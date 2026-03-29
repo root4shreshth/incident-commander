@@ -1,3 +1,14 @@
+---
+title: IncidentCommanderEnv
+emoji: 🚨
+colorFrom: red
+colorTo: yellow
+sdk: docker
+app_port: 8000
+tags:
+  - openenv
+---
+
 # IncidentCommanderEnv
 
 **SRE/DevOps Cloud Incident Response & Diagnostics** — An OpenEnv environment where an AI agent acts as an on-call Site Reliability Engineer, diagnosing and remediating production incidents across a simulated microservices cluster.

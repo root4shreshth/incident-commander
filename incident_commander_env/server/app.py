@@ -36,6 +36,23 @@ app.add_middleware(
 env = IncidentCommanderEnv()
 
 
+@app.get("/")
+def root() -> Dict[str, Any]:
+    """Root endpoint — environment info."""
+    return {
+        "name": "IncidentCommanderEnv",
+        "version": "0.1.0",
+        "description": "SRE/DevOps Cloud Incident Response & Diagnostics",
+        "endpoints": {
+            "POST /reset": "Start new incident episode",
+            "POST /step": "Execute an SRE action",
+            "GET /state": "Get current episode state",
+            "GET /health": "Liveness check",
+            "GET /tasks": "List available tasks",
+        },
+    }
+
+
 class ResetRequest(BaseModel):
     task_id: Optional[str] = None
 
