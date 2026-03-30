@@ -9,6 +9,5 @@ build/
 .venv/
 venv/
 *.log
-baseline_results.json
 outputs/
 .claude/

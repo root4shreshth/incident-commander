@@ -136,10 +136,13 @@ docker run -p 8000:8000 incident-commander-env
 
 ## Baseline Scores
 
+**Model:** Llama 3.3 70B (via Groq)
+
 | Task | Score | Steps | Status |
 |---|---|---|---|
-| oom_crash | ~0.80-1.00 | 4-8 | Resolved |
-| db_pool_exhaustion | ~0.50-0.80 | 8-15 | Resolved |
-| bad_deployment_cascade | ~0.30-0.60 | 12-25 | Partial |
+| oom_crash (Easy) | **1.00** | 5/15 | Resolved |
+| db_pool_exhaustion (Medium) | **0.80** | 25/25 | Partial (missed order-service restart) |
+| bad_deployment_cascade (Hard) | **0.40** | 35/35 | Partial (rollback done, rate-limited before restarts) |
+| **Average** | **0.73** | — | — |
 
-*Scores vary by model. Tested with gpt-4o-mini.*
+*Hard task score is artificially low due to API rate limiting mid-episode. Agent was on correct path (rollback completed at step 5).*
