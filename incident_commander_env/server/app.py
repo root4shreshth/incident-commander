@@ -5,14 +5,20 @@ Exposes POST /reset, POST /step, GET /state endpoints as required by OpenEnv spe
 
 from __future__ import annotations
 
+import os
+from pathlib import Path
 from typing import Any, Dict, Optional
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from incident_commander_env.models import IncidentAction, IncidentObservation, IncidentState
 from incident_commander_env.server.environment import IncidentCommanderEnv
+
+STATIC_DIR = Path(__file__).parent / "static"
 
 
 app = FastAPI(
@@ -37,8 +43,11 @@ env = IncidentCommanderEnv()
 
 
 @app.get("/")
-def root() -> Dict[str, Any]:
-    """Root endpoint — environment info."""
+def root():
+    """Serve the interactive UI."""
+    html_path = STATIC_DIR / "index.html"
+    if html_path.exists():
+        return FileResponse(html_path)
     return {
         "name": "IncidentCommanderEnv",
         "version": "0.1.0",
