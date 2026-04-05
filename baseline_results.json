@@ -1,31 +1,25 @@
 {
-  "model": "llama-3.3-70b-versatile",
+  "model": "meta-llama/llama-3.3-70b-instruct",
+  "provider": "OpenRouter",
   "tasks": {
     "oom_crash": {
       "task_id": "oom_crash",
       "score": 1.0,
-      "steps_used": 5,
-      "resolved": true,
-      "total_reward": 0.2549,
-      "time_seconds": 17.3
+      "steps_used": 4,
+      "resolved": true
     },
     "db_pool_exhaustion": {
       "task_id": "db_pool_exhaustion",
       "score": 0.8,
       "steps_used": 25,
-      "resolved": false,
-      "total_reward": 0.4922,
-      "time_seconds": 280.5
+      "resolved": false
     },
     "bad_deployment_cascade": {
       "task_id": "bad_deployment_cascade",
-      "score": 0.4,
-      "steps_used": 35,
-      "resolved": false,
-      "total_reward": 0.0914,
-      "time_seconds": 204.4
+      "score": 1.0,
+      "steps_used": 18,
+      "resolved": true
     }
   },
-  "average_score": 0.7333,
-  "total_time_seconds": 508.3
+  "average_score": 0.9333
 }
