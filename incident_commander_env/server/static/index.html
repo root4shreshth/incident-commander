@@ -222,10 +222,12 @@
 
 <!-- ════════ HOME ════════ -->
 <div id="tab-home" class="tab-content active">
+
+    <!-- ── 1. HERO ── -->
     <div class="hero">
         <div class="hero-label"><span class="dot"></span> OpenEnv-Compatible RL Environment</div>
-        <h1>AI Agents as<br><em>On-Call SRE Engineers</em></h1>
-        <p class="subtitle">Train and evaluate AI agents on real-world incident response. Diagnose production outages, trace dependency chains, and execute precise remediation across a simulated 9-service microservices cluster.</p>
+        <h1>The Flight Simulator for<br><em>SRE Incident Response</em></h1>
+        <p class="subtitle">Train and evaluate AI agents on real-world production incident diagnosis and remediation. A Gymnasium-compatible environment with 9 microservices, 3 escalating scenarios, and rubric-graded scoring.</p>
         <div class="hero-actions">
             <button class="btn btn-primary" onclick="switchTab('demo')">&#9654; Try Interactive Demo</button>
             <button class="btn btn-outline" onclick="switchTab('api')">View API Docs</button>
@@ -240,35 +242,103 @@
 
     <hr class="divider">
 
-    <!-- Guide for Judges -->
+    <!-- ── 2. THE PROBLEM ── -->
     <div class="section">
-        <div class="guide-card">
-            <h3>&#128161; How to Evaluate This Environment</h3>
-            <div class="guide-steps">
-                <div class="guide-step"><div class="guide-step-num">1</div><div class="guide-step-text"><strong>Quick API Test</strong> -- Scroll down to "Test the API" and click the buttons to verify <code>/health</code>, <code>/reset</code>, <code>/step</code>, and <code>/state</code> endpoints work.</div></div>
-                <div class="guide-step"><div class="guide-step-num">2</div><div class="guide-step-text"><strong>Play the Interactive Demo</strong> -- Click "Interactive Demo" tab, select "OOM Crash" (easy), hit "Start Incident", then: <code>list_services</code> &#8594; <code>read_logs(payment-service)</code> &#8594; <code>restart_service(payment-service)</code> with <code>{"memory_limit":"512Mi"}</code>. You should score 1.00.</div></div>
-                <div class="guide-step"><div class="guide-step-num">3</div><div class="guide-step-text"><strong>Run the Baseline Agent</strong> -- <code>python inference.py</code> runs an LLM agent against all 3 tasks, emitting <code>[START]/[STEP]/[END]</code> structured logs. Baseline scores: 1.00 / 0.80 / 1.00 (avg 0.93).</div></div>
-                <div class="guide-step"><div class="guide-step-num">4</div><div class="guide-step-text"><strong>Try the Hard Task</strong> -- "Bad Deployment Cascade" requires correct action ordering (rollback BEFORE restarting starved services). This genuinely challenges frontier models.</div></div>
+        <div class="section-label">The Problem</div>
+        <h2>Production Incidents Are Costing Billions</h2>
+        <p class="section-sub">The status quo is unsustainable -- and there is no training ground</p>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:32px">
+            <div class="step-card" style="border-left:3px solid var(--accent-red)">
+                <div style="font-size:32px;font-weight:900;color:var(--accent-red);margin-bottom:4px">$1M-$5M</div>
+                <div style="font-size:13px;color:var(--text-secondary);line-height:1.5">Cost per hour of downtime for enterprises</div>
+            </div>
+            <div class="step-card" style="border-left:3px solid var(--accent-orange)">
+                <div style="font-size:32px;font-weight:900;color:var(--accent-orange);margin-bottom:4px">8.85 hrs</div>
+                <div style="font-size:13px;color:var(--text-secondary);line-height:1.5">Average Mean Time To Resolution (MTTR)</div>
+            </div>
+            <div class="step-card" style="border-left:3px solid var(--accent-purple)">
+                <div style="font-size:32px;font-weight:900;color:var(--accent-purple);margin-bottom:4px">65%</div>
+                <div style="font-size:13px;color:var(--text-secondary);line-height:1.5">Of engineers report burnout from on-call stress</div>
+            </div>
+            <div class="step-card" style="border-left:3px solid var(--accent-cyan)">
+                <div style="font-size:32px;font-weight:900;color:var(--accent-cyan);margin-bottom:4px">0</div>
+                <div style="font-size:13px;color:var(--text-secondary);line-height:1.5">RL environments for incident response training</div>
             </div>
         </div>
-    </div>
-
-    <!-- How It Works -->
-    <div class="section">
-        <div class="section-label">Workflow</div>
-        <h2>How It Works</h2>
-        <p class="section-sub">An AI agent goes through the standard RL loop: observe, reason, act, learn</p>
-        <div class="steps-grid">
-            <div class="step-card"><div class="step-num">01</div><div class="step-icon">&#128680;</div><h3>Alert Fires</h3><p>Agent receives PagerDuty-style incident alert with affected services</p></div>
-            <div class="step-card"><div class="step-num">02</div><div class="step-icon">&#128269;</div><h3>Investigate</h3><p>Read logs, check metrics, run diagnostics across 9 microservices</p></div>
-            <div class="step-card"><div class="step-num">03</div><div class="step-icon">&#128300;</div><h3>Diagnose</h3><p>Trace dependency chains to identify the root cause</p></div>
-            <div class="step-card"><div class="step-num">04</div><div class="step-icon">&#9889;</div><h3>Remediate</h3><p>Restart, rollback, scale, or reconfigure to fix the issue</p></div>
+        <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:16px;padding:28px;font-size:15px;line-height:1.8;color:var(--text-secondary)">
+            Every tech company operates on-call rotations where engineers are woken at 3 AM to diagnose production outages. There is no safe, realistic environment to practice incident response. Engineers learn by making mistakes in production. AI agents have no benchmark to train on.
         </div>
     </div>
 
     <hr class="divider">
 
-    <!-- Tasks -->
+    <!-- ── 3. THE SOLUTION ── -->
+    <div class="section">
+        <div class="section-label">The Solution</div>
+        <h2>A Complete Incident Response Training Environment</h2>
+        <p class="section-sub">IncidentCommanderEnv simulates a production microservices cluster where AI agents -- or human engineers -- diagnose and remediate real-world incidents through a standard RL interface.</p>
+        <div class="steps-grid">
+            <div class="step-card">
+                <div class="step-num">01</div>
+                <div class="step-icon">&#128680;</div>
+                <h3>Alert Fires</h3>
+                <p>Agent receives a PagerDuty-style incident alert with affected services and severity</p>
+            </div>
+            <div class="step-card">
+                <div class="step-num">02</div>
+                <div class="step-icon">&#128269;</div>
+                <h3>Investigate</h3>
+                <p>Read logs, check metrics, and run diagnostics across 9 interconnected microservices</p>
+            </div>
+            <div class="step-card">
+                <div class="step-num">03</div>
+                <div class="step-icon">&#128300;</div>
+                <h3>Diagnose</h3>
+                <p>Trace dependency chains and causal relationships to pinpoint the root cause</p>
+            </div>
+            <div class="step-card">
+                <div class="step-num">04</div>
+                <div class="step-icon">&#9889;</div>
+                <h3>Remediate</h3>
+                <p>Restart, rollback, scale, or reconfigure -- in the correct order -- to resolve the incident</p>
+            </div>
+        </div>
+    </div>
+
+    <hr class="divider">
+
+    <!-- ── 4. WHY THIS MATTERS ── -->
+    <div class="section">
+        <div class="section-label">Why This Matters</div>
+        <h2>First-of-its-Kind in the RL Ecosystem</h2>
+        <p class="section-sub">No Gymnasium or OpenEnv environment exists for DevOps, infrastructure, or incident response</p>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px">
+            <div class="step-card">
+                <div style="font-size:28px;margin-bottom:10px">&#127942;</div>
+                <h3>Zero Prior Art</h3>
+                <p>No OpenEnv/Gymnasium environment exists for DevOps or infrastructure operations</p>
+            </div>
+            <div class="step-card">
+                <div style="font-size:28px;margin-bottom:10px">&#128279;</div>
+                <h3>Causal Reasoning</h3>
+                <p>Agents must trace symptoms through dependency graphs, not just classify alerts</p>
+            </div>
+            <div class="step-card">
+                <div style="font-size:28px;margin-bottom:10px">&#128260;</div>
+                <h3>Action Ordering</h3>
+                <p>Hard task requires correct remediation sequence -- rollback before restart</p>
+            </div>
+            <div class="step-card">
+                <div style="font-size:28px;margin-bottom:10px">&#127919;</div>
+                <h3>Partial Credit</h3>
+                <p>Every diagnostic step provides reward signal, not just binary pass/fail</p>
+            </div>
+        </div>
+    </div>
+
+    <hr class="divider">
+
+    <!-- ── 5. INCIDENT SCENARIOS ── -->
     <div class="section">
         <div class="section-label">Incident Scenarios</div>
         <h2>3 Tasks (Easy &#8594; Hard)</h2>
@@ -282,7 +352,7 @@
 
     <hr class="divider">
 
-    <!-- Architecture -->
+    <!-- ── 6. ARCHITECTURE ── -->
     <div class="section">
         <div class="section-label">Infrastructure</div>
         <h2>9-Service Microservices Cluster</h2>
@@ -313,31 +383,22 @@
 
     <hr class="divider">
 
-    <!-- Actions -->
+    <!-- ── 7. HOW TO EVALUATE ── -->
     <div class="section">
-        <div class="section-label">Action Space</div>
-        <h2>10 Agent Actions</h2>
-        <p class="section-sub">Diagnostic and remediation actions matching real SRE workflows</p>
-        <table class="tbl">
-            <thead><tr><th>Action</th><th>Target</th><th>Parameters</th><th>Description</th></tr></thead>
-            <tbody>
-                <tr><td><code>list_services</code></td><td>--</td><td>--</td><td>Overview of all 9 services with health and metrics</td></tr>
-                <tr><td><code>describe_service</code></td><td>Required</td><td>--</td><td>Full config, deployment history, dependencies</td></tr>
-                <tr><td><code>read_logs</code></td><td>Required</td><td><code>lines, severity</code></td><td>Structured log lines (ERROR, WARN, INFO)</td></tr>
-                <tr><td><code>check_metrics</code></td><td>Required</td><td>--</td><td>CPU, memory, latency p50/p99, error rate</td></tr>
-                <tr><td><code>restart_service</code></td><td>Required</td><td><code>memory_limit</code></td><td>Restart with optional new memory config</td></tr>
-                <tr><td><code>scale_service</code></td><td>Required</td><td><code>replicas</code></td><td>Change replica count</td></tr>
-                <tr><td><code>rollback_deployment</code></td><td>Required</td><td><code>to_version</code></td><td>Rollback to a previous deployment version</td></tr>
-                <tr><td><code>run_diagnostic</code></td><td>Required</td><td><code>command</code></td><td>check_connectivity, check_health, check_resources</td></tr>
-                <tr><td><code>update_config</code></td><td>Required</td><td><code>key, value</code></td><td>Change runtime config (e.g. DB pool size)</td></tr>
-                <tr><td><code>resolve_incident</code></td><td>--</td><td><code>root_cause</code></td><td>Declare incident resolved with summary</td></tr>
-            </tbody>
-        </table>
+        <div class="guide-card">
+            <h3>&#128161; How to Evaluate This Environment</h3>
+            <div class="guide-steps">
+                <div class="guide-step"><div class="guide-step-num">1</div><div class="guide-step-text"><strong>Quick API Test</strong> -- Scroll down to "Test the API" and click the buttons to verify <code>/health</code>, <code>/reset</code>, <code>/step</code>, and <code>/state</code> endpoints work.</div></div>
+                <div class="guide-step"><div class="guide-step-num">2</div><div class="guide-step-text"><strong>Play the Interactive Demo</strong> -- Click "Interactive Demo" tab, select "OOM Crash" (easy), hit "Start Incident", then: <code>list_services</code> &#8594; <code>read_logs(payment-service)</code> &#8594; <code>restart_service(payment-service)</code> with <code>{"memory_limit":"512Mi"}</code>. You should score 1.00.</div></div>
+                <div class="guide-step"><div class="guide-step-num">3</div><div class="guide-step-text"><strong>Run the Baseline Agent</strong> -- <code>python inference.py</code> runs an LLM agent against all 3 tasks, emitting <code>[START]/[STEP]/[END]</code> structured logs. Baseline scores: 1.00 / 0.80 / 1.00 (avg 0.93).</div></div>
+                <div class="guide-step"><div class="guide-step-num">4</div><div class="guide-step-text"><strong>Try the Hard Task</strong> -- "Bad Deployment Cascade" requires correct action ordering (rollback BEFORE restarting starved services). This genuinely challenges frontier models.</div></div>
+            </div>
+        </div>
     </div>
 
     <hr class="divider">
 
-    <!-- Quick Test -->
+    <!-- ── 8. QUICK API TEST ── -->
     <div class="section">
         <div class="section-label">Try It</div>
         <h2>Test the API</h2>
@@ -356,6 +417,7 @@
         </div>
     </div>
 
+    <!-- ── 9. FOOTER ── -->
     <div class="footer">Built for the <strong>Meta PyTorch OpenEnv Hackathon 2026</strong> by Team MetaMorphs</div>
 </div>
 
