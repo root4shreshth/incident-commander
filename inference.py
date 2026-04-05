@@ -49,7 +49,7 @@ _load_dotenv()
 # -- Configuration ---------------------------------------------------------
 API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
 MODEL_NAME = os.getenv("MODEL_NAME", "Qwen/Qwen2.5-72B-Instruct")
-HF_TOKEN = os.getenv("HF_TOKEN") or os.getenv("API_KEY", "")
+HF_TOKEN = os.getenv("HF_TOKEN")
 ENV_URL = os.getenv("ENV_URL", "https://hype4raj-incident-commander-env.hf.space")
 
 BENCHMARK = "incident_commander_env"
