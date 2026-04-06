@@ -1,0 +1,3 @@
+name: incident_commander_env
+version: "0.1.0"
+description: "SRE/DevOps Cloud Incident Response & Diagnostics - AI agent acts as on-call SRE diagnosing and remediating production incidents across a simulated microservices cluster"
