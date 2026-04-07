@@ -50,7 +50,9 @@ class BaseScenario(ABC):
         rubric = self.get_rubric()
         score = sum(weight for _, check, weight in rubric if check(actions, cluster))
         penalties = self.compute_penalties(actions, cluster)
-        return max(0.0, min(1.0, score + penalties))
+        # Clamp to strict (0, 1) — hackathon validator rejects exactly 0.0 and 1.0
+        raw = score + penalties
+        return max(0.01, min(0.99, raw))
 
     def grade_details(self, actions: List[ActionRecord], cluster: Cluster) -> Dict[str, Any]:
         """Return detailed breakdown for debugging."""
