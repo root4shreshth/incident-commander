@@ -66,4 +66,8 @@ def compute_step_reward(
     elif action.action_type == "resolve_incident":
         reward = 0.05
 
-    return reward * (TIME_DECAY ** step)
+    # Ensure reward is never exactly 0.0 — validator requires strict (0, 1)
+    result = reward * (TIME_DECAY ** step)
+    if result == 0.0:
+        result = 0.01
+    return result

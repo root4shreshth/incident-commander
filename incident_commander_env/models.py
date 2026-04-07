@@ -91,7 +91,7 @@ class IncidentObservation(BaseModel):
 
     message: str = Field("", description="Human-readable response text")
     done: bool = Field(False, description="Whether the episode has ended")
-    reward: float = Field(0.0, description="Reward from this step")
+    reward: float = Field(0.01, description="Reward from this step")
 
     alert: Optional[str] = Field(None, description="Active incident alert (set on reset)")
     services_summary: Optional[List[ServiceSummary]] = Field(
@@ -121,7 +121,7 @@ class IncidentState(BaseModel):
     root_cause_identified: bool = False
     services_restarted: List[str] = Field(default_factory=list)
     actions_taken: List[str] = Field(default_factory=list)
-    current_score: float = 0.0
+    current_score: float = 0.01
     max_steps: int = 0
 
 

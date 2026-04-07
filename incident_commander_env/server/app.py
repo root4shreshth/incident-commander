@@ -85,7 +85,7 @@ def reset(request: ResetRequest = ResetRequest()) -> Dict[str, Any]:
     obs = env.reset(task_id=request.task_id)
     return {
         "observation": obs.model_dump(),
-        "reward": 0.0,
+        "reward": 0.01,
         "done": obs.done,
         "info": {
             "task_id": env.state.task_id,
