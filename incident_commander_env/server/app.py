@@ -17,6 +17,13 @@ from pydantic import BaseModel
 
 from incident_commander_env.models import IncidentAction, IncidentObservation, IncidentState
 from incident_commander_env.server.environment import IncidentCommanderEnv
+from incident_commander_env.server.coach import (
+    IDEAL_TRAJECTORIES,
+    LEARNING_CONTEXT,
+    build_postmortem,
+    compute_hint,
+    explain_observation,
+)
 
 STATIC_DIR = Path(__file__).parent / "static"
 
@@ -40,6 +47,9 @@ app.add_middleware(
 )
 
 env = IncidentCommanderEnv()
+
+if STATIC_DIR.exists():
+    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 
 @app.get("/")
@@ -141,12 +151,75 @@ def list_tasks() -> Dict[str, Any]:
     tasks = {}
     for task_id, scenario_cls in SCENARIO_REGISTRY.items():
         s = scenario_cls()
+        ctx = LEARNING_CONTEXT.get(task_id, {})
         tasks[task_id] = {
             "difficulty": s.difficulty,
             "description": s.description,
             "max_steps": s.max_steps,
+            "backstory": ctx.get("backstory", ""),
+            "learning_goals": ctx.get("learning_goals", []),
+            "est_minutes": ctx.get("est_minutes", 10),
+            "prerequisite": ctx.get("prerequisite"),
+            "skill_tag": ctx.get("skill_tag", s.difficulty.upper()),
         }
     return {"tasks": tasks}
+
+
+@app.get("/coach/hint")
+def coach_hint() -> Dict[str, Any]:
+    """Return a contextual, rule-based hint based on the current game state."""
+    if not env._scenario or not env._cluster:
+        return {
+            "hint": "Pick a scenario and click Start Incident. Your AI coach will appear once the incident begins.",
+            "suggested_action": None,
+            "tone": "neutral",
+        }
+    return compute_hint(
+        task_id=env._state.task_id,
+        cluster=env._cluster,
+        action_history=env._action_history,
+        step_count=env._state.step_count,
+        max_steps=env._scenario.max_steps,
+    )
+
+
+class ExplainRequest(BaseModel):
+    last_action: Optional[Dict[str, Any]] = None
+    last_message: Optional[str] = None
+
+
+@app.post("/coach/explain")
+def coach_explain(request: ExplainRequest) -> Dict[str, Any]:
+    """Explain the most recent observation in plain English."""
+    if not env._scenario:
+        return {"explanation": "Start an incident first, then click 'Why?' on any action result for an explanation."}
+    return explain_observation(
+        task_id=env._state.task_id,
+        last_action=request.last_action or {},
+        last_message=request.last_message or "",
+    )
+
+
+@app.get("/postmortem")
+def postmortem() -> Dict[str, Any]:
+    """Build a structured post-mortem for the review screen."""
+    if not env._scenario or not env._cluster:
+        return {"error": "No episode has been run yet."}
+    return build_postmortem(
+        scenario=env._scenario,
+        action_history=env._action_history,
+        cluster=env._cluster,
+        state=env._state,
+    )
+
+
+@app.get("/ideal-trajectory/{task_id}")
+def ideal_trajectory(task_id: str) -> Dict[str, Any]:
+    """Return what a senior SRE would have done."""
+    traj = IDEAL_TRAJECTORIES.get(task_id)
+    if not traj:
+        return {"error": f"No ideal trajectory available for task {task_id}"}
+    return {"task_id": task_id, "trajectory": traj}
 
 
 def main() -> None:

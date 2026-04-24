@@ -25,3 +25,9 @@ dev = [
 
 [tool.setuptools.packages.find]
 include = ["incident_commander_env*"]
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "pytest>=9.0.2",
+]

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>IncidentCommanderEnv - SRE Incident Response RL Environment</title>
+    <title>IncidentCommanderEnv — Train to respond to production incidents</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     <style>
         :root{--bg-primary:#0a0e17;--bg-secondary:#111827;--bg-card:#1a2035;--bg-elevated:#1e2943;--border:rgba(99,115,148,0.2);--border-active:rgba(99,179,255,0.4);--text-primary:#f1f5f9;--text-secondary:#94a3b8;--text-muted:#64748b;--accent-blue:#3b82f6;--accent-green:#22c55e;--accent-red:#ef4444;--accent-orange:#f59e0b;--accent-purple:#a855f7;--accent-cyan:#06b6d4;--glow-blue:rgba(59,130,246,0.15);--glow-red:rgba(239,68,68,0.15);--glow-green:rgba(34,197,94,0.15)}
@@ -21,6 +21,10 @@
         @keyframes barGrow{from{width:0}to{width:var(--bar-w)}}
         @keyframes slideDown{from{opacity:0;transform:translateY(-100%)}to{opacity:1;transform:translateY(0)}}
         @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+        @keyframes alertFlash{0%{background:rgba(239,68,68,0)}30%{background:rgba(239,68,68,.15)}100%{background:rgba(239,68,68,0)}}
+        @keyframes nodePulseCrash{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
+        @keyframes ringFill{from{stroke-dashoffset:163}}
+        @keyframes floatIn{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
         .spinner{width:14px;height:14px;border:2px solid rgba(255,255,255,.2);border-top-color:#fff;border-radius:50%;animation:spin .6s linear infinite;display:inline-block;vertical-align:middle}
         .spinner-sm{width:10px;height:10px;border-width:1.5px}
 
@@ -33,11 +37,16 @@
         .nav-right{margin-left:auto;display:flex;align-items:center;gap:16px}
         .live-badge{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--accent-green);font-weight:500}
         .live-dot{width:7px;height:7px;border-radius:50%;background:var(--accent-green);box-shadow:0 0 8px var(--accent-green);animation:pulse 2s infinite}
+        .mode-toggle{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-secondary);font-weight:500;cursor:pointer;background:var(--bg-card);border:1px solid var(--border);padding:6px 12px;border-radius:20px;transition:all .2s}
+        .mode-toggle:hover{border-color:var(--border-active)}
+        .mode-dot{width:8px;height:8px;border-radius:50%;background:var(--accent-cyan);transition:all .25s}
+        body[data-mode="pro"] .mode-dot{background:var(--accent-purple)}
         .tab-content{display:none;animation:fadeIn .3s ease}.tab-content.active{display:block}
 
         /* Buttons */
         .btn{padding:10px 22px;border-radius:10px;border:none;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s;font-family:inherit;display:inline-flex;align-items:center;gap:8px}
         .btn:hover{transform:translateY(-1px)}.btn:active{transform:translateY(0)}
+        .btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
         .btn-primary{background:var(--accent-blue);color:#fff}.btn-primary:hover{background:#2563eb;box-shadow:0 4px 16px rgba(59,130,246,.3)}
         .btn-outline{background:transparent;color:var(--text-secondary);border:1px solid var(--border)}.btn-outline:hover{border-color:var(--accent-blue);color:var(--text-primary);background:var(--glow-blue)}
         .btn-green{background:var(--accent-green);color:#000;font-weight:700}.btn-green:hover{background:#16a34a}
@@ -91,7 +100,352 @@
         .guide-step-text code{background:var(--bg-elevated);padding:2px 6px;border-radius:4px;font-size:12px;color:var(--accent-cyan)}
         .footer{text-align:center;padding:40px 32px;border-top:1px solid var(--border);color:var(--text-muted);font-size:13px}.footer strong{color:var(--text-secondary)}
 
-        /* Scenario test cards */
+        /* API */
+        .ep-card{background:var(--bg-card);border:1px solid var(--border);border-radius:12px;margin-bottom:10px;overflow:hidden}
+        .ep-header{padding:14px 20px;display:flex;align-items:center;gap:12px;cursor:pointer;transition:background .15s}.ep-header:hover{background:rgba(255,255,255,.02)}
+        .method{padding:4px 10px;border-radius:6px;font-size:11px;font-weight:700;font-family:'JetBrains Mono',monospace}
+        .m-post{background:rgba(34,197,94,.12);color:var(--accent-green)}.m-get{background:rgba(59,130,246,.12);color:var(--accent-blue)}
+        .ep-path{font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:500}.ep-desc{margin-left:auto;font-size:13px;color:var(--text-muted)}
+        .ep-body{padding:20px;background:var(--bg-primary);border-top:1px solid var(--border);display:none}.ep-body.open{display:block}
+        .ep-body pre{font-family:'JetBrains Mono',monospace;font-size:12px;line-height:1.7;white-space:pre-wrap}
+        .ep-body .k{color:var(--accent-green)}.ep-body .s{color:var(--accent-cyan)}.ep-body .n{color:var(--accent-orange)}
+
+        /* ═══════════════════════════════════════════════════════════════════ */
+        /* ═══════ NEW DEMO SCREEN — Human-focused training UX          ══════ */
+        /* ═══════════════════════════════════════════════════════════════════ */
+        .hidden{display:none !important}
+
+        /* Scenario picker */
+        .picker-head{padding:48px 32px 24px;text-align:center}
+        .picker-head h1{font-size:36px;font-weight:800;letter-spacing:-.5px;margin-bottom:8px}
+        .picker-head p{color:var(--text-secondary);max-width:540px;margin:0 auto;font-size:15px;line-height:1.6}
+        .picker-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:20px;padding:24px 32px 64px;max-width:1280px;margin:0 auto}
+        .picker-reset{margin-top:16px;opacity:.75;font-size:11px}
+        .picker-reset:hover{opacity:1;border-color:var(--accent-orange);color:var(--accent-orange)}
+
+        .scene-card{background:var(--bg-card);border:1px solid var(--border);border-radius:16px;padding:24px;display:flex;flex-direction:column;transition:all .25s;position:relative;overflow:hidden;animation:floatIn .45s ease-out backwards}
+        .scene-card:nth-child(2){animation-delay:.08s}.scene-card:nth-child(3){animation-delay:.16s}
+        .scene-card:hover{border-color:var(--border-active);transform:translateY(-3px);box-shadow:0 12px 32px rgba(0,0,0,.35)}
+        .scene-card.is-locked{opacity:.55}
+        .scene-card.is-done{border-color:rgba(34,197,94,.4)}
+        .scene-card.is-done::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--accent-green)}
+        .scene-head{display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap}
+        .scene-done{font-size:11px;font-weight:700;color:var(--accent-green);background:rgba(34,197,94,.12);padding:3px 10px;border-radius:10px}
+        .scene-locked{font-size:11px;font-weight:700;color:var(--text-muted);background:var(--bg-elevated);padding:3px 10px;border-radius:10px}
+        .scene-card h3{font-size:20px;font-weight:700;margin-bottom:10px;letter-spacing:-.3px}
+        .scene-backstory{font-size:13px;color:var(--text-secondary);line-height:1.6;margin-bottom:16px;font-style:italic;padding:10px 12px;background:rgba(59,130,246,.05);border-left:3px solid var(--accent-blue);border-radius:0 8px 8px 0}
+        .scene-goals{margin-bottom:16px}
+        .goals-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--text-muted);margin-bottom:6px}
+        .scene-goals ul{list-style:none;padding:0}
+        .scene-goals li{font-size:13px;color:var(--text-secondary);padding:4px 0 4px 16px;position:relative}
+        .scene-goals li::before{content:'✓';position:absolute;left:0;color:var(--accent-blue);font-weight:700}
+        .scene-meta{display:flex;gap:12px;font-size:11px;color:var(--text-muted);margin-bottom:16px;flex-wrap:wrap}
+        .scene-meta span{padding:3px 8px;background:var(--bg-elevated);border-radius:6px}
+        .scene-start{margin-top:auto;width:100%;justify-content:center;font-size:14px;padding:12px}
+
+        /* Incident screen layout — scrolls naturally, sticky top bar + sticky coach */
+        .inc-screen{display:grid;grid-template-columns:minmax(0,1fr) 340px;grid-template-areas:"top top" "main coach" "notebook coach" "tbox coach";min-height:calc(100vh - 56px);gap:0;align-items:start}
+        @media(max-width:1100px){.inc-screen{grid-template-columns:1fr;grid-template-areas:"top" "main" "notebook" "tbox" "coach"}}
+
+        .inc-top{grid-area:top;background:var(--bg-secondary);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:18px;padding:12px 24px;position:sticky;top:56px;z-index:45;backdrop-filter:blur(12px)}
+        .inc-back{background:transparent;border:1px solid var(--border);color:var(--text-secondary);padding:6px 14px;border-radius:10px;font-size:12px;cursor:pointer}
+        .inc-back:hover{border-color:var(--border-active);color:var(--text-primary)}
+
+        .battery{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-secondary)}
+        .battery-shell{width:80px;height:14px;border:2px solid var(--text-muted);border-radius:3px;position:relative;padding:1px}
+        .battery-shell::after{content:'';position:absolute;right:-4px;top:3px;width:3px;height:6px;background:var(--text-muted);border-radius:0 2px 2px 0}
+        .battery-fill{height:100%;border-radius:1px;transition:all .4s ease;background:var(--accent-green)}
+        .battery-fill.bat-mid{background:var(--accent-orange)}.battery-fill.bat-low{background:var(--accent-red);animation:dotBlink 1s infinite}
+        .step-label{font-size:11px;color:var(--text-muted)}
+
+        .score-ring{position:relative;width:60px;height:60px}
+        .score-ring svg{transform:rotate(-90deg)}
+        .score-ring .ring-bg{fill:none;stroke:var(--border);stroke-width:5}
+        .score-ring .ring-fill{fill:none;stroke:var(--accent-green);stroke-width:5;stroke-linecap:round;transition:stroke-dashoffset .5s ease}
+        .score-ring .ring-num{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:800}
+        .score-ring .ring-pct{font-size:10px;color:var(--text-muted);margin-left:1px}
+
+        .inc-alert{flex:1;display:flex;align-items:center;gap:14px;background:linear-gradient(90deg,rgba(239,68,68,.08),transparent);border-radius:12px;padding:10px 16px;border-left:3px solid var(--accent-red);position:relative;overflow:hidden;max-height:84px}
+        .alert-flash{position:absolute;inset:0;pointer-events:none;animation:alertFlash 2s ease-out}
+        .alert-content{position:relative;min-width:0}
+        .alert-tag{font-size:10px;font-weight:700;color:var(--accent-red);text-transform:uppercase;letter-spacing:.8px;margin-bottom:2px}
+        .alert-headline{font-size:13px;font-weight:600;color:var(--text-primary);line-height:1.35;margin-bottom:3px}
+        .alert-sub{font-size:11px;color:var(--text-secondary);line-height:1.45;font-style:italic;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+        /* Service map — main panel */
+        .inc-main{grid-area:main;background:var(--bg-primary);padding:20px 24px;display:grid;grid-template-columns:minmax(0,1fr) 280px;gap:20px}
+        @media(max-width:1100px){.inc-main{grid-template-columns:1fr}}
+        .svc-map-wrap{background:var(--bg-card);border:1px solid var(--border);border-radius:16px;padding:16px;display:flex;flex-direction:column;min-height:460px}
+        .svc-map-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+        .svc-map-head h3{font-size:14px;font-weight:700}
+        .svc-map-legend{display:flex;gap:10px;font-size:11px;color:var(--text-muted)}
+        .svc-map-legend span{display:flex;align-items:center;gap:4px}
+        .svc-map-legend i{display:inline-block;width:8px;height:8px;border-radius:50%}
+        .svc-map-legend .lg-healthy{background:var(--accent-green)}.svc-map-legend .lg-degraded{background:var(--accent-orange)}.svc-map-legend .lg-bad{background:var(--accent-red)}
+        .svc-map-svg{width:100%;height:auto;max-height:500px;display:block}
+        .svc-node-inner.node-pulse-crash{animation:nodePulseCrash 1s infinite;transform-origin:center;transform-box:fill-box}
+        .svc-node-inner.node-pulse-bad{animation:nodePulseCrash 2s infinite;transform-origin:center;transform-box:fill-box}
+        .edge{stroke:rgba(148,163,184,0.3);stroke-width:1.5;fill:none;transition:stroke .3s}
+        .edge.edge-ok{stroke:rgba(148,163,184,0.3)}
+        .edge.edge-bad{stroke:#ef4444;stroke-width:2;stroke-dasharray:5,3;animation:dashdraw 1.5s linear infinite}
+        @keyframes dashdraw{to{stroke-dashoffset:-16}}
+
+        /* Service detail panel (right of map; compact when empty) */
+        .svc-detail{background:var(--bg-card);border:1px solid var(--border);border-radius:16px;padding:18px}
+        .svc-detail-empty{color:var(--text-muted);font-size:13px;font-style:italic;text-align:center;padding:8px 0}
+        .svc-detail-head{display:flex;align-items:center;gap:12px;margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--border)}
+        .svc-detail-name{font-size:15px;font-weight:700}
+        .svc-detail-health{font-size:11px;color:var(--text-muted);margin-top:2px;letter-spacing:.3px}
+        .svc-detail-metrics{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:14px}
+        .metric-tile{background:var(--bg-elevated);border-radius:8px;padding:8px;display:flex;flex-direction:column;align-items:center;text-align:center}
+        .m-label{font-size:9.5px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;font-weight:600}
+        .m-val{font-size:15px;font-weight:700;margin-top:3px;color:var(--text-primary)}
+        .svc-quick-actions{display:flex;flex-direction:column;gap:6px}
+        .svc-quick-actions button{justify-content:flex-start;padding:8px 12px}
+        .health-dot{width:14px;height:14px;border-radius:50%;flex-shrink:0}
+        .health-dot.h-ok{background:var(--accent-green);box-shadow:0 0 8px rgba(34,197,94,.5)}
+        .health-dot.h-deg{background:var(--accent-orange);box-shadow:0 0 8px rgba(245,158,11,.5)}
+        .health-dot.h-bad{background:var(--accent-red);box-shadow:0 0 8px rgba(239,68,68,.5);animation:dotBlink 1s infinite}
+        .health-dot.h-crash{background:var(--accent-red);box-shadow:0 0 12px rgba(239,68,68,.7);animation:dotBlink .4s infinite}
+        .health-dot.h-restart{background:var(--accent-blue);animation:pulse 1s infinite}
+
+        /* Action toolbox — sticky to viewport bottom so it's always reachable */
+        .tbox{grid-area:tbox;background:var(--bg-card);border-top:1px solid var(--border);padding:14px 24px;display:grid;grid-template-columns:1.3fr 1.5fr .8fr;gap:18px;position:sticky;bottom:0;z-index:30;box-shadow:0 -8px 24px rgba(0,0,0,.35)}
+        @media(max-width:900px){.tbox{grid-template-columns:1fr}}
+        .tbox-group{display:flex;flex-direction:column;gap:8px;min-width:0}
+        .tbox-title{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-muted)}
+        .tbox-btns{display:flex;flex-wrap:wrap;gap:6px}
+        .action-btn{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:10px 10px;min-width:82px;border-radius:10px;border:1px solid var(--border);background:var(--bg-elevated);color:var(--text-primary);font-size:11px;font-weight:600;cursor:pointer;transition:all .15s;font-family:inherit}
+        .action-btn:hover{border-color:var(--accent-blue);background:var(--glow-blue);transform:translateY(-1px)}
+        .action-btn.is-danger:hover{border-color:var(--accent-orange);background:rgba(245,158,11,.08)}
+        .action-icon{font-size:18px}
+        .action-label{font-size:11px;line-height:1.2;text-align:center}
+
+        /* Notebook (grows with the page; no internal scroll) */
+        .notebook-area{grid-area:notebook;background:var(--bg-primary);padding:0;display:flex;flex-direction:column}
+        .notebook-head{padding:16px 24px 8px;display:flex;align-items:center;gap:10px;background:var(--bg-primary);border-bottom:1px solid var(--border)}
+        .notebook-head h3{font-size:13px;font-weight:700;color:var(--text-secondary)}
+        .notebook-count{font-size:11px;color:var(--text-muted)}
+        .notebook{padding:16px 24px 32px;display:flex;flex-direction:column;gap:10px}
+        .nb-empty{text-align:center;padding:24px;color:var(--text-muted);font-size:13px}
+        .nb-empty-title{font-size:14px;color:var(--text-secondary);margin-bottom:4px;font-weight:600}
+        .nb-card{background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:12px 14px;animation:fadeSlideIn .3s ease-out;border-left:3px solid var(--border)}
+        .nb-card.nb-good{border-left-color:var(--accent-green)}
+        .nb-card.nb-warn{border-left-color:var(--accent-orange)}
+        .nb-card.nb-err{border-left-color:var(--accent-red);animation:fadeSlideIn .3s ease-out,shakeX .3s .1s}
+        .nb-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;flex-wrap:wrap}
+        .nb-head-left{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600}
+        .nb-icon{font-size:16px}
+        .nb-target{font-family:'JetBrains Mono',monospace;font-size:11px;background:var(--bg-elevated);padding:2px 8px;border-radius:6px;color:var(--accent-cyan)}
+        .nb-head-right{display:flex;align-items:center;gap:10px;font-size:11px}
+        .nb-reward{font-family:'JetBrains Mono',monospace;font-weight:700;padding:2px 8px;border-radius:6px}
+        .nb-reward.rw-good{background:rgba(34,197,94,.12);color:var(--accent-green)}
+        .nb-reward.rw-bad{background:rgba(239,68,68,.12);color:var(--accent-red)}
+        .nb-reward.rw-neutral{background:var(--bg-elevated);color:var(--text-muted)}
+        .nb-step{color:var(--text-muted);font-size:10px}
+        .nb-keyfact{font-size:13px;color:var(--text-primary);line-height:1.55;margin-bottom:8px}
+        .nb-keyfact code{font-family:'JetBrains Mono',monospace;font-size:11px;background:var(--bg-elevated);padding:2px 6px;border-radius:4px;color:var(--text-secondary)}
+        .nb-keyfact .kf-bad{color:var(--accent-red);font-weight:600}
+        .nb-keyfact .kf-warn{color:var(--accent-orange)}
+        .nb-keyfact .kf-ok{color:var(--accent-green);font-weight:600}
+        .nb-raw{margin-top:6px}
+        .nb-raw summary{font-size:11px;color:var(--text-muted);cursor:pointer;padding:3px 0}
+        .nb-raw summary:hover{color:var(--text-secondary)}
+        .nb-raw pre{font-family:'JetBrains Mono',monospace;font-size:11px;background:var(--bg-primary);padding:10px;border-radius:8px;max-height:240px;overflow:auto;color:var(--text-secondary);border:1px solid var(--border);margin-top:6px;white-space:pre-wrap}
+        .nb-why{margin-top:4px}
+        body[data-mode="pro"] .nb-raw{margin-top:2px}
+        body[data-mode="pro"] .nb-raw[open] summary{color:var(--accent-blue)}
+
+        /* Coach panel — sticky sidebar stays visible while user scrolls the notebook */
+        .coach-panel{grid-area:coach;background:var(--bg-secondary);border-left:1px solid var(--border);padding:18px;display:flex;flex-direction:column;gap:14px;position:sticky;top:140px;align-self:start;max-height:calc(100vh - 160px);overflow-y:auto}
+        @media(max-width:1100px){.coach-panel{position:static;max-height:none;border-left:none;border-top:1px solid var(--border)}}
+        .coach-head-top{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+        .coach-head-top h3{font-size:14px;font-weight:700}
+        .coach-head-top .coach-sub{font-size:11px;color:var(--text-muted)}
+        .coach-bubble{background:var(--bg-card);border:1px solid var(--border);border-radius:14px;padding:14px;animation:fadeSlideIn .3s ease-out;border-left:3px solid var(--accent-blue)}
+        .coach-bubble.coach-celebrate{border-left-color:var(--accent-green)}
+        .coach-bubble.coach-warn{border-left-color:var(--accent-orange)}
+        .coach-bubble.coach-encourage{border-left-color:var(--accent-cyan)}
+        .coach-bubble.coach-explain{border-left-color:var(--accent-purple)}
+        .coach-head{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+        .coach-avatar{width:28px;height:28px;border-radius:50%;background:var(--bg-elevated);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+        .coach-name{font-size:12px;font-weight:700;color:var(--text-secondary)}
+        .coach-body{font-size:13px;line-height:1.6;color:var(--text-primary)}
+        .coach-body strong{color:var(--accent-cyan)}
+        .coach-cta{margin-top:10px}
+        .coach-terms{margin-top:10px;display:flex;flex-wrap:wrap;gap:4px}
+        .term-chip{font-size:10px;color:var(--accent-purple);background:rgba(168,85,247,.1);padding:2px 7px;border-radius:8px}
+        body[data-mode="pro"] .coach-panel{display:none}
+        body[data-mode="pro"] .inc-screen{grid-template-columns:minmax(0,1fr);grid-template-areas:"top" "main" "notebook" "tbox"}
+        body[data-mode="pro"] .nb-raw{open:true}
+
+        /* Modal */
+        .modal-backdrop{position:fixed;inset:0;background:rgba(10,14,23,.75);backdrop-filter:blur(4px);z-index:500;display:flex;align-items:center;justify-content:center;animation:fadeIn .2s ease}
+        .modal-card{background:var(--bg-card);border:1px solid var(--border);border-radius:16px;padding:24px;max-width:480px;width:90%;max-height:85vh;overflow-y:auto;animation:fadeSlideIn .3s ease-out}
+        .modal-head{display:flex;align-items:center;gap:14px;margin-bottom:18px}
+        .modal-icon{width:42px;height:42px;border-radius:12px;background:var(--bg-elevated);display:flex;align-items:center;justify-content:center;font-size:22px}
+        .modal-head h3{font-size:17px;font-weight:700}
+        .modal-sub{font-size:12px;color:var(--text-muted);margin-top:2px}
+        .modal-warning{background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.3);color:var(--accent-orange);padding:10px 14px;border-radius:10px;font-size:12px;margin-bottom:16px;font-weight:500}
+        .modal-form{display:flex;flex-direction:column;gap:10px}
+        .modal-form label{font-size:11px;font-weight:600;color:var(--text-secondary);margin-bottom:-4px}
+        .modal-form select,.modal-form input,.modal-form textarea{background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);padding:9px 12px;border-radius:10px;font-size:13px;width:100%;font-family:inherit;resize:vertical}
+        .modal-form select:focus,.modal-form input:focus,.modal-form textarea:focus{border-color:var(--accent-blue);outline:none;box-shadow:0 0 0 3px var(--glow-blue)}
+        .modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:18px}
+
+        /* Post-mortem overlay */
+        .pm-overlay{position:fixed;inset:0;background:rgba(10,14,23,.92);backdrop-filter:blur(10px);z-index:400;overflow-y:auto;padding:40px 20px;animation:fadeIn .3s ease}
+        .pm-card{background:var(--bg-card);border:1px solid var(--border);border-radius:20px;max-width:960px;margin:0 auto;padding:36px;position:relative;animation:fadeSlideIn .4s ease-out}
+        .pm-close{position:absolute;top:16px;right:16px;width:32px;height:32px;border-radius:50%;background:var(--bg-elevated);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text-muted);font-size:14px;transition:all .2s}
+        .pm-close:hover{background:var(--accent-red);color:#fff}
+        .pm-top{display:flex;align-items:center;gap:24px;margin-bottom:32px}
+        .pm-grade{font-size:96px;font-weight:900;line-height:1;letter-spacing:-3px}
+        .pm-title{font-size:24px;font-weight:800;letter-spacing:-.5px;margin-bottom:4px}
+        .pm-score{font-size:14px;color:var(--text-secondary)}.pm-score strong{color:var(--text-primary)}
+        .pm-section{margin-bottom:28px}
+        .pm-section-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--accent-blue);margin-bottom:12px}
+        .pm-crits{display:flex;flex-direction:column;gap:8px}
+        .pm-crit{display:flex;align-items:center;gap:12px;padding:10px 14px;background:var(--bg-elevated);border-radius:10px;font-size:13px}
+        .pm-crit.passed{border-left:3px solid var(--accent-green)}
+        .pm-crit.missed{border-left:3px solid var(--accent-red);opacity:.75}
+        .pm-crit-text{flex:1}
+        .pm-crit-w{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-muted)}
+        .pm-penalty{margin-top:10px;padding:8px 12px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:8px;font-size:12px;color:var(--accent-red)}
+        .pm-two-col{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:24px}
+        @media(max-width:720px){.pm-two-col{grid-template-columns:1fr}}
+        .pm-col{background:var(--bg-secondary);border:1px solid var(--border);border-radius:14px;padding:16px}
+        .pm-traj{display:flex;flex-direction:column;gap:6px;max-height:360px;overflow-y:auto}
+        .pm-traj-row{background:var(--bg-card);padding:8px 12px;border-radius:8px;font-size:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+        .pm-traj-row.ideal{flex-direction:column;align-items:flex-start;gap:4px;padding:10px 12px}
+        .pm-traj-step{font-family:'JetBrains Mono',monospace;color:var(--text-muted);font-weight:700;min-width:24px}
+        .pm-traj-act{font-weight:600}
+        .pm-traj-tgt{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--accent-cyan)}
+        .pm-traj-why{font-size:11px;color:var(--text-muted);font-style:italic;line-height:1.4;margin-top:2px;width:100%}
+        .pm-traj-empty{color:var(--text-muted);font-size:12px;text-align:center;padding:12px}
+        .pm-study{background:linear-gradient(135deg,rgba(168,85,247,.08),rgba(59,130,246,.08));border:1px solid rgba(168,85,247,.2);border-radius:14px;padding:18px;margin-bottom:20px}
+        .pm-study-title{font-size:13px;font-weight:700;color:var(--accent-purple);margin-bottom:6px}
+        .pm-study-body{font-size:13px;color:var(--text-secondary);line-height:1.6}
+        .pm-footer{display:flex;gap:10px;justify-content:flex-end}
+
+        /* Tutorial overlay */
+        .tut-overlay{position:fixed;inset:0;background:rgba(10,14,23,.9);backdrop-filter:blur(12px);z-index:600;display:flex;align-items:center;justify-content:center;padding:24px;animation:fadeIn .3s ease}
+        .tut-card{background:var(--bg-card);border:1px solid var(--border);border-radius:20px;padding:40px;max-width:580px;width:100%;animation:fadeSlideIn .45s ease-out}
+        .tut-card h2{font-size:28px;font-weight:800;margin-bottom:8px;letter-spacing:-.5px}
+        .tut-lead{font-size:15px;color:var(--text-secondary);line-height:1.6;margin-bottom:24px}
+        .tut-lead strong{color:var(--text-primary)}
+        .tut-steps{display:flex;flex-direction:column;gap:14px;margin-bottom:24px}
+        .tut-step{display:flex;gap:14px;align-items:flex-start;font-size:14px;color:var(--text-secondary);line-height:1.5}
+        .tut-step strong{color:var(--text-primary)}
+        .tut-num{width:28px;height:28px;border-radius:50%;background:var(--accent-blue);color:#fff;font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+        #tut-go{width:100%;justify-content:center;padding:12px}
+
+        /* ═══════════════════════════════════════════════════════════════════ */
+        /* ═══════ AUTH SCREEN — split panel + floating paths           ══════ */
+        /* ═══════════════════════════════════════════════════════════════════ */
+        .auth-screen{display:grid;grid-template-columns:1fr 1fr;min-height:calc(100vh - 56px);background:var(--bg-primary);animation:fadeIn .3s ease}
+        @media(max-width:900px){.auth-screen{grid-template-columns:1fr}}
+
+        /* Left panel — branding + testimonial over a dark photographic background */
+        .auth-left{position:relative;background-color:var(--bg-secondary);background-image:url('https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=1400&q=80');background-size:cover;background-position:center;border-right:1px solid var(--border);padding:56px 48px;display:flex;flex-direction:column;overflow:hidden;min-height:560px}
+        @media(max-width:900px){.auth-left{display:none}}
+        .auth-left-gradient{position:absolute;inset:0;background:linear-gradient(180deg,rgba(10,14,23,0.55) 0%,rgba(10,14,23,0.75) 55%,rgba(10,14,23,0.92) 100%);z-index:5;pointer-events:none}
+        .auth-brand{position:relative;z-index:15;display:flex;align-items:center;gap:10px;font-size:18px;font-weight:700}
+        .auth-brand-icon{width:28px;height:28px;display:flex;align-items:center;justify-content:center;border-radius:8px;background:linear-gradient(135deg,var(--accent-red),var(--accent-orange));color:#fff;font-size:16px}
+        .auth-quote{position:relative;z-index:15;margin-top:auto}
+        .auth-quote p{font-size:19px;line-height:1.55;color:var(--text-primary);font-weight:500;margin-bottom:12px;letter-spacing:-.2px}
+        .auth-quote footer{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text-muted);font-weight:500}
+        .auth-brand-icon{width:34px;height:34px;display:flex;align-items:center;justify-content:center;border-radius:10px;background:linear-gradient(135deg,var(--accent-red),var(--accent-orange));color:#fff;box-shadow:0 6px 18px rgba(239,68,68,.35)}
+        .auth-brand-icon svg{color:#fff}
+
+        /* Right panel — sign-in form */
+        .auth-right{position:relative;display:flex;align-items:center;justify-content:center;padding:56px 32px 32px;min-height:calc(100vh - 56px)}
+        .auth-right::before{content:'';position:absolute;top:-120px;right:-120px;width:440px;height:440px;background:radial-gradient(circle,rgba(59,130,246,.08) 0%,transparent 70%);pointer-events:none}
+        .auth-right::after{content:'';position:absolute;bottom:-100px;left:-80px;width:360px;height:360px;background:radial-gradient(circle,rgba(168,85,247,.06) 0%,transparent 70%);pointer-events:none}
+        .auth-back{position:absolute;top:20px;left:20px;background:transparent;color:var(--text-secondary);border:none;display:flex;align-items:center;gap:4px;padding:8px 12px;border-radius:8px;cursor:pointer;font-size:13px;font-family:inherit;transition:all .15s;z-index:5}
+        .auth-back:hover{color:var(--text-primary);background:rgba(255,255,255,.04)}
+        .auth-form-wrap{position:relative;z-index:2;width:100%;max-width:380px;display:flex;flex-direction:column;gap:18px;animation:fadeSlideIn .4s ease-out}
+        .auth-brand-mobile{display:none;align-items:center;gap:10px;font-size:17px;font-weight:700;margin-bottom:4px}
+        @media(max-width:900px){.auth-brand-mobile{display:flex}}
+        .auth-title{font-size:26px;font-weight:800;letter-spacing:-.5px;line-height:1.2}
+        .auth-sub{color:var(--text-secondary);font-size:14px;line-height:1.5}
+        .auth-social{display:flex;flex-direction:column;gap:8px}
+        .auth-btn{width:100%;padding:11px 16px;border-radius:10px;border:1px solid var(--border);background:var(--bg-card);color:var(--text-primary);font-size:13.5px;font-weight:600;cursor:pointer;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:10px;font-family:inherit}
+        .auth-btn:hover{border-color:var(--border-active);background:var(--bg-elevated);transform:translateY(-1px)}
+        .auth-btn svg{width:18px;height:18px;flex-shrink:0}
+        .auth-primary{background:var(--accent-blue);border-color:var(--accent-blue);color:#fff}
+        .auth-primary:hover{background:#2563eb;border-color:#2563eb;box-shadow:0 4px 14px rgba(59,130,246,.35)}
+        .auth-sep{display:flex;align-items:center;gap:10px;margin:2px 0}
+        .auth-sep-line{flex:1;height:1px;background:var(--border)}
+        .auth-sep-text{font-size:11px;color:var(--text-muted);letter-spacing:1px;font-weight:600}
+        .auth-hint{font-size:11.5px;color:var(--text-muted);margin-bottom:6px}
+        .auth-input-wrap{position:relative}
+        .auth-input-wrap input{width:100%;padding:11px 12px 11px 38px;border-radius:10px;border:1px solid var(--border);background:var(--bg-primary);color:var(--text-primary);font-size:13.5px;font-family:inherit;transition:all .15s}
+        .auth-input-wrap input:focus{outline:none;border-color:var(--accent-blue);box-shadow:0 0 0 3px var(--glow-blue)}
+        .auth-input-wrap svg{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text-muted);pointer-events:none;width:16px;height:16px}
+        .auth-error{color:var(--accent-red);font-size:11.5px;margin-top:-4px;animation:shakeX .3s}
+        .auth-terms{color:var(--text-muted);font-size:11.5px;line-height:1.55;margin-top:6px}
+        .auth-terms a{color:var(--text-secondary);text-decoration:underline;text-underline-offset:3px}
+        .auth-terms a:hover{color:var(--text-primary)}
+
+        /* Nav user badge */
+        .user-badge{display:flex;align-items:center;gap:8px;background:var(--bg-card);border:1px solid var(--border);padding:6px 10px 6px 6px;border-radius:24px;font-size:12px;color:var(--text-secondary);cursor:pointer;transition:all .2s;position:relative}
+        .user-badge:hover{border-color:var(--border-active);color:var(--text-primary)}
+        .user-badge .user-avatar{width:22px;height:22px;border-radius:50%;background:linear-gradient(135deg,var(--accent-blue),var(--accent-purple));color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:10px;flex-shrink:0;text-transform:uppercase}
+        .user-badge .user-name{max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .user-menu{position:absolute;top:100%;right:0;margin-top:6px;background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:6px;min-width:220px;box-shadow:0 8px 24px rgba(0,0,0,.4);z-index:150;display:none;animation:fadeSlideIn .2s ease-out}
+        .user-badge.open .user-menu{display:block}
+        .user-menu-info{padding:10px 12px;border-bottom:1px solid var(--border);margin-bottom:4px}
+        .user-menu-email{font-size:12px;color:var(--text-secondary);word-break:break-all}
+        .user-menu-provider{font-size:10.5px;color:var(--text-muted);margin-top:2px}
+        .user-menu-btn{width:100%;background:transparent;border:none;color:var(--text-secondary);text-align:left;padding:8px 12px;border-radius:8px;font-size:12.5px;cursor:pointer;font-family:inherit;display:flex;align-items:center;gap:8px;transition:all .15s}
+        .user-menu-btn:hover{background:rgba(255,255,255,.04);color:var(--text-primary)}
+        .user-menu-btn.danger:hover{background:rgba(239,68,68,.08);color:var(--accent-red)}
+
+        /* Sign in button (unsigned state) */
+        .nav-signin{background:transparent;border:1px solid var(--border);color:var(--text-secondary);padding:6px 14px;border-radius:24px;font-size:12px;font-weight:500;cursor:pointer;transition:all .2s;font-family:inherit}
+        .nav-signin:hover{border-color:var(--accent-blue);color:var(--text-primary);background:var(--glow-blue)}
+
+        /* Toast */
+        .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--bg-card);border:1px solid var(--border);border-left:3px solid var(--accent-blue);padding:12px 18px;border-radius:12px;font-size:13px;color:var(--text-primary);z-index:700;box-shadow:0 8px 24px rgba(0,0,0,.4);animation:fadeSlideIn .25s ease-out}
+
+        /* Inline icon helpers */
+        .inline-ic{display:inline-flex;align-items:center;justify-content:center;vertical-align:middle}
+        .inline-ic svg{display:block}
+        .inline-meta{display:inline-flex;align-items:center;gap:5px}
+        .inline-meta svg{flex-shrink:0}
+        .svc-map-head h3{display:flex;align-items:center;gap:8px}
+        .svc-map-head h3 svg{color:var(--accent-blue)}
+        .notebook-head h3{display:flex;align-items:center;gap:8px}
+        .notebook-head h3 svg{color:var(--accent-cyan)}
+        .coach-head-top h3{display:flex;align-items:center;gap:8px}
+        .coach-head-top h3 svg{color:var(--accent-purple)}
+        .inc-back{display:inline-flex;align-items:center;gap:6px}
+        .icon-btn{padding:6px 8px}
+        .icon-btn svg{display:block}
+        .nb-icon svg{vertical-align:middle;color:var(--text-secondary)}
+        .action-icon{display:flex;align-items:center;justify-content:center;color:var(--accent-blue)}
+        .action-icon svg{display:block}
+        .action-btn.is-danger .action-icon{color:var(--accent-orange)}
+        .svc-quick-actions button{display:inline-flex;align-items:center;gap:6px;justify-content:flex-start !important}
+        .svc-quick-actions button svg{color:var(--text-secondary)}
+        .scene-done, .scene-locked{display:inline-flex;align-items:center;gap:4px}
+        .coach-avatar svg{color:var(--text-primary)}
+        .coach-bubble.coach-celebrate .coach-avatar svg{color:var(--accent-green)}
+        .coach-bubble.coach-encourage .coach-avatar svg{color:var(--accent-cyan)}
+        .coach-bubble.coach-warn .coach-avatar svg{color:var(--accent-orange)}
+        .coach-bubble.coach-explain .coach-avatar svg{color:var(--accent-purple)}
+        .pm-crit-icon{display:inline-flex}
+        .pm-crit.passed .pm-crit-icon svg{color:var(--accent-green)}
+        .pm-crit.missed .pm-crit-icon svg{color:var(--accent-red)}
+        .pm-close svg{display:block}
+        .tut-header{display:flex;align-items:center;gap:12px;margin-bottom:8px}
+        .tut-brand-icon{display:flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,var(--accent-red),var(--accent-orange));color:#fff;box-shadow:0 6px 16px rgba(239,68,68,.3)}
+        .tut-header h2{margin:0}
+        .user-menu-btn{align-items:center}
+        .user-menu-btn svg{flex-shrink:0;opacity:.7}
+        .auth-btn svg.icon{color:currentColor}
+
+        /* Live test cards (overview tab) */
         .scenarios-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px}
         .sc-card{background:var(--bg-card);border:1px solid var(--border);border-radius:16px;padding:24px;transition:all .2s;position:relative;overflow:hidden}
         .sc-card:hover{border-color:var(--border-active)}
@@ -108,69 +462,9 @@
         .sc-result.success{background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.2);color:var(--accent-green)}
         .sc-result.partial{background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.2);color:var(--accent-orange)}
         .sc-result.info{background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.2);color:var(--accent-blue)}
-
-        /* API */
-        .ep-card{background:var(--bg-card);border:1px solid var(--border);border-radius:12px;margin-bottom:10px;overflow:hidden}
-        .ep-header{padding:14px 20px;display:flex;align-items:center;gap:12px;cursor:pointer;transition:background .15s}.ep-header:hover{background:rgba(255,255,255,.02)}
-        .method{padding:4px 10px;border-radius:6px;font-size:11px;font-weight:700;font-family:'JetBrains Mono',monospace}
-        .m-post{background:rgba(34,197,94,.12);color:var(--accent-green)}.m-get{background:rgba(59,130,246,.12);color:var(--accent-blue)}
-        .ep-path{font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:500}.ep-desc{margin-left:auto;font-size:13px;color:var(--text-muted)}
-        .ep-body{padding:20px;background:var(--bg-primary);border-top:1px solid var(--border);display:none}.ep-body.open{display:block}
-        .ep-body pre{font-family:'JetBrains Mono',monospace;font-size:12px;line-height:1.7;white-space:pre-wrap}
-        .ep-body .k{color:var(--accent-green)}.ep-body .s{color:var(--accent-cyan)}.ep-body .n{color:var(--accent-orange)}
-
-        /* ═══ DEMO ═══ */
-        .demo-bar{background:var(--bg-secondary);border-bottom:1px solid var(--border);padding:12px 24px;display:flex;align-items:center;gap:16px}
-        .demo-bar h2{font-size:15px;font-weight:700}
-        .demo-badge{padding:4px 12px;border-radius:20px;font-size:11px;font-weight:700;transition:all .3s}
-        .badge-idle{background:var(--bg-elevated);color:var(--text-muted)}.badge-active{background:rgba(239,68,68,.15);color:var(--accent-red);animation:pulse 2s infinite}.badge-resolved{background:rgba(34,197,94,.15);color:var(--accent-green);animation:glowPulse 2s infinite}
-        .demo-score{margin-left:auto;display:flex;align-items:center;gap:16px;font-size:13px;color:var(--text-secondary)}
-        .demo-score span{color:var(--accent-blue);font-weight:700;font-size:17px}
-        .score-pill{display:flex;align-items:center;gap:6px;background:var(--bg-card);border:1px solid var(--border);border-radius:20px;padding:4px 14px 4px 6px;transition:all .3s}
-        .score-dot{width:10px;height:10px;border-radius:50%;transition:all .3s}
-        .demo-progress{height:3px;background:var(--border);border-radius:0}
-        .demo-progress .progress-fill{height:100%;transition:width .4s ease}
-        .demo-wrap{display:flex;height:calc(100vh - 111px)}.demo-left{width:320px;background:var(--bg-secondary);border-right:1px solid var(--border);padding:20px;overflow-y:auto;display:flex;flex-direction:column;gap:16px}
-        .demo-right{flex:1;display:flex;flex-direction:column}
-        .demo-alert{background:linear-gradient(135deg,rgba(239,68,68,.08),rgba(239,68,68,.04));border-bottom:1px solid rgba(239,68,68,.2);padding:12px 24px;font-size:13px;display:none;animation:slideDown .3s ease-out}
-        .demo-alert.active{display:block}.demo-alert strong{color:var(--accent-red)}
-        .demo-output{flex:1;overflow-y:auto;padding:20px}
-        .lbl{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--text-muted);margin-bottom:6px}
-        .tc{padding:12px 14px;border-radius:12px;border:1px solid var(--border);cursor:pointer;transition:all .15s;margin-bottom:8px}
-        .tc:hover{border-color:var(--border-active);background:rgba(59,130,246,.04)}.tc.active{border-color:var(--accent-blue);background:rgba(59,130,246,.06)}
-        .tc .tc-name{font-weight:600;font-size:13px;margin-bottom:2px}.tc .tc-desc{font-size:11px;color:var(--text-muted)}.tc .diff-badge{margin-top:6px}
-        select,input[type=text]{background:var(--bg-primary);border:1px solid var(--border);color:var(--text-primary);padding:10px 12px;border-radius:10px;font-size:13px;width:100%;font-family:inherit;transition:border .2s}
-        select:focus,input:focus{border-color:var(--accent-blue);outline:none;box-shadow:0 0 0 3px var(--glow-blue)}
-        .hint{font-size:11px;color:var(--text-muted);margin-top:4px;font-style:italic}
-        .msg{margin-bottom:12px;padding:14px 18px;border-radius:12px;font-size:13px;line-height:1.7;border-left:3px solid;animation:fadeSlideIn .3s ease-out}
-        .msg-sys{background:rgba(59,130,246,.06);border-color:var(--accent-blue)}.msg-act{background:rgba(34,197,94,.06);border-color:var(--accent-green)}
-        .msg-obs{background:rgba(255,255,255,.02);border-color:var(--border)}.msg-err{background:rgba(239,68,68,.06);border-color:var(--accent-red)}
-        .msg-done{background:rgba(168,85,247,.06);border-color:var(--accent-purple)}
-        .msg pre{white-space:pre-wrap;font-family:'JetBrains Mono',monospace;font-size:12px;margin-top:8px}.msg .meta{font-size:11px;color:var(--text-muted);margin-top:8px}
-        .reward-tag{display:inline-block;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700;font-family:'JetBrains Mono',monospace;animation:rewardPop .3s ease-out}
-        .reward-pos{background:rgba(34,197,94,.15);color:var(--accent-green)}.reward-neg{background:rgba(239,68,68,.15);color:var(--accent-red)}
-        .svc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;margin-top:10px}
-        .svc-c{background:var(--bg-primary);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:12px;animation:fadeSlideIn .3s ease-out}
-        .svc-c .svc-n{font-weight:600;display:flex;align-items:center;gap:6px}
-        .health-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}.hd-ok{background:var(--accent-green);animation:pulse 3s infinite}.hd-deg{background:var(--accent-orange)}.hd-bad{background:var(--accent-red);animation:dotBlink .5s infinite}.hd-crash{background:var(--accent-red);animation:dotBlink .3s infinite}
-        .mini-bar{height:4px;background:var(--border);border-radius:2px;margin-top:4px;overflow:hidden}.mini-bar-fill{height:100%;border-radius:2px;animation:barGrow .5s ease-out forwards}
-        .err-badge{padding:1px 6px;border-radius:4px;font-size:10px;font-weight:700;display:inline-block;margin-left:4px}
-
-        /* Score overlay */
-        .score-overlay{position:absolute;inset:0;background:rgba(10,14,23,.85);display:flex;align-items:center;justify-content:center;z-index:10;animation:fadeIn .3s ease-out;backdrop-filter:blur(4px)}
-        .score-card{background:var(--bg-card);border:1px solid var(--border);border-radius:20px;padding:40px 56px;text-align:center;animation:fadeSlideIn .4s ease-out}
-        .score-card .big-score{font-size:64px;font-weight:900;margin:12px 0}
-        .score-card .score-label{font-size:14px;color:var(--text-muted);margin-bottom:16px}
-        .reward-bars{display:flex;align-items:flex-end;gap:3px;justify-content:center;height:40px;margin:16px 0}
-        .reward-bars .rbar{width:8px;border-radius:2px 2px 0 0;transition:height .3s ease}
-
-        .demo-guide{background:linear-gradient(135deg,rgba(59,130,246,.06),rgba(168,85,247,.06));border:1px solid rgba(59,130,246,.15);border-radius:12px;padding:20px;margin-bottom:16px}
-        .demo-guide h4{font-size:14px;font-weight:700;margin-bottom:8px;color:var(--accent-blue)}
-        .demo-guide ol{margin-left:18px;font-size:13px;color:var(--text-secondary);line-height:1.8}
-        .demo-guide code{background:var(--bg-elevated);padding:2px 6px;border-radius:4px;font-size:11px;color:var(--accent-cyan)}
     </style>
 </head>
-<body>
+<body data-mode="junior">
 
 <div class="nav">
     <div class="nav-brand">
@@ -179,75 +473,84 @@
     </div>
     <div class="nav-tabs">
         <div class="nav-tab active" onclick="switchTab('home')">Overview</div>
-        <div class="nav-tab" onclick="switchTab('demo')">Interactive Demo</div>
+        <div class="nav-tab" onclick="switchTab('demo')">Training</div>
         <div class="nav-tab" onclick="switchTab('api')">API Reference</div>
     </div>
-    <div class="nav-right"><div class="live-badge"><div class="live-dot"></div> Environment Live</div></div>
+    <div class="nav-right">
+        <button id="tutorial-restart" class="btn btn-outline btn-xs icon-btn" title="Restart tutorial" aria-label="Restart tutorial"></button>
+        <div class="mode-toggle" id="mode-toggle" title="Toggle between Junior (coach on) and Pro (coach off)">
+            <span class="mode-dot"></span>
+            <span>Mode:</span>
+            <span id="mode-label">Junior</span>
+        </div>
+        <div id="user-slot"></div>
+        <div class="live-badge"><div class="live-dot"></div> Environment Live</div>
+    </div>
 </div>
 
 <!-- ═══════ HOME ═══════ -->
 <div id="tab-home" class="tab-content active">
     <div class="hero">
-        <div class="hero-label"><span class="dot"></span> OpenEnv-Compatible RL Environment</div>
-        <h1>The Flight Simulator for<br><em>SRE Incident Response</em></h1>
-        <p class="subtitle">Train and evaluate AI agents on real-world production incident diagnosis and remediation. A Gymnasium-compatible environment with 9 microservices, 3 escalating scenarios, and rubric-graded scoring.</p>
+        <div class="hero-label"><span class="dot"></span> Incident-response simulator · AI-coached</div>
+        <h1>Train to fix production<br><em>before it breaks on you</em></h1>
+        <p class="subtitle">A flight simulator for on-call engineers. You're paged at 3 AM, a real-looking outage unfolds across 9 microservices, and an AI coach nudges you toward the right fix. No production is harmed.</p>
         <div class="hero-actions">
-            <button class="btn btn-primary" onclick="switchTab('demo')">&#9654; Try Interactive Demo</button>
+            <button class="btn btn-primary" onclick="switchTab('demo')">▶ Start Training</button>
             <button class="btn btn-outline" onclick="switchTab('api')">View API Docs</button>
         </div>
         <div class="stats-row">
-            <div class="stat"><div class="stat-value green">0.93</div><div class="stat-label">Baseline Score</div></div>
+            <div class="stat"><div class="stat-value green">3</div><div class="stat-label">Incident Scenarios</div></div>
             <div class="stat"><div class="stat-value blue">9</div><div class="stat-label">Microservices</div></div>
-            <div class="stat"><div class="stat-value orange">3</div><div class="stat-label">Incident Tasks</div></div>
-            <div class="stat"><div class="stat-value">10</div><div class="stat-label">Agent Actions</div></div>
+            <div class="stat"><div class="stat-value orange">10</div><div class="stat-label">SRE Actions</div></div>
+            <div class="stat"><div class="stat-value">1:1</div><div class="stat-label">AI Coaching</div></div>
         </div>
     </div>
     <hr class="divider">
     <div class="section">
         <div class="section-label">The Problem</div>
         <h2>Production Incidents Are Costing Billions</h2>
-        <p class="section-sub">The status quo is unsustainable -- and there is no training ground</p>
+        <p class="section-sub">The status quo is unsustainable — and there is no training ground</p>
         <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:32px">
             <div class="step-card" style="border-left:3px solid var(--accent-red);text-align:left"><div style="font-size:32px;font-weight:900;color:var(--accent-red);margin-bottom:4px">$1M-$5M</div><div style="font-size:13px;color:var(--text-secondary)">Cost per hour of downtime for enterprises</div></div>
             <div class="step-card" style="border-left:3px solid var(--accent-orange);text-align:left"><div style="font-size:32px;font-weight:900;color:var(--accent-orange);margin-bottom:4px">8.85 hrs</div><div style="font-size:13px;color:var(--text-secondary)">Average Mean Time To Resolution</div></div>
             <div class="step-card" style="border-left:3px solid var(--accent-purple);text-align:left"><div style="font-size:32px;font-weight:900;color:var(--accent-purple);margin-bottom:4px">65%</div><div style="font-size:13px;color:var(--text-secondary)">Of engineers report burnout from on-call</div></div>
-            <div class="step-card" style="border-left:3px solid var(--accent-cyan);text-align:left"><div style="font-size:32px;font-weight:900;color:var(--accent-cyan);margin-bottom:4px">0</div><div style="font-size:13px;color:var(--text-secondary)">RL environments for incident response</div></div>
+            <div class="step-card" style="border-left:3px solid var(--accent-cyan);text-align:left"><div style="font-size:32px;font-weight:900;color:var(--accent-cyan);margin-bottom:4px">6 mo</div><div style="font-size:13px;color:var(--text-secondary)">Typical ramp-up time for new SREs</div></div>
         </div>
-        <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:16px;padding:28px;font-size:15px;line-height:1.8;color:var(--text-secondary)">Every tech company operates on-call rotations where engineers are woken at 3 AM to diagnose production outages. There is no safe, realistic environment to practice. Engineers learn by making mistakes in production. AI agents have no benchmark to train on.</div>
+        <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:16px;padding:28px;font-size:15px;line-height:1.8;color:var(--text-secondary)">Every tech company operates on-call rotations where engineers are woken at 3 AM to diagnose production outages. There is no safe, realistic place to practice. Engineers learn by making mistakes in production.</div>
     </div>
     <hr class="divider">
     <div class="section">
-        <div class="section-label">The Solution</div>
-        <h2>A Complete Incident Response Training Environment</h2>
-        <p class="section-sub">Simulates a production microservices cluster where AI agents diagnose and remediate real-world incidents through a standard RL interface.</p>
+        <div class="section-label">How Training Works</div>
+        <h2>Four Steps, Coached End-to-End</h2>
+        <p class="section-sub">A realistic outage, real decisions, instant feedback from your AI coach.</p>
         <div class="steps-grid">
-            <div class="step-card"><div class="step-num">01</div><div class="step-icon">&#128680;</div><h3>Alert Fires</h3><p>PagerDuty-style incident alert with affected services and severity</p></div>
-            <div class="step-card"><div class="step-num">02</div><div class="step-icon">&#128269;</div><h3>Investigate</h3><p>Read logs, check metrics, run diagnostics across 9 microservices</p></div>
-            <div class="step-card"><div class="step-num">03</div><div class="step-icon">&#128300;</div><h3>Diagnose</h3><p>Trace dependency chains to pinpoint the root cause</p></div>
-            <div class="step-card"><div class="step-num">04</div><div class="step-icon">&#9889;</div><h3>Remediate</h3><p>Restart, rollback, scale, or reconfigure to resolve the incident</p></div>
+            <div class="step-card"><div class="step-num">01</div><div class="step-icon">🚨</div><h3>Alert Fires</h3><p>You're paged. Alert tells you which services are screaming, not why.</p></div>
+            <div class="step-card"><div class="step-num">02</div><div class="step-icon">🔍</div><h3>Investigate</h3><p>Click the service map. Read logs. Check metrics. Your coach nudges you toward the right clue.</p></div>
+            <div class="step-card"><div class="step-num">03</div><div class="step-icon">🔬</div><h3>Diagnose</h3><p>Trace the dependency chain to find the real root cause — not the surface symptom.</p></div>
+            <div class="step-card"><div class="step-num">04</div><div class="step-icon">⚡</div><h3>Remediate</h3><p>Restart, rollback, or reconfigure. Every decision is scored and explained.</p></div>
         </div>
     </div>
     <hr class="divider">
     <div class="section">
-        <div class="section-label">Why This Matters</div>
-        <h2>First-of-its-Kind in the RL Ecosystem</h2>
-        <p class="section-sub">No Gymnasium or OpenEnv environment exists for DevOps or incident response</p>
+        <div class="section-label">What Makes It Different</div>
+        <h2>An AI Coach in Your Corner</h2>
+        <p class="section-sub">Every mistake becomes a learning moment, not a bruise</p>
         <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px">
-            <div class="step-card"><div style="font-size:28px;margin-bottom:10px">&#127942;</div><h3>Zero Prior Art</h3><p>No OpenEnv/Gymnasium environment exists for infrastructure operations</p></div>
-            <div class="step-card"><div style="font-size:28px;margin-bottom:10px">&#128279;</div><h3>Causal Reasoning</h3><p>Agents must trace symptoms through dependency graphs</p></div>
-            <div class="step-card"><div style="font-size:28px;margin-bottom:10px">&#128260;</div><h3>Action Ordering</h3><p>Hard task requires correct remediation sequence</p></div>
-            <div class="step-card"><div style="font-size:28px;margin-bottom:10px">&#127919;</div><h3>Partial Credit</h3><p>Every diagnostic step provides reward signal</p></div>
+            <div class="step-card"><div style="font-size:28px;margin-bottom:10px">💡</div><h3>Contextual Hints</h3><p>The coach reads your game state and suggests the next best action — with the reason why.</p></div>
+            <div class="step-card"><div style="font-size:28px;margin-bottom:10px">📘</div><h3>Plain-English Why</h3><p>Click "Why?" on any log or metric to get a jargon-free explanation.</p></div>
+            <div class="step-card"><div style="font-size:28px;margin-bottom:10px">🗺️</div><h3>Visual Service Map</h3><p>See the cascade spread through the dependency graph in real time.</p></div>
+            <div class="step-card"><div style="font-size:28px;margin-bottom:10px">🏆</div><h3>Post-mortem Review</h3><p>Finish an incident, see your grade, compare against a senior SRE's playbook.</p></div>
         </div>
     </div>
     <hr class="divider">
     <div class="section">
         <div class="section-label">Incident Scenarios</div>
-        <h2>3 Tasks (Easy &#8594; Hard)</h2>
-        <p class="section-sub">Deterministic rubric-based grading from 0.0 to 1.0</p>
+        <h2>3 Scenarios — Easy to Hard</h2>
+        <p class="section-sub">Each one teaches a different diagnostic skill. Unlock progressively.</p>
         <div class="tasks-grid">
-            <div class="tcard"><div class="tcard-top"><span class="diff-badge diff-easy">EASY</span><span class="tcard-score" style="color:var(--accent-green)">1.00</span></div><h3>OOM Crash</h3><p>payment-service crashes with OutOfMemoryError. Identify, read logs, restart with higher memory.</p><div class="tcard-meta"><span>&#9201; 15 steps</span><span>&#127919; 4 criteria</span></div></div>
-            <div class="tcard"><div class="tcard-top"><span class="diff-badge diff-medium">MEDIUM</span><span class="tcard-score" style="color:var(--accent-orange)">0.80</span></div><h3>DB Pool Exhaustion</h3><p>Connection leak exhausts postgres-db pool, causing cascading 500s across services.</p><div class="tcard-meta"><span>&#9201; 25 steps</span><span>&#127919; 7 criteria</span></div></div>
-            <div class="tcard"><div class="tcard-top"><span class="diff-badge diff-hard">HARD</span><span class="tcard-score" style="color:var(--accent-green)">1.00</span></div><h3>Bad Deployment Cascade</h3><p>Memory leak from bad deploy exhausts cluster quota. Action ORDER matters.</p><div class="tcard-meta"><span>&#9201; 35 steps</span><span>&#127919; 10 criteria</span></div></div>
+            <div class="tcard"><div class="tcard-top"><span class="diff-badge diff-easy">YOUR FIRST PAGE</span><span class="tcard-score" style="color:var(--accent-green)">5 min</span></div><h3>OOM Crash</h3><p>payment-service crashes with OutOfMemoryError. Learn how to read logs, spot memory limits, and restart correctly.</p><div class="tcard-meta"><span>⏱ 15 steps</span><span>🎯 4 learning goals</span></div></div>
+            <div class="tcard"><div class="tcard-top"><span class="diff-badge diff-medium">TRACE THE CASCADE</span><span class="tcard-score" style="color:var(--accent-orange)">12 min</span></div><h3>DB Pool Exhaustion</h3><p>Connection leak cascades through the stack. Learn to trace symptoms past the surface to the real root cause.</p><div class="tcard-meta"><span>⏱ 25 steps</span><span>🎯 7 learning goals</span></div></div>
+            <div class="tcard"><div class="tcard-top"><span class="diff-badge diff-hard">UNDER FIRE</span><span class="tcard-score" style="color:var(--accent-red)">20 min</span></div><h3>Bad Deployment Cascade</h3><p>A bad deploy takes out the cluster. Three services failing at once. Learn when to rollback vs restart, and the importance of sequencing.</p><div class="tcard-meta"><span>⏱ 35 steps</span><span>🎯 10 learning goals</span></div></div>
         </div>
     </div>
     <hr class="divider">
@@ -256,50 +559,48 @@
         <h2>9-Service Microservices Cluster</h2>
         <p class="section-sub">Realistic failure propagation through a dependency graph</p>
         <div class="arch-grid">
-            <div class="arch-card"><h3>&#127760; Service Topology</h3>
-                <div class="service-map"><span class="svc-ok">frontend-bff</span> <span class="svc-arrow">&#8594;</span> <span class="svc-ok">api-gateway</span>
-    <span class="svc-arrow">&#9500;&#8594;</span> <span class="svc-bad">order-service</span> <span class="svc-arrow">&#8594;</span> <span class="svc-ok">payment-service</span>
-    <span class="svc-arrow">&#9474;                      &#8594;</span> <span class="svc-ok">inventory-service</span>
-    <span class="svc-arrow">&#9474;                      &#8594;</span> <span class="svc-ok">postgres-db</span>
-    <span class="svc-arrow">&#9500;&#8594;</span> <span class="svc-ok">user-service</span> <span class="svc-arrow">&#8594;</span> <span class="svc-ok">auth-service</span>
-    <span class="svc-arrow">&#9492;&#8594;</span> <span class="svc-ok">notification-service</span></div>
+            <div class="arch-card"><h3>🌐 Service Topology</h3>
+                <div class="service-map"><span class="svc-ok">frontend-bff</span> <span class="svc-arrow">→</span> <span class="svc-ok">api-gateway</span>
+    <span class="svc-arrow">├→</span> <span class="svc-bad">order-service</span> <span class="svc-arrow">→</span> <span class="svc-ok">payment-service</span>
+    <span class="svc-arrow">│                       →</span> <span class="svc-ok">inventory-service</span>
+    <span class="svc-arrow">│                       →</span> <span class="svc-ok">postgres-db</span>
+    <span class="svc-arrow">├→</span> <span class="svc-ok">user-service</span> <span class="svc-arrow">→</span> <span class="svc-ok">auth-service</span>
+    <span class="svc-arrow">└→</span> <span class="svc-ok">notification-service</span></div>
             </div>
-            <div class="arch-card"><h3>&#128202; Per-Service Simulation</h3>
+            <div class="arch-card"><h3>📊 Per-Service Simulation</h3>
                 <ul class="feat-list">
-                    <li><span class="dot"></span> <strong>Health states</strong> -- healthy, degraded, unhealthy, crashed</li>
-                    <li><span class="dot"></span> <strong>Live metrics</strong> -- CPU, memory, latency p50/p99, error rate</li>
-                    <li><span class="dot"></span> <strong>Structured logs</strong> -- timestamped with realistic error patterns</li>
-                    <li><span class="dot"></span> <strong>Deployment history</strong> -- version tracking + rollback</li>
-                    <li><span class="dot"></span> <strong>Dependencies</strong> -- upstream/downstream failure cascading</li>
-                    <li><span class="dot"></span> <strong>Resource quotas</strong> -- CPU/memory limits per replica</li>
+                    <li><span class="dot"></span> <strong>Health states</strong> — healthy, degraded, unhealthy, crashed</li>
+                    <li><span class="dot"></span> <strong>Live metrics</strong> — CPU, memory, latency p50/p99, error rate</li>
+                    <li><span class="dot"></span> <strong>Structured logs</strong> — timestamped with realistic error patterns</li>
+                    <li><span class="dot"></span> <strong>Deployment history</strong> — version tracking + rollback</li>
+                    <li><span class="dot"></span> <strong>Dependencies</strong> — upstream/downstream failure cascading</li>
+                    <li><span class="dot"></span> <strong>Resource quotas</strong> — CPU/memory limits per replica</li>
                 </ul>
             </div>
         </div>
     </div>
     <hr class="divider">
     <div class="section">
-        <div class="guide-card"><h3>&#128161; How to Evaluate This Environment</h3>
+        <div class="guide-card"><h3>💡 Ready to train?</h3>
             <div class="guide-steps">
-                <div class="guide-step"><div class="guide-step-num">1</div><div class="guide-step-text"><strong>Run the Live Tests below</strong> -- Click each scenario card to see real API calls with staged execution and visual feedback.</div></div>
-                <div class="guide-step"><div class="guide-step-num">2</div><div class="guide-step-text"><strong>Play the Interactive Demo</strong> -- Click "Interactive Demo" tab, select "OOM Crash", then: <code>list_services</code> &#8594; <code>read_logs(payment-service)</code> &#8594; <code>restart_service</code> with <code>{"memory_limit":"512Mi"}</code></div></div>
-                <div class="guide-step"><div class="guide-step-num">3</div><div class="guide-step-text"><strong>Run the Baseline Agent</strong> -- <code>python inference.py</code> with <code>[START]/[STEP]/[END]</code> structured logs. Average score: <strong>0.93</strong></div></div>
-                <div class="guide-step"><div class="guide-step-num">4</div><div class="guide-step-text"><strong>Try the Hard Task</strong> -- "Bad Deployment Cascade" requires rollback BEFORE restarting starved services.</div></div>
+                <div class="guide-step"><div class="guide-step-num">1</div><div class="guide-step-text">Click <strong>Training</strong> in the nav bar. Your first-run tutorial will walk you through the UI.</div></div>
+                <div class="guide-step"><div class="guide-step-num">2</div><div class="guide-step-text">Start with <strong>"Your first page"</strong> — a simple OOM crash, solvable in ~5 minutes.</div></div>
+                <div class="guide-step"><div class="guide-step-num">3</div><div class="guide-step-text">Your AI coach appears on the right. Stuck? Click <code>🤖 Hint</code>. Want an explanation of a log line? Click <code>Why?</code> on any action card.</div></div>
+                <div class="guide-step"><div class="guide-step-num">4</div><div class="guide-step-text">Finish an incident and see your <strong>post-mortem</strong>: grade, rubric breakdown, and what a senior SRE would have done differently.</div></div>
             </div>
         </div>
     </div>
-    <hr class="divider">
 
-    <!-- Live Test Scenarios -->
     <div class="section">
         <div class="section-label">Live Testing</div>
         <h2>Run Real API Scenarios</h2>
         <p class="section-sub">Each test makes real API calls to the running environment. Watch the staged execution.</p>
         <div class="scenarios-grid">
-            <div class="sc-card" id="sc-health"><h4>&#9889; Health Check</h4><div class="sc-desc">Verify the environment is running and responsive</div><div class="sc-steps" id="sc-health-steps"></div><button class="btn btn-sm btn-outline" onclick="runSc('health')">Run Test</button></div>
-            <div class="sc-card" id="sc-tasks"><h4>&#128203; List All Tasks</h4><div class="sc-desc">Enumerate available incident scenarios with difficulty levels</div><div class="sc-steps" id="sc-tasks-steps"></div><button class="btn btn-sm btn-outline" onclick="runSc('tasks')">Run Test</button></div>
-            <div class="sc-card" id="sc-diag"><h4>&#128269; Quick Diagnosis</h4><div class="sc-desc">Start an OOM incident, list services, then read error logs from the crashed service</div><div class="sc-steps" id="sc-diag-steps"></div><button class="btn btn-sm btn-outline" onclick="runSc('diag')">Run Test</button></div>
-            <div class="sc-card" id="sc-fix"><h4>&#9989; Full Resolution</h4><div class="sc-desc">Run a complete fix: diagnose the OOM crash and restart with more memory. Expect score 1.00</div><div class="sc-steps" id="sc-fix-steps"></div><button class="btn btn-sm btn-outline" onclick="runSc('fix')">Run Test</button></div>
-            <div class="sc-card" id="sc-cascade"><h4>&#128165; Cascading Failure</h4><div class="sc-desc">Start a DB pool exhaustion incident and trace the cascade from frontend through to the database</div><div class="sc-steps" id="sc-cascade-steps"></div><button class="btn btn-sm btn-outline" onclick="runSc('cascade')">Run Test</button></div>
+            <div class="sc-card" id="sc-health"><h4>⚡ Health Check</h4><div class="sc-desc">Verify the environment is running and responsive</div><div class="sc-steps" id="sc-health-steps"></div><button class="btn btn-sm btn-outline" onclick="runSc('health')">Run Test</button></div>
+            <div class="sc-card" id="sc-tasks"><h4>📋 List All Tasks</h4><div class="sc-desc">Enumerate available incident scenarios with difficulty levels</div><div class="sc-steps" id="sc-tasks-steps"></div><button class="btn btn-sm btn-outline" onclick="runSc('tasks')">Run Test</button></div>
+            <div class="sc-card" id="sc-diag"><h4>🔍 Quick Diagnosis</h4><div class="sc-desc">Start an OOM incident, list services, then read error logs from the crashed service</div><div class="sc-steps" id="sc-diag-steps"></div><button class="btn btn-sm btn-outline" onclick="runSc('diag')">Run Test</button></div>
+            <div class="sc-card" id="sc-fix"><h4>✅ Full Resolution</h4><div class="sc-desc">Run a complete fix: diagnose the OOM crash and restart with more memory</div><div class="sc-steps" id="sc-fix-steps"></div><button class="btn btn-sm btn-outline" onclick="runSc('fix')">Run Test</button></div>
+            <div class="sc-card" id="sc-cascade"><h4>💥 Cascading Failure</h4><div class="sc-desc">Start a DB pool exhaustion incident and trace the cascade from frontend through to the database</div><div class="sc-steps" id="sc-cascade-steps"></div><button class="btn btn-sm btn-outline" onclick="runSc('cascade')">Run Test</button></div>
         </div>
     </div>
     <div class="footer">Built for the <strong>Meta PyTorch OpenEnv Hackathon 2026</strong> by Team MetaMorphs</div>
@@ -309,11 +610,11 @@
 <div id="tab-api" class="tab-content">
     <div class="section">
         <div class="section-label">Endpoints</div><h2>API Reference</h2>
-        <p class="section-sub">Base URL: <code style="background:var(--bg-elevated);padding:6px 12px;border-radius:8px;font-size:13px">https://hype4raj-incident-commander-env.hf.space</code></p>
+        <p class="section-sub">Base URL: <code style="background:var(--bg-elevated);padding:6px 12px;border-radius:8px;font-size:13px">http://localhost:8000</code></p>
         <div class="ep-card"><div class="ep-header" onclick="this.nextElementSibling.classList.toggle('open')"><span class="method m-post">POST</span><span class="ep-path">/reset</span><span class="ep-desc">Start a new incident episode</span></div><div class="ep-body"><pre><span class="k">Request:</span>  { <span class="s">"task_id"</span>: <span class="s">"oom_crash"</span> }
 <span class="k">Response:</span>
 { <span class="s">"observation"</span>: { <span class="s">"message"</span>: <span class="s">"INCIDENT ALERT..."</span>, <span class="s">"alert"</span>: <span class="s">"..."</span>, <span class="s">"dependency_graph"</span>: {...} },
-  <span class="s">"reward"</span>: <span class="n">0.0</span>, <span class="s">"done"</span>: <span class="n">false</span>,
+  <span class="s">"reward"</span>: <span class="n">0.01</span>, <span class="s">"done"</span>: <span class="n">false</span>,
   <span class="s">"info"</span>: { <span class="s">"task_id"</span>: <span class="s">"oom_crash"</span>, <span class="s">"max_steps"</span>: <span class="n">15</span> } }</pre></div></div>
         <div class="ep-card"><div class="ep-header" onclick="this.nextElementSibling.classList.toggle('open')"><span class="method m-post">POST</span><span class="ep-path">/step</span><span class="ep-desc">Execute an SRE action</span></div><div class="ep-body"><pre><span class="k">Request:</span>
 { <span class="s">"action_type"</span>: <span class="s">"read_logs"</span>, <span class="s">"target_service"</span>: <span class="s">"payment-service"</span>,
@@ -323,193 +624,271 @@
   <span class="s">"reward"</span>: <span class="n">0.03</span>, <span class="s">"done"</span>: <span class="n">false</span>, <span class="s">"info"</span>: { <span class="s">"step_count"</span>: <span class="n">2</span> } }</pre></div></div>
         <div class="ep-card"><div class="ep-header" onclick="this.nextElementSibling.classList.toggle('open')"><span class="method m-get">GET</span><span class="ep-path">/state</span><span class="ep-desc">Current episode state</span></div><div class="ep-body"><pre><span class="k">Response:</span>
 { <span class="s">"episode_id"</span>: <span class="s">"uuid"</span>, <span class="s">"step_count"</span>: <span class="n">5</span>, <span class="s">"task_id"</span>: <span class="s">"oom_crash"</span>,
-  <span class="s">"incident_resolved"</span>: <span class="n">true</span>, <span class="s">"current_score"</span>: <span class="n">1.0</span> }</pre></div></div>
-        <div class="ep-card"><div class="ep-header" onclick="this.nextElementSibling.classList.toggle('open')"><span class="method m-get">GET</span><span class="ep-path">/tasks</span><span class="ep-desc">List available scenarios</span></div><div class="ep-body"><pre><span class="k">Response:</span>
-{ <span class="s">"tasks"</span>: { <span class="s">"oom_crash"</span>: { <span class="s">"difficulty"</span>: <span class="s">"easy"</span>, <span class="s">"max_steps"</span>: <span class="n">15</span> }, ... } }</pre></div></div>
+  <span class="s">"incident_resolved"</span>: <span class="n">true</span>, <span class="s">"current_score"</span>: <span class="n">0.99</span> }</pre></div></div>
+        <div class="ep-card"><div class="ep-header" onclick="this.nextElementSibling.classList.toggle('open')"><span class="method m-get">GET</span><span class="ep-path">/tasks</span><span class="ep-desc">List available scenarios (with backstory, goals, prereqs)</span></div><div class="ep-body"><pre><span class="k">Response:</span>
+{ <span class="s">"tasks"</span>: { <span class="s">"oom_crash"</span>: { <span class="s">"skill_tag"</span>: <span class="s">"Your first page"</span>, <span class="s">"backstory"</span>: <span class="s">"..."</span>, <span class="s">"learning_goals"</span>: [...] }, ... } }</pre></div></div>
+        <div class="ep-card"><div class="ep-header" onclick="this.nextElementSibling.classList.toggle('open')"><span class="method m-get">GET</span><span class="ep-path">/coach/hint</span><span class="ep-desc">Rule-based contextual hint for the current game state</span></div><div class="ep-body"><pre><span class="k">Response:</span>
+{ <span class="s">"hint"</span>: <span class="s">"Next: read_logs on payment-service..."</span>, <span class="s">"suggested_action"</span>: {...}, <span class="s">"tone"</span>: <span class="s">"encourage"</span> }</pre></div></div>
+        <div class="ep-card"><div class="ep-header" onclick="this.nextElementSibling.classList.toggle('open')"><span class="method m-post">POST</span><span class="ep-path">/coach/explain</span><span class="ep-desc">Plain-English explanation of the last observation</span></div><div class="ep-body"><pre><span class="k">Request:</span>
+{ <span class="s">"last_action"</span>: {...}, <span class="s">"last_message"</span>: <span class="s">"...log text..."</span> }
+<span class="k">Response:</span>
+{ <span class="s">"explanation"</span>: <span class="s">"OutOfMemoryError means..."</span>, <span class="s">"matched_terms"</span>: [...] }</pre></div></div>
+        <div class="ep-card"><div class="ep-header" onclick="this.nextElementSibling.classList.toggle('open')"><span class="method m-get">GET</span><span class="ep-path">/postmortem</span><span class="ep-desc">End-of-episode review with criteria, trajectory, and senior comparison</span></div><div class="ep-body"><pre><span class="k">Response:</span>
+{ <span class="s">"grade_letter"</span>: <span class="s">"A"</span>, <span class="s">"score"</span>: <span class="n">0.99</span>, <span class="s">"criteria"</span>: [...], <span class="s">"user_trajectory"</span>: [...], <span class="s">"ideal_trajectory"</span>: [...] }</pre></div></div>
         <div class="ep-card"><div class="ep-header" onclick="this.nextElementSibling.classList.toggle('open')"><span class="method m-get">GET</span><span class="ep-path">/health</span><span class="ep-desc">Liveness check</span></div><div class="ep-body"><pre><span class="k">Response:</span> { <span class="s">"status"</span>: <span class="s">"ok"</span> }</pre></div></div>
     </div>
 </div>
 
-<!-- ═══════ DEMO ═══════ -->
+<!-- ═══════ TRAINING (DEMO) ═══════ -->
 <div id="tab-demo" class="tab-content">
-    <div class="demo-bar">
-        <h2>Interactive SRE Console</h2>
-        <span class="demo-badge badge-idle" id="statusBadge">IDLE</span>
-        <div class="demo-score">
-            Step: <span id="stepCount">0</span> / <span id="maxSteps">-</span>
-            <div class="score-pill"><div class="score-dot" id="scoreDot" style="background:var(--text-muted)"></div> <span id="currentScore">0.00</span></div>
+    <!-- Auth screen (shown when user is not signed in) -->
+    <div id="auth-screen" class="auth-screen hidden">
+        <div class="auth-left">
+            <div class="auth-left-gradient"></div>
+            <div class="auth-brand" id="auth-brand-desktop"></div>
+            <blockquote class="auth-quote">
+                <p>"I used to stare blankly at logs during pages. After a weekend of training here, I knew exactly where to look first. It's muscle memory for outages."</p>
+                <footer>~ Priya, SRE @ fintech · graduated all 3 scenarios</footer>
+            </blockquote>
+        </div>
+        <div class="auth-right">
+            <button class="auth-back" id="auth-back-btn"></button>
+            <div class="auth-form-wrap">
+                <div class="auth-brand-mobile" id="auth-brand-mobile"></div>
+                <div>
+                    <h1 class="auth-title">Sign in or start training</h1>
+                    <p class="auth-sub">Your progress is tied to your email. Sign in with any of these to begin.</p>
+                </div>
+                <div class="auth-social" id="auth-social-btns"></div>
+                <div class="auth-sep">
+                    <div class="auth-sep-line"></div>
+                    <span class="auth-sep-text">OR</span>
+                    <div class="auth-sep-line"></div>
+                </div>
+                <form id="auth-email-form" autocomplete="off">
+                    <p class="auth-hint">Enter your email to sign in or create an account</p>
+                    <div class="auth-input-wrap" id="auth-email-wrap">
+                        <input type="email" id="auth-email-input" placeholder="your.email@example.com" required>
+                    </div>
+                    <div id="auth-error" class="auth-error hidden"></div>
+                    <button type="submit" class="auth-btn auth-primary" style="margin-top:8px">Continue with email</button>
+                </form>
+                <p class="auth-terms">
+                    By continuing, you agree to our <a href="#">Terms of Service</a> and <a href="#">Privacy Policy</a>. Your progress is stored locally in this browser.
+                </p>
+            </div>
         </div>
     </div>
-    <div class="demo-progress"><div class="progress-fill" id="stepProgress" style="width:0%;background:var(--accent-blue)"></div></div>
-    <div class="demo-wrap">
-        <div class="demo-left">
-            <div><div class="lbl">Select Incident</div>
-                <div class="tc active" data-task="oom_crash" onclick="selTask(this)"><div class="tc-name">OOM Crash</div><div class="tc-desc">payment-service down</div><span class="diff-badge diff-easy">EASY</span></div>
-                <div class="tc" data-task="db_pool_exhaustion" onclick="selTask(this)"><div class="tc-name">DB Pool Exhaustion</div><div class="tc-desc">Cascading 5xx errors</div><span class="diff-badge diff-medium">MEDIUM</span></div>
-                <div class="tc" data-task="bad_deployment_cascade" onclick="selTask(this)"><div class="tc-name">Bad Deployment</div><div class="tc-desc">Memory leak cascade</div><span class="diff-badge diff-hard">HARD</span></div>
-                <button class="btn btn-green" style="width:100%;margin-top:8px" id="resetBtn" onclick="resetEnv()">Start Incident</button>
-            </div>
-            <hr style="border-color:var(--border)">
-            <div>
-                <div class="lbl">Take Action</div>
-                <div style="margin-bottom:8px"><label style="font-size:11px;color:var(--text-muted)">Action</label>
-                <select id="actionType" onchange="updateHint()"><option value="list_services">list_services</option><option value="describe_service">describe_service</option><option value="read_logs">read_logs</option><option value="check_metrics">check_metrics</option><option value="restart_service">restart_service</option><option value="scale_service">scale_service</option><option value="rollback_deployment">rollback_deployment</option><option value="run_diagnostic">run_diagnostic</option><option value="update_config">update_config</option><option value="resolve_incident">resolve_incident</option></select></div>
-                <div style="margin-bottom:8px"><label style="font-size:11px;color:var(--text-muted)">Target Service</label>
-                <select id="targetService"><option value="">(none)</option><option value="api-gateway">api-gateway</option><option value="frontend-bff">frontend-bff</option><option value="order-service">order-service</option><option value="payment-service">payment-service</option><option value="inventory-service">inventory-service</option><option value="user-service">user-service</option><option value="auth-service">auth-service</option><option value="notification-service">notification-service</option><option value="postgres-db">postgres-db</option></select></div>
-                <div style="margin-bottom:8px"><label style="font-size:11px;color:var(--text-muted)">Parameters (JSON)</label>
-                <input type="text" id="params" placeholder='e.g. {"severity":"ERROR"}'/><div class="hint" id="paramHint">No parameters needed</div></div>
-                <button class="btn btn-primary" style="width:100%" id="stepBtn" onclick="stepEnv()" disabled>Execute Action</button>
-            </div>
+
+    <!-- Scenario picker -->
+    <div id="scenario-picker">
+        <div class="picker-head">
+            <h1>Pick your incident</h1>
+            <p>Start with "Your first page" if you're new. Each scenario unlocks the next. Your progress is saved in this browser.</p>
+            <button class="btn btn-outline btn-xs picker-reset" id="reset-progress"><span class="inline-ic" id="reset-progress-ic"></span> Reset progress</button>
         </div>
-        <div class="demo-right" style="position:relative">
-            <div class="demo-alert" id="alertBanner"><strong>INCIDENT ALERT</strong> &mdash; <span id="alertText"></span></div>
-            <div class="demo-output" id="output">
-                <div class="demo-guide"><h4>Quick Start Guide</h4><ol>
-                    <li>Select an incident scenario on the left (start with <strong>OOM Crash</strong>)</li>
-                    <li>Click <strong>"Start Incident"</strong> to begin</li>
-                    <li>Use <code>list_services</code> to see the cluster state</li>
-                    <li>Investigate with <code>read_logs</code> and <code>check_metrics</code></li>
-                    <li>Apply a fix: <code>restart_service</code>, <code>rollback_deployment</code>, etc.</li>
-                    <li>Goal: maximize score (0.0 - 1.0) within the step budget</li>
-                </ol></div>
+        <div class="picker-grid" id="scenario-grid"></div>
+    </div>
+
+    <!-- Incident screen -->
+    <div id="incident-screen" class="hidden">
+        <div class="inc-screen">
+            <div class="inc-top">
+                <button class="inc-back" id="back-to-picker"><span class="inline-ic" id="back-to-picker-ic"></span> Scenarios</button>
+                <div class="battery">
+                    <span class="step-label">Budget</span>
+                    <div class="battery-shell"><div class="battery-fill bat-ok" id="battery-fill" style="width:100%"></div></div>
+                    <span id="step-num">0 / 15</span>
+                </div>
+                <div class="inc-alert" id="alert-banner">
+                    <div class="alert-content">
+                        <div class="alert-tag">Waiting for the page…</div>
+                        <div class="alert-headline">Select a scenario to begin.</div>
+                    </div>
+                </div>
+                <div class="score-ring">
+                    <svg width="60" height="60" viewBox="0 0 60 60">
+                        <circle class="ring-bg" cx="30" cy="30" r="26"></circle>
+                        <circle class="ring-fill" id="score-ring-fill" cx="30" cy="30" r="26" stroke-dasharray="163" stroke-dashoffset="163"></circle>
+                    </svg>
+                    <div class="ring-num"><span id="score-num">0</span><span class="ring-pct">%</span></div>
+                </div>
+            </div>
+
+            <div class="inc-main">
+                <div class="svc-map-wrap">
+                    <div class="svc-map-head">
+                        <h3><span class="inline-ic" id="svc-map-head-ic"></span> Service map · <span style="color:var(--text-muted);font-weight:500;font-size:12px">click any service for details</span></h3>
+                        <div class="svc-map-legend">
+                            <span><i class="lg-healthy"></i>healthy</span>
+                            <span><i class="lg-degraded"></i>degraded</span>
+                            <span><i class="lg-bad"></i>unhealthy/crashed</span>
+                        </div>
+                    </div>
+                    <div id="svc-map"></div>
+                </div>
+                <div class="svc-detail" id="svc-detail-panel">
+                    <div class="svc-detail-empty">Click a service in the map to inspect it.</div>
+                </div>
+            </div>
+
+            <div class="notebook-area">
+                <div class="notebook-head">
+                    <h3><span class="inline-ic" id="notebook-head-ic"></span> Your action log</h3>
+                    <span class="notebook-count" id="notebook-count"></span>
+                </div>
+                <div id="notebook" class="notebook"></div>
+            </div>
+
+            <div id="action-toolbox" class="tbox"></div>
+
+            <div class="coach-panel">
+                <div class="coach-head-top">
+                    <h3><span class="inline-ic" id="coach-head-ic"></span> AI Coach</h3>
+                    <span class="coach-sub">Junior mode · toggle off for Pro</span>
+                </div>
+                <div id="coach-bubble"></div>
+                <button class="btn btn-xs btn-outline" onclick="refreshCoachClick()"><span class="inline-ic" id="coach-refresh-ic"></span> New hint</button>
             </div>
         </div>
     </div>
 </div>
 
+<!-- Modal for action parameters -->
+<div id="action-modal" class="modal-backdrop hidden">
+    <div class="modal-card">
+        <div id="action-modal-body"></div>
+    </div>
+</div>
+
+<!-- Post-mortem overlay -->
+<div id="postmortem-overlay" class="pm-overlay hidden"></div>
+
+<!-- Tutorial overlay -->
+<div id="tutorial-overlay" class="tut-overlay hidden"></div>
+
 <script>
-const API=window.location.origin;let selT='oom_crash',epActive=false,totR=0,maxS=0,curStep=0,allRewards=[];
-const HINTS={list_services:'No parameters needed',describe_service:'Select a target service',read_logs:'{"lines":50,"severity":"ERROR"}',check_metrics:'No parameters needed',restart_service:'{"memory_limit":"512Mi"} (optional)',scale_service:'{"replicas":3}',rollback_deployment:'{"to_version":"v2.3.1"}',run_diagnostic:'{"command":"check_connectivity"}',update_config:'{"key":"db.pool.max_size","value":50}',resolve_incident:'{"root_cause":"...","resolution":"..."}'};
+// Only the minimal top-level helpers that multiple tabs need.
+const API = window.location.origin;
 
-function switchTab(t){document.querySelectorAll('.tab-content').forEach(e=>e.classList.remove('active'));document.querySelectorAll('.nav-tab').forEach(e=>e.classList.remove('active'));document.getElementById('tab-'+t).classList.add('active');document.querySelectorAll('.nav-tab')[['home','demo','api'].indexOf(t)].classList.add('active')}
-function selTask(el){document.querySelectorAll('.tc').forEach(c=>c.classList.remove('active'));el.classList.add('active');selT=el.dataset.task}
-function updateHint(){document.getElementById('paramHint').textContent=HINTS[document.getElementById('actionType').value]||''}
-function addMsg(h,t){const o=document.getElementById('output'),d=document.createElement('div');d.className='msg msg-'+t;d.innerHTML=h;o.appendChild(d);o.scrollTop=o.scrollHeight}
-function updateProgress(){const pct=maxS>0?(curStep/maxS)*100:0;document.getElementById('stepProgress').style.width=pct+'%';const c=pct>80?'var(--accent-red)':pct>50?'var(--accent-orange)':'var(--accent-blue)';document.getElementById('stepProgress').style.background=c}
-function updateScoreDisplay(s){document.getElementById('currentScore').textContent=s.toFixed(2);const dot=document.getElementById('scoreDot');dot.style.background=s>=0.7?'var(--accent-green)':s>=0.3?'var(--accent-orange)':'var(--accent-red)'}
-function renderSvcCard(s){const hc=s.health==='crashed'?'hd-crash':s.health==='healthy'?'hd-ok':s.health==='degraded'?'hd-deg':'hd-bad';const cpu=Math.min(s.cpu_percent,100);const mem=Math.min((s.memory_mb/512)*100,100);const ec=s.error_rate_percent<1?'var(--accent-green)':s.error_rate_percent<10?'var(--accent-orange)':'var(--accent-red)';const eb=s.error_rate_percent<1?'rgba(34,197,94,.12)':s.error_rate_percent<10?'rgba(245,158,11,.12)':'rgba(239,68,68,.12)';return`<div class="svc-c"><div class="svc-n"><div class="health-dot ${hc}"></div>${s.name}</div><div style="color:var(--text-muted);font-size:11px;margin-top:4px">v${s.version} | ${s.replicas}x</div><div style="display:flex;gap:8px;margin-top:6px;font-size:10px;color:var(--text-muted)"><div style="flex:1">CPU<div class="mini-bar"><div class="mini-bar-fill" style="--bar-w:${cpu}%;width:${cpu}%;background:${cpu>80?'var(--accent-red)':'var(--accent-blue)'}"></div></div></div><div style="flex:1">MEM<div class="mini-bar"><div class="mini-bar-fill" style="--bar-w:${mem}%;width:${mem}%;background:${mem>90?'var(--accent-red)':'var(--accent-blue)'}"></div></div></div><div><span class="err-badge" style="background:${eb};color:${ec}">${s.error_rate_percent}%</span></div></div></div>`}
-
-async function resetEnv(){
-    const btn=document.getElementById('resetBtn');btn.innerHTML='<span class="spinner"></span> Initializing...';btn.classList.add('loading');
-    document.getElementById('output').innerHTML='';totR=0;curStep=0;allRewards=[];
-    updateScoreDisplay(0);document.getElementById('stepProgress').style.width='0%';
-    try{
-        const r=await fetch(API+'/reset',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({task_id:selT})});
-        const d=await r.json(),obs=d.observation;maxS=d.info.max_steps;
-        addMsg('<span style="color:var(--accent-green)">&#10003;</span> Cluster initialized. 9 services online.','sys');
-        await new Promise(r=>setTimeout(r,400));
-        btn.innerHTML='<span class="spinner"></span> Injecting fault...';
-        document.getElementById('alertBanner').classList.add('active');document.getElementById('alertBanner').style.animation='slideDown .3s ease-out';
-        document.getElementById('alertText').textContent=obs.alert||'';
-        document.getElementById('statusBadge').textContent='ACTIVE';document.getElementById('statusBadge').className='demo-badge badge-active';
-        document.getElementById('stepCount').textContent='0';document.getElementById('maxSteps').textContent=maxS;
-        await new Promise(r=>setTimeout(r,400));
-        addMsg('<strong>&#128680; Incident Started: '+selT+'</strong><pre>'+obs.message+'</pre>','sys');
-        await new Promise(r=>setTimeout(r,200));
-        if(obs.dependency_graph){let g='<strong>Service Dependencies:</strong><pre>';for(const[s,deps]of Object.entries(obs.dependency_graph))g+=s+' \u2192 ['+deps.join(', ')+']\n';addMsg(g+'</pre>','sys')}
-        document.getElementById('stepBtn').disabled=false;epActive=true;
-    }catch(e){addMsg('<strong>Error:</strong> '+e.message,'err')}
-    btn.innerHTML='Start Incident';btn.classList.remove('loading');
+function switchTab(t) {
+    document.querySelectorAll('.tab-content').forEach(e => e.classList.remove('active'));
+    document.querySelectorAll('.nav-tab').forEach(e => e.classList.remove('active'));
+    document.getElementById('tab-' + t).classList.add('active');
+    document.querySelectorAll('.nav-tab')[['home', 'demo', 'api'].indexOf(t)].classList.add('active');
 }
 
-async function stepEnv(){
-    if(!epActive)return;const btn=document.getElementById('stepBtn');
-    const at=document.getElementById('actionType').value,ts=document.getElementById('targetService').value||null;
-    let p={};const ps=document.getElementById('params').value.trim();
-    if(ps){try{p=JSON.parse(ps)}catch{addMsg('<strong>Invalid JSON</strong>','err');return}}
-    btn.innerHTML='<span class="spinner"></span> Executing...';btn.classList.add('loading');
-    addMsg('<strong>'+at+'</strong>'+(ts?'('+ts+')':'')+(ps?' <span style="color:var(--text-muted);font-size:12px">'+ps+'</span>':''),'act');
-    try{
-        const r=await fetch(API+'/step',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action_type:at,target_service:ts,parameters:p})});
-        const d=await r.json(),obs=d.observation;totR+=d.reward;allRewards.push(d.reward);curStep=d.info.step_count;
-        document.getElementById('stepCount').textContent=curStep;updateProgress();
-        await new Promise(r=>setTimeout(r,150));
-        const rTag=d.reward>=0?`<span class="reward-tag reward-pos">+${d.reward.toFixed(4)}</span>`:`<span class="reward-tag reward-neg">${d.reward.toFixed(4)}</span>`;
-        let h='<pre>'+obs.message+'</pre><div class="meta">'+rTag+' Total: '+totR.toFixed(4)+'</div>';
-        if(obs.services_summary){h+='<div class="svc-grid">';for(const s of obs.services_summary)h+=renderSvcCard(s);h+='</div>'}
-        addMsg(h,obs.error?'err':d.done?'done':'obs');
-        if(d.done){
-            epActive=false;btn.disabled=true;const sc=d.info.final_score||0;updateScoreDisplay(sc);
-            const resolved=obs.message.includes('RESOLVED');
-            document.getElementById('statusBadge').textContent=resolved?'RESOLVED':'ENDED';
-            document.getElementById('statusBadge').className='demo-badge '+(resolved?'badge-resolved':'badge-idle');
-            // Score overlay
-            const ov=document.createElement('div');ov.className='score-overlay';ov.onclick=function(){this.remove()};
-            let bars='';for(const rw of allRewards){const h=Math.max(Math.abs(rw)*200,2);const c=rw>=0?'var(--accent-green)':'var(--accent-red)';bars+=`<div class="rbar" style="height:${h}px;background:${c}"></div>`}
-            ov.innerHTML=`<div class="score-card"><div style="font-size:14px;font-weight:600;color:${resolved?'var(--accent-green)':'var(--accent-orange)'}">${resolved?'&#10003; INCIDENT RESOLVED':'&#9888; STEP LIMIT REACHED'}</div><div class="big-score" style="color:${sc>=0.7?'var(--accent-green)':sc>=0.3?'var(--accent-orange)':'var(--accent-red)'}">${sc.toFixed(2)}</div><div class="score-label">${curStep} steps used / ${maxS} max</div><div class="reward-bars">${bars}</div><div style="font-size:12px;color:var(--text-muted);margin-bottom:16px">Reward per step</div><button class="btn btn-primary" onclick="this.closest('.score-overlay').remove()">Close</button></div>`;
-            document.querySelector('.demo-right').appendChild(ov);
-        }
-    }catch(e){addMsg('<strong>Error:</strong> '+e.message,'err')}
-    btn.innerHTML='Execute Action';btn.classList.remove('loading');
+async function refreshCoachClick() {
+    if (window.Coach) {
+        const data = await Coach.api.hint();
+        Coach.renderHint(document.getElementById('coach-bubble'), data);
+    }
 }
 
-// ═══ Scenario tests (Overview tab) ═══
-async function apiCall(method,path,body){
-    const opts={method,headers:{'Content-Type':'application/json'}};if(body)opts.body=JSON.stringify(body);
-    const t0=performance.now();const r=await fetch(API+path,opts);const d=await r.json();return{data:d,ms:Math.round(performance.now()-t0)}
+// Overview tab: Live test scenarios
+async function apiCall(method, path, body) {
+    const opts = { method, headers: {'Content-Type': 'application/json'} };
+    if (body) opts.body = JSON.stringify(body);
+    const t0 = performance.now();
+    const r = await fetch(API + path, opts);
+    const d = await r.json();
+    return { data: d, ms: Math.round(performance.now() - t0) };
 }
-function scStep(id,html){const c=document.getElementById('sc-'+id+'-steps');const d=document.createElement('div');d.className='sc-step';d.innerHTML=html;c.appendChild(d)}
-function scResult(id,html,cls){const c=document.getElementById('sc-'+id+'-steps');const d=document.createElement('div');d.className='sc-result '+cls;d.innerHTML=html;c.appendChild(d)}
-async function runSc(id){
-    const card=document.getElementById('sc-'+id);const btn=card.querySelector('.btn');const steps=document.getElementById('sc-'+id+'-steps');
-    steps.innerHTML='';btn.innerHTML='<span class="spinner spinner-sm"></span> Running...';btn.classList.add('loading');
-    try{
-        if(id==='health'){
-            scStep(id,'<span class="dot-run"></span> <code>GET /health</code> <span class="sc-val">...</span>');
-            const{data,ms}=await apiCall('GET','/health');await new Promise(r=>setTimeout(r,300));
-            steps.innerHTML='';scStep(id,'<span class="dot-ok"></span> <code>GET /health</code> <span class="sc-val">'+ms+'ms</span>');
-            scResult(id,'&#10003; Environment healthy &mdash; status: '+data.status+' ('+ms+'ms)','success');
+function scStep(id, html) { const c = document.getElementById('sc-' + id + '-steps'); const d = document.createElement('div'); d.className = 'sc-step'; d.innerHTML = html; c.appendChild(d); }
+function scResult(id, html, cls) { const c = document.getElementById('sc-' + id + '-steps'); const d = document.createElement('div'); d.className = 'sc-result ' + cls; d.innerHTML = html; c.appendChild(d); }
+async function runSc(id) {
+    const card = document.getElementById('sc-' + id);
+    const btn = card.querySelector('.btn');
+    const steps = document.getElementById('sc-' + id + '-steps');
+    steps.innerHTML = '';
+    btn.innerHTML = '<span class="spinner spinner-sm"></span> Running...';
+    btn.classList.add('loading');
+    try {
+        if (id === 'health') {
+            scStep(id, '<span class="dot-run"></span> <code>GET /health</code> <span class="sc-val">...</span>');
+            const {data, ms} = await apiCall('GET', '/health');
+            await new Promise(r => setTimeout(r, 300));
+            steps.innerHTML = '';
+            scStep(id, '<span class="dot-ok"></span> <code>GET /health</code> <span class="sc-val">' + ms + 'ms</span>');
+            scResult(id, '✓ Environment healthy — status: ' + data.status + ' (' + ms + 'ms)', 'success');
+        } else if (id === 'tasks') {
+            scStep(id, '<span class="dot-run"></span> <code>GET /tasks</code>');
+            const {data, ms} = await apiCall('GET', '/tasks');
+            await new Promise(r => setTimeout(r, 300));
+            steps.innerHTML = '';
+            for (const [k, v] of Object.entries(data.tasks)) {
+                const dc = v.difficulty === 'easy' ? 'diff-easy' : v.difficulty === 'medium' ? 'diff-medium' : 'diff-hard';
+                scStep(id, '<span class="dot-ok"></span> <strong>' + k + '</strong> <span class="diff-badge ' + dc + '" style="padding:2px 8px;font-size:10px">' + v.difficulty.toUpperCase() + '</span> <span class="sc-val">' + v.max_steps + ' steps</span>');
+            }
+            scResult(id, '✓ 3 tasks found with difficulty progression (' + ms + 'ms)', 'success');
+        } else if (id === 'diag') {
+            scStep(id, '<span class="dot-run"></span> <code>POST /reset</code> oom_crash');
+            await apiCall('POST', '/reset', {task_id: 'oom_crash'});
+            await new Promise(r => setTimeout(r, 400));
+            steps.lastChild.innerHTML = '<span class="dot-ok"></span> <code>POST /reset</code> oom_crash <span class="sc-val">✓</span>';
+            scStep(id, '<span class="dot-run"></span> <code>POST /step</code> list_services');
+            const {data: d1} = await apiCall('POST', '/step', {action_type: 'list_services', target_service: null, parameters: {}});
+            await new Promise(r => setTimeout(r, 400));
+            const crashed = d1.observation.services_summary?.find(s => s.health === 'crashed');
+            steps.lastChild.innerHTML = '<span class="dot-ok"></span> <code>list_services</code> <span class="sc-val" style="color:var(--accent-red)">' + (crashed ? crashed.name + ' CRASHED' : 'all ok') + '</span>';
+            scStep(id, '<span class="dot-run"></span> <code>POST /step</code> read_logs(payment-service)');
+            const {data: d2} = await apiCall('POST', '/step', {action_type: 'read_logs', target_service: 'payment-service', parameters: {severity: 'ERROR'}});
+            await new Promise(r => setTimeout(r, 400));
+            const hasOOM = d2.observation.message?.includes('OutOfMemory') || d2.observation.message?.includes('OOM');
+            steps.lastChild.innerHTML = '<span class="dot-ok"></span> <code>read_logs</code> payment-service <span class="sc-val" style="color:var(--accent-red)">' + (hasOOM ? 'OOM detected' : 'errors found') + '</span>';
+            scResult(id, '🔍 Diagnosis: payment-service crashed with OutOfMemoryError. Fix: restart with higher memory.', 'info');
+        } else if (id === 'fix') {
+            scStep(id, '<span class="dot-run"></span> Initializing incident...');
+            await apiCall('POST', '/reset', {task_id: 'oom_crash'});
+            await new Promise(r => setTimeout(r, 300));
+            steps.lastChild.innerHTML = '<span class="dot-ok"></span> Incident initialized <span class="sc-val">oom_crash</span>';
+            const acts = [
+                {a: 'list_services', t: null, p: {}, l: 'Scanning cluster...'},
+                {a: 'read_logs', t: 'payment-service', p: {severity: 'ERROR'}, l: 'Reading error logs...'},
+                {a: 'check_metrics', t: 'payment-service', p: {}, l: 'Checking metrics...'},
+                {a: 'restart_service', t: 'payment-service', p: {memory_limit: '512Mi'}, l: 'Restarting with 512Mi...'}
+            ];
+            for (const act of acts) {
+                scStep(id, '<span class="dot-run"></span> ' + act.l);
+                const {data} = await apiCall('POST', '/step', {action_type: act.a, target_service: act.t, parameters: act.p});
+                await new Promise(r => setTimeout(r, 350));
+                const rw = data.reward;
+                const rc = rw >= 0 ? 'var(--accent-green)' : 'var(--accent-red)';
+                steps.lastChild.innerHTML = '<span class="dot-ok"></span> <code>' + act.a + '</code>' + (act.t ? '(' + act.t + ')' : '') + ' <span class="sc-val" style="color:' + rc + '">' + (rw >= 0 ? '+' : '') + rw.toFixed(2) + '</span>';
+            }
+            const st = await apiCall('GET', '/state');
+            const sc = st.data.current_score;
+            scResult(id, '🏆 Score: ' + sc.toFixed(2) + ' / 1.00 ' + (sc >= 0.9 ? '— Perfect resolution!' : ''), sc >= 0.9 ? 'success' : 'partial');
+        } else if (id === 'cascade') {
+            scStep(id, '<span class="dot-run"></span> Initializing cascading failure...');
+            await apiCall('POST', '/reset', {task_id: 'db_pool_exhaustion'});
+            await new Promise(r => setTimeout(r, 400));
+            steps.lastChild.innerHTML = '<span class="dot-ok"></span> Incident: db_pool_exhaustion <span class="sc-val" style="color:var(--accent-orange)">ACTIVE</span>';
+            scStep(id, '<span class="dot-run"></span> Checking frontend symptoms...');
+            await apiCall('POST', '/step', {action_type: 'check_metrics', target_service: 'frontend-bff', parameters: {}});
+            await new Promise(r => setTimeout(r, 400));
+            steps.lastChild.innerHTML = '<span class="dot-ok"></span> frontend-bff <span class="sc-val" style="color:var(--accent-orange)">errors elevated</span>';
+            scStep(id, '<span class="dot-run"></span> Tracing to order-service...');
+            await apiCall('POST', '/step', {action_type: 'check_metrics', target_service: 'order-service', parameters: {}});
+            await new Promise(r => setTimeout(r, 400));
+            steps.lastChild.innerHTML = '<span class="dot-ok"></span> order-service <span class="sc-val" style="color:var(--accent-red)">high latency</span>';
+            scStep(id, '<span class="dot-run"></span> Checking database...');
+            await apiCall('POST', '/step', {action_type: 'check_metrics', target_service: 'postgres-db', parameters: {}});
+            await new Promise(r => setTimeout(r, 400));
+            steps.lastChild.innerHTML = '<span class="dot-ok"></span> postgres-db <span class="sc-val" style="color:var(--accent-red)">pool exhausted</span>';
+            scResult(id, '🔗 Cascade traced: frontend → order-service → postgres-db (connection pool exhausted)', 'partial');
         }
-        else if(id==='tasks'){
-            scStep(id,'<span class="dot-run"></span> <code>GET /tasks</code>');
-            const{data,ms}=await apiCall('GET','/tasks');await new Promise(r=>setTimeout(r,300));
-            steps.innerHTML='';
-            for(const[k,v]of Object.entries(data.tasks)){const dc=v.difficulty==='easy'?'diff-easy':v.difficulty==='medium'?'diff-medium':'diff-hard';scStep(id,'<span class="dot-ok"></span> <strong>'+k+'</strong> <span class="diff-badge '+dc+'" style="padding:2px 8px;font-size:10px">'+v.difficulty.toUpperCase()+'</span> <span class="sc-val">'+v.max_steps+' steps</span>')}
-            scResult(id,'&#10003; 3 tasks found with difficulty progression ('+ms+'ms)','success');
-        }
-        else if(id==='diag'){
-            scStep(id,'<span class="dot-run"></span> <code>POST /reset</code> oom_crash');
-            await apiCall('POST','/reset',{task_id:'oom_crash'});await new Promise(r=>setTimeout(r,400));
-            steps.lastChild.innerHTML='<span class="dot-ok"></span> <code>POST /reset</code> oom_crash <span class="sc-val">&#10003;</span>';
-            scStep(id,'<span class="dot-run"></span> <code>POST /step</code> list_services');
-            const{data:d1}=await apiCall('POST','/step',{action_type:'list_services',target_service:null,parameters:{}});await new Promise(r=>setTimeout(r,400));
-            const crashed=d1.observation.services_summary?.find(s=>s.health==='crashed');
-            steps.lastChild.innerHTML='<span class="dot-ok"></span> <code>list_services</code> <span class="sc-val" style="color:var(--accent-red)">'+( crashed?crashed.name+' CRASHED':'all ok')+'</span>';
-            scStep(id,'<span class="dot-run"></span> <code>POST /step</code> read_logs(payment-service)');
-            const{data:d2}=await apiCall('POST','/step',{action_type:'read_logs',target_service:'payment-service',parameters:{severity:'ERROR'}});await new Promise(r=>setTimeout(r,400));
-            const hasOOM=d2.observation.message?.includes('OutOfMemory')||d2.observation.message?.includes('OOM');
-            steps.lastChild.innerHTML='<span class="dot-ok"></span> <code>read_logs</code> payment-service <span class="sc-val" style="color:var(--accent-red)">'+(hasOOM?'OOM detected':'errors found')+'</span>';
-            scResult(id,'&#128270; Diagnosis: payment-service crashed with OutOfMemoryError. Fix: restart with higher memory.','info');
-        }
-        else if(id==='fix'){
-            scStep(id,'<span class="dot-run"></span> Initializing incident...');
-            await apiCall('POST','/reset',{task_id:'oom_crash'});await new Promise(r=>setTimeout(r,300));
-            steps.lastChild.innerHTML='<span class="dot-ok"></span> Incident initialized <span class="sc-val">oom_crash</span>';
-            const acts=[{a:'list_services',t:null,p:{},l:'Scanning cluster...'},{a:'read_logs',t:'payment-service',p:{severity:'ERROR'},l:'Reading error logs...'},{a:'check_metrics',t:'payment-service',p:{},l:'Checking metrics...'},{a:'restart_service',t:'payment-service',p:{memory_limit:'512Mi'},l:'Restarting with 512Mi...'}];
-            let lastR=null;for(const act of acts){scStep(id,'<span class="dot-run"></span> '+act.l);const{data}=await apiCall('POST','/step',{action_type:act.a,target_service:act.t,parameters:act.p});lastR=data;await new Promise(r=>setTimeout(r,350));const rw=data.reward;const rc=rw>=0?'var(--accent-green)':'var(--accent-red)';steps.lastChild.innerHTML='<span class="dot-ok"></span> <code>'+act.a+'</code>'+(act.t?'('+act.t+')':'')+' <span class="sc-val" style="color:'+rc+'">'+(rw>=0?'+':'')+rw.toFixed(2)+'</span>'}
-            const st=await apiCall('GET','/state');const sc=st.data.current_score;
-            scResult(id,'&#127942; Score: '+sc.toFixed(2)+' / 1.00 '+(sc>=0.9?'&mdash; Perfect resolution!':''),sc>=0.9?'success':'partial');
-        }
-        else if(id==='cascade'){
-            scStep(id,'<span class="dot-run"></span> Initializing cascading failure...');
-            await apiCall('POST','/reset',{task_id:'db_pool_exhaustion'});await new Promise(r=>setTimeout(r,400));
-            steps.lastChild.innerHTML='<span class="dot-ok"></span> Incident: db_pool_exhaustion <span class="sc-val" style="color:var(--accent-orange)">ACTIVE</span>';
-            scStep(id,'<span class="dot-run"></span> Checking frontend symptoms...');
-            const{data:d1}=await apiCall('POST','/step',{action_type:'check_metrics',target_service:'frontend-bff',parameters:{}});await new Promise(r=>setTimeout(r,400));
-            steps.lastChild.innerHTML='<span class="dot-ok"></span> frontend-bff <span class="sc-val" style="color:var(--accent-orange)">errors elevated</span>';
-            scStep(id,'<span class="dot-run"></span> Tracing to order-service...');
-            const{data:d2}=await apiCall('POST','/step',{action_type:'check_metrics',target_service:'order-service',parameters:{}});await new Promise(r=>setTimeout(r,400));
-            steps.lastChild.innerHTML='<span class="dot-ok"></span> order-service <span class="sc-val" style="color:var(--accent-red)">high latency</span>';
-            scStep(id,'<span class="dot-run"></span> Checking database...');
-            const{data:d3}=await apiCall('POST','/step',{action_type:'check_metrics',target_service:'postgres-db',parameters:{}});await new Promise(r=>setTimeout(r,400));
-            steps.lastChild.innerHTML='<span class="dot-ok"></span> postgres-db <span class="sc-val" style="color:var(--accent-red)">pool exhausted</span>';
-            scResult(id,'&#128279; Cascade traced: frontend &#8594; order-service &#8594; postgres-db (connection pool exhausted)','partial');
-        }
-    }catch(e){scResult(id,'&#10007; Error: '+e.message,'');}
-    btn.innerHTML='Run Test';btn.classList.remove('loading');
+    } catch (e) {
+        scResult(id, '✗ Error: ' + e.message, '');
+    }
+    btn.innerHTML = 'Run Test';
+    btn.classList.remove('loading');
 }
-
-document.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey&&epActive)stepEnv()});updateHint();
 </script>
+<script src="/static/icons.js?v=4"></script>
+<script src="/static/auth.js?v=4"></script>
+<script src="/static/coach.js?v=4"></script>
+<script src="/static/map.js?v=4"></script>
+<script src="/static/demo.js?v=4"></script>
 </body>
 </html>
