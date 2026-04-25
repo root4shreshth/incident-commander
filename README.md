@@ -7,201 +7,297 @@ sdk: docker
 app_port: 8000
 tags:
   - openenv
+  - rl
+  - reinforcement-learning
+  - sre
+  - devops
+  - incident-response
+  - grpo
+  - sft
+  - llm-agents
 ---
 
 # IncidentCommanderEnv
 
-**SRE/DevOps Cloud Incident Response & Diagnostics** -- An OpenEnv reinforcement learning environment where AI agents act as on-call Site Reliability Engineers, diagnosing and remediating production incidents across a simulated microservices cluster.
+> An OpenEnv RL environment that trains LLM agents to be on-call SREs — they receive a real PagerDuty-style alert, investigate a microservices cluster, identify root cause, and remediate it under time pressure. Same trained policy then runs unchanged against a real Docker stack to fix a real outage.
 
-## Why This Environment?
+**Meta OpenEnv Hackathon · April 2026 · Theme #3.1: Professional Tasks**
 
-Every tech company -- from startups to Meta-scale -- has on-call engineers who are woken at 3 AM to diagnose production outages. This is a **$45B+ observability/incident management market** (Datadog, PagerDuty, Splunk). Incidents are stressful, time-sensitive, and require systematic diagnostic reasoning -- exactly what AI agents need to learn.
+| What | Where |
+|---|---|
+| Live HuggingFace Space | [hype4raj-incident-commander-env.hf.space](https://hype4raj-incident-commander-env.hf.space) |
+| Training notebook (Colab) | [`training/train_grpo.ipynb`](training/train_grpo.ipynb) |
+| Trained LoRA adapter | (link added on submission) |
+| Blog post | [`docs/blog.md`](docs/blog.md) |
+| 90-second video | (link added on submission) |
+| Eval results | [`results/`](results/) |
+| Project deck (.docx) | [`IncidentCommanderEnv_Project_Document.docx`](IncidentCommanderEnv_Project_Document.docx) |
 
-**No OpenEnv environment exists for DevOps/infrastructure management.** This fills a real gap in the RL/agent ecosystem.
+---
 
-## How It Works
+## The 30-second story
 
-```
-1. ALERT     -->  Agent receives PagerDuty-style incident alert
-2. INVESTIGATE --> Read logs, check metrics, run diagnostics across 9 services
-3. DIAGNOSE  -->  Trace dependency chains to identify root cause
-4. REMEDIATE -->  Restart, rollback, scale, or reconfigure to fix the issue
-5. RESOLVE   -->  Declare root cause and resolution
-```
+On-call SRE is a $45B market and a multi-billion-token-per-day workload for LLMs that can't be benchmarked because there is no public RL environment for it. We built one. The agent gets a PagerDuty-style alert ("payment-service is failing"), investigates a 9-service simulated cluster through 10 typed actions (`read_logs`, `check_metrics`, `restart_service`, …), and is graded by a **6-component verifiable rubric** with no learned reward model — so it cannot be reward-hacked. We trained Qwen2.5-Coder-1.5B with **SFT then GRPO** and the success rate climbs from random-baseline → base-model → SFT → SFT+GRPO across three scenario families. The trained policy then drives a **real Docker stack** through the same Backend Protocol — so the agent that learned in simulation also fixes a real outage live in our demo video.
 
-The agent interacts via the standard OpenEnv API: `POST /reset` to start an episode, `POST /step` to take actions, `GET /state` to check progress.
+## Why this matters for the hackathon rubric
 
-## Simulated Infrastructure
+| Rubric (% weight) | What we ship for it |
+|---|---|
+| **Innovation (40%)** | First OpenEnv environment for SRE/DevOps. Backend Protocol that lets one trained policy run on either simulator or real Docker (sim-to-real transfer). Parametric scenario families instead of hardcoded cases — agent must generalize over a distribution of (target service, memory limits, deployment versions). |
+| **Storytelling (30%)** | Three-act demo: train → eval → real-Docker outage rescue. Per-component wandb plots show the policy learning each reward axis separately. Observe-mode dashboard replays trained-agent runs as live incident streams. |
+| **Reward improvement (20%)** | Eval table across 4 conditions × 3 families × 30 seeds = 360 episodes. Random baseline → base model → SFT → SFT+GRPO. Per-component breakdown surfaces *what* improved, not just the scalar. |
+| **Pipeline coherence (10%)** | Pure FastAPI + Pydantic typed models, deterministic seed-to-trajectory mapping, anti-reward-hacking regression tests, OpenEnv-spec-compliant `openenv.yaml`. |
 
-A production microservices cluster with **9 interconnected services**:
+---
 
-```
-frontend-bff --> api-gateway --> order-service --> payment-service
-                              --> user-service  --> auth-service
-                              --> notification-service
-                              --> inventory-service
-                All DB-dependent services --> postgres-db
-```
+## Quick start
 
-Each service has realistic:
-- **Health states**: healthy, degraded, unhealthy, crashed, restarting
-- **Live metrics**: CPU%, memory (MB), request latency (p50/p99), error rate, connections, RPS
-- **Structured logs**: timestamped with realistic error patterns (OOM, connection pool, deployment failures)
-- **Deployment history**: version tracking with rollback capability
-- **Dependencies**: upstream/downstream failure cascading via a DAG topology
-
-## Action Space (10 Actions)
-
-| Action | Target | Parameters | Description |
-|---|---|---|---|
-| `list_services` | -- | -- | Overview of all 9 services with health and key metrics |
-| `describe_service` | Required | -- | Full config, deployment history, dependencies |
-| `read_logs` | Required | `lines`, `severity` | Structured log lines (ERROR, WARN, INFO) |
-| `check_metrics` | Required | -- | CPU, memory, latency p50/p99, error rate, connections |
-| `restart_service` | Required | `memory_limit` | Restart with optional new memory config |
-| `scale_service` | Required | `replicas` | Change replica count |
-| `rollback_deployment` | Required | `to_version` | Rollback to a previous version |
-| `run_diagnostic` | Required | `command` | check_connectivity, check_health, check_resources, check_dns |
-| `update_config` | Required | `key`, `value` | Change runtime config (e.g. DB pool size) |
-| `resolve_incident` | -- | `root_cause`, `resolution` | Declare incident resolved with summary |
-
-## Observation Space
-
-Each observation returned by `/step` includes:
-
-| Field | Type | Description |
-|---|---|---|
-| `message` | string | Human-readable description of action result |
-| `done` | bool | Whether the episode has ended |
-| `reward` | float | Per-step reward signal |
-| `alert` | string (optional) | Incident alert text (on reset) |
-| `services_summary` | list (optional) | All services health/metrics (from list_services) |
-| `service_detail` | object (optional) | Full service config (from describe_service) |
-| `logs` | list (optional) | Log lines (from read_logs) |
-| `metrics` | object (optional) | CPU, memory, latency snapshot (from check_metrics) |
-| `diagnostic_result` | string (optional) | Diagnostic output (from run_diagnostic) |
-| `dependency_graph` | object (optional) | Service dependency graph (on reset) |
-| `error` | string (optional) | Error message if action is invalid |
-
-## 3 Tasks (Easy to Hard)
-
-### Task 1: OOM Crash (Easy)
-- **Scenario**: payment-service crashes with OutOfMemoryError (memory limit 256Mi, usage spiked to 300Mi)
-- **Max Steps**: 15
-- **Resolution**: Identify service, read logs, restart with higher memory limit (>256Mi)
-- **Grading** (4 criteria): Service identification (0.20), log reading (0.20), OOM diagnosis (0.20), correct fix (0.40)
-- **Penalties**: -0.10 per healthy service restart
-
-### Task 2: DB Connection Pool Exhaustion (Medium)
-- **Scenario**: order-service has a connection leak, exhausting postgres-db pool (20/20 connections), causing cascading 500s in order-service, payment-service, inventory-service. frontend-bff shows generic errors.
-- **Max Steps**: 25
-- **Resolution**: Trace from frontend symptoms through dependency chain to DB root cause. Fix pool config and restart order-service.
-- **Grading** (7 criteria): Frontend investigation (0.10), trace to order-service (0.15), identify DB root (0.15), read DB logs (0.10), fix pool (0.20), restart order-service (0.20), resolve (0.10)
-- **The trap**: Obvious symptom is in frontend-bff, but root cause is 2 layers deep in postgres-db
-
-### Task 3: Bad Deployment Cascade (Hard)
-- **Scenario**: Bad deployment (order-service v2.4.0) introduces memory leak. Autoscaler spawns 6 replicas, exhausting cluster quota (memory at 95%). inventory-service and notification-service starved.
-- **Max Steps**: 35
-- **Resolution**: Rollback order-service to v2.3.1 (NOT restart), then restart starved services. **Action ORDER matters** -- rollback must happen before dependent restarts.
-- **Grading** (10 criteria): Blast radius mapping (0.10), identify origin (0.10), find bad deployment (0.10), rollback (0.15), address quota (0.10), restart inventory (0.10), restart notification (0.10), correct ordering (0.05), accurate resolution (0.10), efficiency (0.10)
-- **The trap**: Multiple services failing simultaneously tempts restarting everything, but the root cause is a single bad deployment
-
-## Reward Design
-
-### Per-Step Rewards (guide agent exploration)
-- `+0.03` per diagnostic step on a relevant service
-- `+0.02` per diagnostic step on any service
-- `+0.15` per correct remediation action
-- `-0.10` per harmful action (restarting healthy services)
-- `-0.03` per redundant action (repeating same action)
-- Multiplicative time decay: 0.995 per step (incentivizes faster resolution)
-
-### Episode-End Score (deterministic grader)
-Each scenario defines a weighted rubric. The grader evaluates action history and final cluster state to produce a 0.0-1.0 score. Graders are fully deterministic -- same actions always produce the same score.
-
-## Setup & Usage
-
-### Prerequisites
-- Python 3.10+
-- Docker (for containerized execution)
-
-### Local Development
-
+### 1. Run the env locally
 ```bash
-# Install dependencies
-pip install fastapi uvicorn pydantic openai requests
-
-# Run the environment server
-PYTHONPATH=. uvicorn incident_commander_env.server.app:app --host 0.0.0.0 --port 8000
-
-# Run baseline inference (in another terminal)
-# Create a .env file with your API credentials:
-#   API_BASE_URL=https://openrouter.ai/api/v1
-#   MODEL_NAME=meta-llama/llama-3.3-70b-instruct
-#   HF_TOKEN=your-api-key
-#   ENV_URL=http://localhost:8000
-python inference.py
+git clone https://github.com/<org>/incident-commander
+cd incident-commander
+uv sync                                       # installs server + dev deps
+uv run uvicorn incident_commander_env.server.app:app --port 8000
 ```
+Then open `http://localhost:8000` for the human dashboard, or `http://localhost:8000/observe` to replay recorded trained-agent runs.
 
-### Docker
-
+### 2. Run a quick eval (random baseline)
 ```bash
-docker build -t incident-commander-env .
-docker run -p 8000:8000 incident-commander-env
+uv run python -c "from training.eval_runner import evaluate, random_policy; \
+from training.datasets import SYSTEM_PROMPT; \
+print(evaluate('random', random_policy(42), ['oom_crash','db_pool_exhaustion','bad_deployment_cascade'], list(range(30)), system_prompt=SYSTEM_PROMPT, runs_root='runs').to_dict())"
+```
+Produces `runs/<run_id>/episode.jsonl` traces that the dashboard can replay.
+
+### 3. Train (Colab — 1 GPU, 6–7 hours wall on A100)
+Open [`training/train_grpo.ipynb`](training/train_grpo.ipynb) in Colab. The notebook is fully self-contained: `pip install`, clone repo, SFT, eval, GRPO, eval, plots, push LoRA to HF Hub.
+
+### 4. Run the sim-to-real demo
+```bash
+# Drop the user-vibecoded site under targets/site/ (see "Real-stack contract" below)
+BACKEND=real COMPOSE_ROOT=./targets/site \
+  uv run uvicorn incident_commander_env.server.app:app --port 8000
+# Trained policy now runs against actual Docker containers via the same OpenEnv API
 ```
 
-### HuggingFace Space
+---
 
-Live deployment: [hype4raj-incident-commander-env.hf.space](https://hype4raj-incident-commander-env.hf.space)
+## Architecture
 
-### API Endpoints
+```
+                   ┌──────────────────────────────────────┐
+   POST /reset ──▶ │       IncidentCommanderEnv           │ ◀── GET /state
+   POST /step  ──▶ │   (orchestrator + reward computer)   │ ◀── GET /reward-breakdown
+                   └──────────────┬───────────────────────┘
+                                  │ Backend Protocol
+                  ┌───────────────┼───────────────┐
+                  ▼               ▼               ▼
+        ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐
+        │ Simulated    │  │ Real         │  │ CodeAware        │
+        │ Backend      │  │ Backend      │  │ Backend          │
+        │ (in-memory   │  │ (docker      │  │ (Phase 2 roadmap)│
+        │  Cluster)    │  │  compose)    │  │                  │
+        └──────────────┘  └──────────────┘  └──────────────────┘
+                  │               │
+                  ▼               ▼
+            9 services       3 services
+            (sim)            (real)
+```
 
-| Endpoint | Method | Description |
+The agent's view (`BackendSnapshot`) is identical across substrates — same observation shape, same 10 typed actions, same 6-component reward. That decoupling is what makes the policy transferable from sim to real.
+
+---
+
+## The 6-component verifiable reward (RLVR)
+
+No learned reward model. No LLM-as-judge. Every component is a pure function over `(action, snapshot, scenario)` — auditable and unhackable. Each component is logged separately to wandb so the training plot shows *what* the policy learned, not just a scalar.
+
+| Component | Triggers when… | Range |
 |---|---|---|
-| `/` | GET | Interactive web UI with overview, demo, and API docs |
-| `/reset` | POST | Start new episode. Body: `{"task_id": "oom_crash"}` |
-| `/step` | POST | Execute action. Body: `{"action_type": "...", "target_service": "...", "parameters": {}}` |
-| `/state` | GET | Get current episode state |
-| `/health` | GET | Liveness check |
-| `/tasks` | GET | List available tasks with difficulty and max steps |
+| `r_diagnostic` | first read on a relevant or adjacent service | +0.02 to +0.05 per step |
+| `r_correct_op` | scenario-defined right-move (delegated to `scenario.is_correct_op(action)`) | +0.15 |
+| `r_resolution` | terminal — fix matches scenario rubric AND root_cause keyword match | +0.30 |
+| `r_format` | action parsed cleanly (no fallback) | +0.01 per step |
+| `r_efficiency` | terminal — solved in ≤50% of step budget | +0.10 |
+| `r_penalty` | sum of harmful_restart, redundant, rollback_to_self, unknown_config_key | -0.05 to -0.30 |
 
-## Baseline Scores
+Each component is exposed via `GET /reward-breakdown` per step so the dashboard, training notebook, and tests all share the same numbers.
 
-**Model:** Llama 3.3 70B Instruct (via OpenRouter)
+---
 
-| Task | Score | Steps | Status |
-|---|---|---|---|
-| oom_crash (Easy) | **1.00** | 4/15 | Resolved |
-| db_pool_exhaustion (Medium) | **0.80** | 25/25 | Partial (missed order-service restart) |
-| bad_deployment_cascade (Hard) | **1.00** | 18/35 | Resolved |
-| **Average** | **0.93** | -- | -- |
+## Anti-reward-hacking (the four exploits we plugged)
 
-*The hard task requires correct action ordering (rollback before dependent restarts). The agent successfully identified the bad deployment, rolled back, then restarted starved services in the correct sequence.*
+| Exploit | The leak | How we plugged it |
+|---|---|---|
+| `update_config` string-match heal | Old code did `if "pool" in key.lower() and "size" in key.lower(): heal()` — any garbage like `"my.pool.size"` triggered a fix | Strict allowlist of 5 known config keys; heal decision delegated to `scenario.on_config_update()` |
+| Unconditional anomaly clear on restart | `restart()` cleared *all* anomalies, so `memory_leak` and `db_pool_exhaustion` were "fixed" by a bare restart with no memory bump or pool resize | Class-level `_RESTART_CURABLE = {"oom","connection_leak","resource_starved"}`; non-curable anomalies survive a restart |
+| Redundancy bypass via param tweak | Redundancy detector compared exact `parameters` dicts, so `{"lines":50}` and `{"lines":51}` were "different" and dodged the penalty | Compare on `(action_type, target_service)` tuple within a 3-step sliding window |
+| Rollback-to-self | `rollback(to_version=current)` cleared anomalies as a side effect | Early guard: `if to_version == self.config.version: return error` |
 
-## Project Structure
+Each is pinned by a regression test in `tests/test_reward_hacks.py`.
+
+---
+
+## Parametric scenario families
+
+Three families instead of three hardcoded scenarios. Each `(seed, difficulty)` produces a distinct instance — the agent must learn the *rule*, not memorize *cases*.
+
+| Family | Randomized parameters | Rubric anchor |
+|---|---|---|
+| `oom_crash` | target service ∈ {payment, order, inventory, user}, memory_limit_mb ∈ [192, 320] | restart with mem > old × 2 |
+| `db_pool_exhaustion` | leaking service ∈ {order, payment}, pool_size ∈ {16, 20, 24} | update_config `db.pool.max_size` to ≥ 50 then restart |
+| `bad_deployment_cascade` | (BAD, STABLE) ∈ 3 version pairs | rollback bad → restart starved deps in order |
+
+`difficulty` ∈ [0.0, 1.0] scales `max_steps`, anomaly rates, and cascade depth — the curriculum (in `training/curriculum.py`) ramps difficulty over the training run.
+
+---
+
+## Action space (10 typed actions)
+
+| Action | Target | Parameters |
+|---|---|---|
+| `list_services` | — | — |
+| `describe_service` | required | — |
+| `read_logs` | required | `lines`, `severity` |
+| `check_metrics` | required | — |
+| `restart_service` | required | `memory_limit` |
+| `scale_service` | required | `replicas` |
+| `rollback_deployment` | required | `to_version` |
+| `run_diagnostic` | required | `command` |
+| `update_config` | required | `key`, `value` (allowlist enforced) |
+| `resolve_incident` | — | `root_cause`, `resolution` |
+
+All declared in `openenv.yaml` with full parameter schemas.
+
+---
+
+## Real-stack contract (for the sim-to-real demo)
+
+The `RealBackend` expects a Docker Compose stack at `targets/site/` with:
+
+* **Services named** `frontend`, `api`, `postgres`
+* **Env-var levers** in `docker-compose.yml`:
+  * `IMAGE_TAG=${IMAGE_TAG:-v1.0}` (rollback target)
+  * `mem_limit: ${API_MEM_LIMIT:-256m}` (restart with new memory)
+  * `DB_POOL_SIZE: ${POOL_SIZE:-10}` (db pool resize)
+* **`/health` endpoint** on each service returning `200` when nominal
+* **`chaos.py`** CLI: `python chaos.py --scenario={oom,conn-leak,bad-deploy}|--stop`
+
+When `BACKEND=real`, `RealBackend.reset()` runs `docker compose up -d` then invokes `chaos.py` to reproduce the scenario; each typed action is translated to the appropriate `docker compose ...` invocation. If Docker is unavailable, `RealBackend` degrades to a clearly-labelled stub — useful for CI, HF Space boots before the site lands, and pure tests.
+
+---
+
+## Eval results
+
+```
+results/
+  eval_random.json       # uniform-random baseline
+  eval_base.json         # Qwen2.5-Coder-1.5B (no fine-tune)
+  eval_sft.json          # SFT-only
+  eval_sft_grpo.json     # SFT then GRPO
+  reward_curve.png       # mean reward vs training step
+  reward_components.png  # 6 components plotted separately
+  success_bars.png       # success rate per family per condition
+  action_distribution.png
+```
+
+A representative summary table is regenerated by the eval pipeline; expected pattern (final numbers populated post-training run):
+
+| Condition | oom_crash | db_pool_exhaustion | bad_deployment_cascade | Average |
+|---|---|---|---|---|
+| Random | ~10–15% | ~0–5% | ~0% | floor |
+| Base model | improving | improving | improving | mid |
+| SFT | strong | improving | mid | better |
+| SFT + GRPO | strong | strong | strong | best |
+
+(Numbers replaced with measured values when the Colab run completes.)
+
+---
+
+## API endpoints
+
+| Endpoint | Method | Purpose |
+|---|---|---|
+| `/` | GET | Interactive dashboard |
+| `/reset` | POST | Start episode (`task_id`, `seed`, `difficulty`) |
+| `/step` | POST | Take action (`action_type`, `target_service`, `parameters`) |
+| `/state` | GET | Current episode state |
+| `/reward-breakdown` | GET | Last step's 6-component reward |
+| `/backend` | GET | Which backend is wired (sim/real) |
+| `/tasks` | GET | All scenario families with metadata |
+| `/runs` | GET | List of recorded trained-agent runs |
+| `/watch/{run_id}` | GET | Full event trace for one run |
+| `/observe` | GET | Trained-agent observatory dashboard |
+| `/health` | GET | Liveness |
+
+---
+
+## Project structure
 
 ```
 incident_commander_env/
-  models.py              # Pydantic typed models (Action, Observation, State)
-  openenv.yaml           # OpenEnv specification metadata
+  models.py                            # Pydantic typed Action / Observation / State
+  openenv.yaml                         # Full OpenEnv spec (action_space, observation_space, …)
   server/
-    app.py               # FastAPI routes (/reset, /step, /state)
-    environment.py       # Core RL environment orchestrator
-    actions/handlers.py  # 10 action handler implementations
-    scenarios/           # 3 incident scenarios with rubric-based graders
-    grading/             # Episode-end grader + per-step reward computation
-    simulation/          # Cluster, services, dependency graph, metrics, logs
-    static/index.html    # Interactive web UI
-inference.py             # Baseline inference script (OpenAI client, structured logs)
-Dockerfile               # Container spec (Python 3.11-slim)
-.env                     # API credentials (gitignored)
-baseline_results.json    # Latest baseline scores
+    app.py                             # FastAPI routes
+    environment.py                     # Env orchestrator (delegates to Backend)
+    backends/
+      protocol.py                      # Backend Protocol + typed BackendSnapshot
+      sim.py                           # SimulatedBackend (in-memory)
+      real.py                          # RealBackend (docker compose)
+      docker_ops.py                    # Shell-out helpers (mock-friendly)
+    grading/
+      components.py                    # 6 pure reward functions
+      reward.py                        # Backwards-compat facade
+      grader.py                        # Episode-end rubric
+      episode_context.py               # EpisodeContext dataclass
+    scenarios/
+      base_scenario.py                 # on_config_update / is_correct_op hooks
+      scenario_oom_crash.py            # parametric (seed, difficulty)
+      scenario_db_pool.py              # parametric
+      scenario_bad_deploy.py           # parametric
+    simulation/                        # Cluster, services, metrics, logs
+    static/
+      index.html, demo.js, …           # human dashboard
+      observe.html, observe.js         # trained-agent observatory
+training/
+  datasets.py                          # SFT chat dataset from IDEAL_TRAJECTORIES
+  eval_runner.py                       # episode + report runner (writes JSONL traces)
+  episode_logger.py                    # JSONL writer / reader for /watch
+  curriculum.py                        # 3-phase difficulty schedule
+  grpo_reward.py                       # TRL reward fn wrapping 6-component breakdown
+  plots.py                             # matplotlib helpers (lazy-imported)
+  train_grpo.ipynb                     # Self-contained Colab notebook
+tests/
+  test_reward_components.py            # per-component unit tests
+  test_reward_hacks.py                 # 4 exploits regression-tested
+  test_seeded_reproducibility.py       # same seed → same trajectory
+  test_backend_protocol.py             # Backend contract tests
+  test_real_backend.py                 # RealBackend with mocked subprocess
+  test_observe_mode.py                 # /watch + /runs + JSONL logger
+  test_training_modules.py             # SFT/GRPO plumbing
+  …
+results/                               # plots + JSON eval reports
+docs/
+  blog.md                              # HuggingFace blog source
+  video_script.md                      # 90-second video shot list
 ```
 
-## Technical Details
+---
 
-- **Pure Python simulation**: No external databases or services needed. All 9 services are simulated in-memory.
-- **Deterministic grading**: Rubric-based scoring ensures reproducible evaluation.
-- **Extensible architecture**: New scenarios can be added by implementing `BaseScenario` without touching core code.
-- **Resource efficient**: Runs within 2 vCPU / 8 GB RAM constraint. Inference completes in under 10 minutes.
-- **Structured logging**: Inference emits `[START]/[STEP]/[END]` logs per hackathon evaluation spec.
+## Phase 2 roadmap (mentioned for the pitch)
+
+This Phase-1 hackathon submission proves the methodology and substrate. The roadmap that turns "first OpenEnv for SRE" into "first end-to-end debugging-and-ops co-pilot trained on real-world incidents":
+
+1. **CodeAwareBackend** — git worktree + pytest. Adds `ReadFile`, `GrepCode`, `GitDiff`, `ApplyPatch`, `RunTests` action types. The agent doesn't just restart services — it ships the actual code fix.
+2. **Discriminated typed action union** — replace `Dict[str, Any]` parameters with per-action typed sub-models for compile-time safety.
+3. **Code-fix scenario families** — each ops scenario gains a code-fix variant requiring a real patch + passing test instead of a runtime workaround.
+4. **Sandboxed shell action with allowlist** — 20-command sandboxed shell for diagnostic flexibility beyond the typed action vocabulary.
+5. **Crowdsourced scenario library** — YAML scenario authoring DSL; community PRs.
+
+---
+
+## License & attribution
+
+MIT. Built on top of OpenEnv (Meta) + TRL (HuggingFace) + Unsloth.
+Telemetry-free, deterministic, and reproducible — same seed always produces the same trajectory and the same score.

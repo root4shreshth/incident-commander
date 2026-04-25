@@ -28,6 +28,10 @@ from incident_commander_env.server.coach import (
 
 STATIC_DIR = Path(__file__).parent / "static"
 
+# Where eval-runner writes per-episode JSONL traces. The dashboard's
+# observe mode consumes these via /watch/<run_id>.
+RUNS_ROOT = Path(os.getenv("RUNS_ROOT", "runs")).resolve()
+
 
 app = FastAPI(
     title="IncidentCommanderEnv",
@@ -265,6 +269,65 @@ def ideal_trajectory(task_id: str) -> Dict[str, Any]:
     if not traj:
         return {"error": f"No ideal trajectory available for task {task_id}"}
     return {"task_id": task_id, "trajectory": traj}
+
+
+# ---------------------------------------------------------------------------
+# Observe-mode: the dashboard's "watch a trained agent" surface.
+#
+# Trained agent runs (run by eval_runner with `runs_root=...`) leave JSONL
+# traces under `runs/<run_id>/episode.jsonl`. The dashboard's observe page
+# (static/observe.html) lists them via /runs and replays one via /watch.
+# This is what powers the sim-to-real demo recording.
+# ---------------------------------------------------------------------------
+
+
+@app.get("/runs")
+def list_runs() -> Dict[str, Any]:
+    """List available recorded trained-agent runs."""
+    try:
+        from training.episode_logger import iter_runs
+    except Exception as exc:  # pragma: no cover — defensive
+        return {"runs": [], "error": f"training extras not installed: {exc}"}
+    if not RUNS_ROOT.exists():
+        return {"runs": [], "runs_root": str(RUNS_ROOT)}
+    runs = list(iter_runs(RUNS_ROOT))
+    return {"runs": runs, "runs_root": str(RUNS_ROOT)}
+
+
+@app.get("/watch/{run_id}")
+def watch_run(run_id: str) -> Dict[str, Any]:
+    """Return the events of a single recorded run for replay in observe mode."""
+    try:
+        from training.episode_logger import read_episode
+    except Exception as exc:  # pragma: no cover — defensive
+        return {"error": f"training extras not installed: {exc}", "events": []}
+    # Sanitize: prevent traversal outside RUNS_ROOT
+    safe_id = run_id.replace("..", "").replace("/", "").replace("\\", "")
+    target = RUNS_ROOT / safe_id / "episode.jsonl"
+    if not target.exists():
+        return {"error": f"run not found: {safe_id}", "events": []}
+    events = read_episode(target)
+    summary: Dict[str, Any] = {"run_id": safe_id, "n_events": len(events)}
+    start = next((e for e in events if e.get("type") == "start"), None)
+    end = next((e for e in reversed(events) if e.get("type") == "end"), None)
+    if start:
+        for k in ("task_id", "seed", "model", "alert", "max_steps"):
+            if k in start:
+                summary[k] = start[k]
+    if end:
+        summary["resolved"] = end.get("resolved")
+        summary["score"] = end.get("score")
+        summary["steps_used"] = end.get("steps_used")
+    return {"summary": summary, "events": events}
+
+
+@app.get("/observe")
+def observe_page():
+    """Serve the agent-observation dashboard."""
+    page = STATIC_DIR / "observe.html"
+    if page.exists():
+        return FileResponse(page)
+    return {"error": "observe.html missing — copy it under static/."}
 
 
 def main() -> None:

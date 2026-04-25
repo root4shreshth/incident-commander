@@ -11,3 +11,17 @@ venv/
 *.log
 outputs/
 .claude/
+
+# Recorded trained-agent runs (large, regenerable from notebook)
+runs/
+
+# MS Office lock files
+~$*
+
+# Local site target for sim-to-real demo (vibecoded separately)
+targets/
+
+# Local dev caches
+.pytest_cache/
+.ruff_cache/
+

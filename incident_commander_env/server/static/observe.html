@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>IncidentCommander — Trained Agent Observatory</title>
+  <style>
+    :root {
+      --bg: #0b0d12;
+      --panel: #11141b;
+      --panel-2: #161a23;
+      --line: #232836;
+      --text: #e6e9f2;
+      --muted: #8a93a6;
+      --accent: #69e0d6;
+      --accent-2: #ffb86b;
+      --good: #6cd86b;
+      --bad: #ff6b6b;
+      --warn: #ffd166;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; padding: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
+      font-size: 14px;
+      height: 100%;
+    }
+    body { display: flex; flex-direction: column; min-height: 100vh; }
+    header {
+      padding: 14px 22px;
+      background: var(--panel);
+      border-bottom: 1px solid var(--line);
+      display: flex; align-items: center; gap: 16px;
+    }
+    header .logo { font-weight: 700; letter-spacing: 0.4px; }
+    header .badge {
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: rgba(105, 224, 214, 0.12);
+      color: var(--accent);
+      border: 1px solid rgba(105, 224, 214, 0.3);
+      letter-spacing: 0.6px;
+    }
+    header .spacer { flex: 1; }
+    header select, header button {
+      background: var(--panel-2);
+      color: var(--text);
+      border: 1px solid var(--line);
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-size: 13px;
+    }
+    header button { cursor: pointer; }
+    header button:hover { border-color: var(--accent); }
+    main {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 1fr 380px;
+      gap: 14px;
+      padding: 14px 22px;
+    }
+    .col { display: flex; flex-direction: column; gap: 14px; }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 14px 16px;
+    }
+    .card h3 {
+      margin: 0 0 10px 0;
+      font-size: 12px;
+      text-transform: uppercase;
+      color: var(--muted);
+      letter-spacing: 0.7px;
+    }
+    .meta-grid {
+      display: grid;
+      grid-template-columns: 110px 1fr;
+      row-gap: 6px;
+      column-gap: 12px;
+      font-size: 13px;
+    }
+    .meta-grid .key { color: var(--muted); }
+    .pill {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      letter-spacing: 0.5px;
+    }
+    .pill.good { background: rgba(108, 216, 107, 0.13); color: var(--good); border: 1px solid rgba(108,216,107,0.3); }
+    .pill.bad  { background: rgba(255, 107, 107, 0.13); color: var(--bad);  border: 1px solid rgba(255,107,107,0.3); }
+    .pill.warn { background: rgba(255, 209, 102, 0.13); color: var(--warn); border: 1px solid rgba(255,209,102,0.3); }
+    .pill.muted { background: var(--panel-2); color: var(--muted); border: 1px solid var(--line); }
+
+    .map {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 10px;
+    }
+    .svc {
+      background: var(--panel-2);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px 12px;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .svc.healthy { border-color: rgba(108,216,107,0.4); }
+    .svc.degraded { border-color: rgba(255,209,102,0.4); }
+    .svc.crashed, .svc.unhealthy { border-color: rgba(255,107,107,0.4); box-shadow: 0 0 0 1px rgba(255,107,107,0.15) inset; }
+    .svc .name { font-weight: 600; }
+    .svc .row { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+    .timeline { display: flex; flex-direction: column; gap: 8px; max-height: 65vh; overflow-y: auto; }
+    .step {
+      background: var(--panel-2);
+      border: 1px solid var(--line);
+      border-left: 3px solid var(--accent);
+      padding: 8px 10px;
+      border-radius: 6px;
+    }
+    .step.bad { border-left-color: var(--bad); }
+    .step.good { border-left-color: var(--good); }
+    .step .top {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .step .body {
+      margin-top: 4px;
+      font-family: ui-monospace, "Cascadia Mono", Menlo, monospace;
+      font-size: 12.5px;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+    .step .reward {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 6px;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .reward-bar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; background: var(--panel-2); }
+    .reward-bar .seg { display: block; height: 100%; }
+
+    .empty { color: var(--muted); padding: 30px; text-align: center; font-size: 13px; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="logo">incident<span style="color:var(--accent)">.</span>commander</div>
+    <div class="badge">OBSERVATORY</div>
+    <div class="spacer"></div>
+    <span style="color:var(--muted); font-size:12px;">Run:</span>
+    <select id="run-picker"><option value="">— select a run —</option></select>
+    <button id="btn-replay">Replay</button>
+    <button id="btn-step">Step</button>
+    <button id="btn-pause">Pause</button>
+    <a href="/" style="font-size:12px; margin-left:10px;">↗ live env</a>
+  </header>
+
+  <main>
+    <div class="col">
+      <div class="card">
+        <h3>Episode</h3>
+        <div class="meta-grid">
+          <div class="key">Run ID</div>      <div id="m-run-id">—</div>
+          <div class="key">Task</div>        <div id="m-task">—</div>
+          <div class="key">Seed</div>        <div id="m-seed">—</div>
+          <div class="key">Model</div>       <div id="m-model">—</div>
+          <div class="key">Alert</div>       <div id="m-alert">—</div>
+          <div class="key">Verdict</div>     <div id="m-verdict">—</div>
+          <div class="key">Score</div>       <div id="m-score">—</div>
+          <div class="key">Steps used</div>  <div id="m-steps">—</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Reward decomposition (episode totals)</h3>
+        <div id="reward-bar" class="reward-bar"></div>
+        <div id="reward-table" class="meta-grid" style="margin-top:10px"></div>
+      </div>
+
+      <div class="card">
+        <h3>Service map (final state)</h3>
+        <div id="map" class="map"><div class="empty">Pick a run to see services.</div></div>
+      </div>
+    </div>
+
+    <div class="col">
+      <div class="card">
+        <h3>Action timeline</h3>
+        <div id="timeline" class="timeline"><div class="empty">Pick a run to start replay.</div></div>
+      </div>
+    </div>
+  </main>
+
+  <script src="/static/observe.js"></script>
+</body>
+</html>

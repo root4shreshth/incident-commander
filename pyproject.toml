@@ -22,9 +22,19 @@ dev = [
     "pytest>=8.0.0",
     "httpx>=0.25.0",
 ]
+training = [
+    "transformers>=4.45",
+    "trl>=0.13,<0.16",
+    "datasets>=2.14",
+    "peft>=0.10",
+    "accelerate>=0.30",
+    "bitsandbytes>=0.43",
+    "matplotlib>=3.7",
+    "huggingface-hub>=0.20",
+]
 
 [tool.setuptools.packages.find]
-include = ["incident_commander_env*"]
+include = ["incident_commander_env*", "training*"]
 
 [dependency-groups]
 dev = [
