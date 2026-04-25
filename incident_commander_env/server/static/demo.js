@@ -116,10 +116,38 @@
 
     const social = document.getElementById('auth-social-btns');
     if (social) {
+      // Google: real GIS button if configured, otherwise a demo-mode fallback button
+      const googleSlot = Auth.isGoogleConfigured()
+        ? `<div id="google-signin-btn" style="display:flex;justify-content:center;min-height:44px"></div>`
+        : `<button type="button" class="auth-btn" data-provider="google-demo" title="Set a Google Client ID in the meta tag to enable real OAuth.">${Icons.google(18)} Continue with Google <span style="margin-left:auto;font-size:10px;color:var(--text-muted);font-weight:600;letter-spacing:.5px">DEMO</span></button>`;
       social.innerHTML = `
-        <button type="button" class="auth-btn" data-provider="google">${Icons.google(18)} Continue with Google</button>
-        <button type="button" class="auth-btn" data-provider="apple">${Icons.apple(18)} Continue with Apple</button>
-        <button type="button" class="auth-btn" data-provider="github">${Icons.github(18)} Continue with GitHub</button>`;
+        ${googleSlot}
+        <button type="button" class="auth-btn" data-provider="apple" title="Real Apple Sign-In requires backend OAuth — running in demo mode.">${Icons.apple(18)} Continue with Apple <span style="margin-left:auto;font-size:10px;color:var(--text-muted);font-weight:600;letter-spacing:.5px">DEMO</span></button>
+        <button type="button" class="auth-btn" data-provider="github" title="Real GitHub OAuth requires backend exchange — running in demo mode.">${Icons.github(18)} Continue with GitHub <span style="margin-left:auto;font-size:10px;color:var(--text-muted);font-weight:600;letter-spacing:.5px">DEMO</span></button>`;
+
+      // If Google is configured, wire up the real GIS button
+      if (Auth.isGoogleConfigured()) {
+        Auth.initGoogleSignIn((credential) => {
+          try {
+            Auth.signInWithGoogleCredential(credential);
+            renderUserSlot();
+            applyAuthGate();
+            const u = Auth.currentUser();
+            showToast(`Welcome, ${u.name}.`);
+            if (!localStorage.getItem('ic_tutorial_done')) showTutorial();
+          } catch (err) {
+            const errBox = document.getElementById('auth-error');
+            if (errBox) { errBox.textContent = err.message; errBox.classList.remove('hidden'); }
+          }
+        }).then((ok) => {
+          const slot = document.getElementById('google-signin-btn');
+          if (ok && slot) Auth.renderGoogleButton(slot, { theme: 'filled_black', width: 320 });
+          else if (slot) {
+            // GIS failed to load — replace with demo fallback so user isn't stuck
+            slot.outerHTML = `<button type="button" class="auth-btn" data-provider="google-demo">${Icons.google(18)} Continue with Google <span style="margin-left:auto;font-size:10px;color:var(--text-muted);font-weight:600;letter-spacing:.5px">DEMO</span></button>`;
+          }
+        });
+      }
     }
 
     const emailWrap = document.getElementById('auth-email-wrap');
@@ -161,9 +189,12 @@
       return;
     }
     const initials = (user.name || user.email).split(/\s+/).map(w => w[0]).slice(0,2).join('').toUpperCase();
+    const avatar = user.picture
+      ? `<div class="user-avatar" style="background:transparent;padding:0;overflow:hidden"><img src="${escapeHtml(user.picture)}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:inherit" referrerpolicy="no-referrer"></div>`
+      : `<div class="user-avatar">${escapeHtml(initials)}</div>`;
     slot.innerHTML = `
       <div class="user-badge" id="user-badge">
-        <div class="user-avatar">${escapeHtml(initials)}</div>
+        ${avatar}
         <span class="user-name">${escapeHtml(user.name)}</span>
         <div class="user-menu">
           <div class="user-menu-info">
@@ -832,17 +863,28 @@
         }
       });
     }
-    // Delegated handler — auth social buttons are injected after init
+    // Delegated handler -- demo-mode social buttons (real Google goes through GIS callback)
     document.addEventListener('click', (ev) => {
       const btn = ev.target.closest('.auth-btn[data-provider]');
       if (!btn) return;
       const provider = btn.getAttribute('data-provider');
       if (!provider) return;
-      Auth.signInWithProvider(provider);
+      // google-demo means GIS isn't configured — sign in with a demo Google identity
+      if (provider === 'google-demo') {
+        const user = {
+          email: 'demo.google@asme.ai',
+          name: 'Google Demo',
+          provider: 'Google (demo)',
+          signedInAt: Date.now(),
+        };
+        localStorage.setItem('ic_user', JSON.stringify(user));
+      } else {
+        Auth.signInWithProvider(provider);
+      }
       renderUserSlot();
       applyAuthGate();
       const u = Auth.currentUser();
-      showToast(`Signed in as ${u.name} (${u.provider} demo).`);
+      showToast(`Signed in as ${u.name}.`);
       if (!localStorage.getItem('ic_tutorial_done')) showTutorial();
     });
   }

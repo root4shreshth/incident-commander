@@ -4,7 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>IncidentCommanderEnv — Train to respond to production incidents</title>
+    <!-- Google OAuth Client ID. Create one at https://console.cloud.google.com/apis/credentials
+         (OAuth 2.0 Client IDs -> Web application). Add this Space's URL as an authorized JavaScript origin.
+         Without a real Client ID, the Google button falls back to the demo flow. -->
+    <meta name="google-client-id" content="YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
     <style>
         :root{--bg-primary:#0a0e17;--bg-secondary:#111827;--bg-card:#1a2035;--bg-elevated:#1e2943;--border:rgba(99,115,148,0.2);--border-active:rgba(99,179,255,0.4);--text-primary:#f1f5f9;--text-secondary:#94a3b8;--text-muted:#64748b;--accent-blue:#3b82f6;--accent-green:#22c55e;--accent-red:#ef4444;--accent-orange:#f59e0b;--accent-purple:#a855f7;--accent-cyan:#06b6d4;--glow-blue:rgba(59,130,246,0.15);--glow-red:rgba(239,68,68,0.15);--glow-green:rgba(34,197,94,0.15)}
         *{margin:0;padding:0;box-sizing:border-box}body{font-family:'Inter',system-ui,sans-serif;background:var(--bg-primary);color:var(--text-primary);min-height:100vh;overflow-x:hidden}a{color:var(--accent-blue);text-decoration:none}code,.mono{font-family:'JetBrains Mono',monospace}
