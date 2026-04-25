@@ -184,6 +184,9 @@ CHAOS_FOR_TASK = {
     "oom_crash": "oom",
     "db_pool_exhaustion": "conn-leak",
     "bad_deployment_cascade": "bad-deploy",
+    "disk_full": "disk-full",
+    "slow_query": "lock-contention",
+    "cert_expiry": "cert-expired",
 }
 
 

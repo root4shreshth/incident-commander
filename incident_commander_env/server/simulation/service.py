@@ -78,11 +78,19 @@ class Service:
     # starved dependents does bring them back. The "ordering matters" lesson
     # is enforced by the scenario's rubric (correct_order check), not by
     # restart() refusing to heal.
-    _RESTART_CURABLE = frozenset({"oom", "connection_leak", "resource_starved"})
+    # disk_full + cert_expired heal on restart in the sim model:
+    #   - disk_full: the restart cycle clears tmp/ and rotates logs
+    #   - cert_expired: the restart triggers a cert renewal hook
+    _RESTART_CURABLE = frozenset({
+        "oom", "connection_leak", "resource_starved",
+        "disk_full", "cert_expired",
+    })
 
     # Anomalies that a rollback genuinely fixes (because they were introduced
     # by a bad deploy). Anything else survives a rollback.
-    _ROLLBACK_CURABLE = frozenset({"memory_leak", "oom"})
+    # lock_contention is rollback-curable because it represents a slow query
+    # added in a recent deploy — reverting that deploy reverts the query.
+    _ROLLBACK_CURABLE = frozenset({"memory_leak", "oom", "lock_contention"})
 
     def __init__(self, config: ServiceConfig) -> None:
         self.config = config

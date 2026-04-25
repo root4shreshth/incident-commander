@@ -94,11 +94,13 @@ class TestAllTasksInitialise:
         env.reset(task_id=task_id)
         assert env.state.max_steps > 0
 
-    def test_exactly_three_tasks_registered(self):
-        assert len(SCENARIO_REGISTRY) == 3
-        assert "oom_crash" in SCENARIO_REGISTRY
-        assert "db_pool_exhaustion" in SCENARIO_REGISTRY
-        assert "bad_deployment_cascade" in SCENARIO_REGISTRY
+    def test_six_tasks_registered(self):
+        assert len(SCENARIO_REGISTRY) == 6
+        for fam in (
+            "oom_crash", "db_pool_exhaustion", "bad_deployment_cascade",
+            "disk_full", "slow_query", "cert_expiry",
+        ):
+            assert fam in SCENARIO_REGISTRY, f"missing scenario: {fam}"
 
 
 class TestDefaultTaskCycling:

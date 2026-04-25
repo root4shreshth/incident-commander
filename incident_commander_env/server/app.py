@@ -345,31 +345,71 @@ def observe_page():
 # the server from accepting requests.
 # ---------------------------------------------------------------------------
 
-def _seed_demo_runs_if_empty() -> None:
+def _has_any_recorded_runs() -> bool:
+    """True iff RUNS_ROOT contains at least one valid episode trace."""
+    if not RUNS_ROOT.exists():
+        return False
+    for child in RUNS_ROOT.iterdir():
+        if child.is_dir() and (child / "episode.jsonl").exists():
+            return True
+    return False
+
+
+def _seed_demo_runs(force: bool = False) -> Dict[str, Any]:
+    """Generate baseline demo runs so the Observatory + Home stats are useful
+    on a fresh deploy. Returns a summary dict suitable for an admin endpoint."""
+    if not force and _has_any_recorded_runs():
+        return {"seeded": False, "reason": "runs already present"}
+    RUNS_ROOT.mkdir(parents=True, exist_ok=True)
     try:
-        if RUNS_ROOT.exists():
-            for child in RUNS_ROOT.iterdir():
-                if child.is_dir():
-                    return  # already populated
-        else:
-            RUNS_ROOT.mkdir(parents=True, exist_ok=True)
         from training.datasets import SYSTEM_PROMPT
         from training.eval_runner import evaluate, random_policy
-        evaluate(
+    except Exception as exc:
+        return {"seeded": False, "error": f"training extras not installed: {exc}"}
+    try:
+        report = evaluate(
             "demo-baseline",
             random_policy(rng_seed=42),
-            families=["oom_crash", "db_pool_exhaustion", "bad_deployment_cascade"],
-            seeds=list(range(1, 11)),
+            families=[
+                "oom_crash", "db_pool_exhaustion", "bad_deployment_cascade",
+                "disk_full", "slow_query", "cert_expiry",
+            ],
+            seeds=list(range(1, 6)),  # 5 seeds × 6 families = 30 episodes
             system_prompt=SYSTEM_PROMPT,
             runs_root=str(RUNS_ROOT),
         )
+        return {
+            "seeded": True,
+            "n_episodes": report.n_episodes,
+            "by_family": {
+                f: {"success_rate": s["success_rate"], "avg_score": s["avg_score"]}
+                for f, s in report.by_family.items()
+            },
+        }
     except Exception as exc:  # pragma: no cover — never crash on this
-        print(f"[praetor] demo-runs seeding skipped: {exc}")
+        print(f"[praetor] demo-runs seeding failed: {exc}")
+        return {"seeded": False, "error": f"{type(exc).__name__}: {exc}"}
 
 
-@app.on_event("startup")
-def _startup_seed_demo_runs() -> None:
-    threading.Thread(target=_seed_demo_runs_if_empty, daemon=True).start()
+# Run seeding synchronously at import time. Random_policy is fast (~50ms per
+# episode → ~1.5s for 30 episodes), so the small delay is worth not having a
+# race condition with the first /runs request. Wrapped in try/except so a
+# seeding failure can never break server boot.
+try:
+    if not _has_any_recorded_runs():
+        _seed_result = _seed_demo_runs()
+        if _seed_result.get("seeded"):
+            print(f"[praetor] seeded {_seed_result['n_episodes']} demo runs")
+        else:
+            print(f"[praetor] demo-run seeding skipped: {_seed_result}")
+except Exception as _seed_exc:  # pragma: no cover
+    print(f"[praetor] demo-run seeding errored: {_seed_exc}")
+
+
+@app.post("/admin/regenerate-demo-runs")
+def admin_regenerate_demo_runs(force: bool = False) -> Dict[str, Any]:
+    """Regenerate demo runs. Used by the Observatory empty-state retry button."""
+    return _seed_demo_runs(force=force)
 
 
 # ---------------------------------------------------------------------------
@@ -432,6 +472,35 @@ _DEMO_PLAYBOOK: Dict[str, List[Dict[str, Any]]] = {
         {"action_type": "resolve_incident",
          "parameters": {"root_cause": "v1.1 bundled a memory leak",
                         "resolution": "rolled back api to v1.0 and restarted"}},
+    ],
+    "disk_full": [
+        {"action_type": "list_services"},
+        {"action_type": "read_logs",     "target_service": "api"},
+        {"action_type": "check_metrics", "target_service": "api"},
+        {"action_type": "restart_service", "target_service": "api"},
+        {"action_type": "resolve_incident",
+         "parameters": {"root_cause": "log volume on api filled — writes returning ENOSPC",
+                        "resolution": "restarted api to cycle the volume"}},
+    ],
+    "slow_query": [
+        {"action_type": "list_services"},
+        {"action_type": "check_metrics", "target_service": "api"},
+        {"action_type": "read_logs",     "target_service": "api"},
+        {"action_type": "describe_service", "target_service": "api"},
+        {"action_type": "rollback_deployment", "target_service": "api",
+         "parameters": {"to_version": "v1.0"}},
+        {"action_type": "resolve_incident",
+         "parameters": {"root_cause": "v1.1 introduced a slow query holding row-locks",
+                        "resolution": "rolled back api to v1.0"}},
+    ],
+    "cert_expiry": [
+        {"action_type": "list_services"},
+        {"action_type": "check_metrics", "target_service": "api"},
+        {"action_type": "read_logs",     "target_service": "api"},
+        {"action_type": "restart_service", "target_service": "api"},
+        {"action_type": "resolve_incident",
+         "parameters": {"root_cause": "TLS cert on api expired",
+                        "resolution": "restarted api to renew cert and reload listener"}},
     ],
 }
 
@@ -581,7 +650,9 @@ def _classify_current_fault(
         except (TypeError, ValueError):
             pass
 
-    # Look at logs for telltale strings (cheap heuristic)
+    # Look at logs for telltale strings (cheap heuristic). Order matters here:
+    # the more specific patterns are checked first so they aren't masked by
+    # generic ones (e.g. "memory" appearing in a slow_query log).
     if scenario is None and overall_status in ("degraded", "down"):
         for svc in service_names[:3]:
             r = _site_http(
@@ -590,17 +661,37 @@ def _classify_current_fault(
             if not r.ok or not isinstance(r.body, dict):
                 continue
             text = " ".join(map(str, (r.body.get("logs") or [])))[:4000].lower()
-            if "outofmemory" in text or "oom" in text or "memory" in text:
-                scenario = "oom_crash"; confidence = 0.65
-                evidence.append(f"{svc} logs mention OOM / memory")
+            # Cert expiry — very specific
+            if "tls" in text and ("certificate" in text or "handshake" in text or "expired" in text):
+                scenario = "cert_expiry"; confidence = 0.8
+                evidence.append(f"{svc} logs mention TLS / expired certificate")
                 break
+            # Disk full — very specific
+            if "no space left" in text or "enospc" in text or "disk usage" in text:
+                scenario = "disk_full"; confidence = 0.75
+                evidence.append(f"{svc} logs mention disk full / ENOSPC")
+                break
+            # Lock contention — specific to slow query
+            if "lock wait" in text or "deadlock" in text or "for update" in text:
+                scenario = "slow_query"; confidence = 0.7
+                evidence.append(f"{svc} logs mention lock-wait / deadlock")
+                break
+            # OOM
+            if "outofmemory" in text or "oom" in text or "out of memory" in text:
+                scenario = "oom_crash"; confidence = 0.65
+                evidence.append(f"{svc} logs mention OOM / out of memory")
+                break
+            # DB pool
             if "pool" in text and "connection" in text:
                 scenario = "db_pool_exhaustion"; confidence = 0.65
                 evidence.append(f"{svc} logs mention connection pool")
                 break
-            if "version" in text and ("rollout" in text or "v1.1" in text or "deploy" in text):
+            # Bad deploy
+            if ("version" in text or "rollout" in text or "deploy" in text) and (
+                "v1.1" in text or "v2.5" in text or "memory leak" in text
+            ):
                 scenario = "bad_deployment_cascade"; confidence = 0.55
-                evidence.append(f"{svc} logs mention deployment / version")
+                evidence.append(f"{svc} logs mention recent deployment / version")
                 break
 
     fault_detected = scenario is not None or overall_status in ("degraded", "down")
@@ -611,6 +702,9 @@ def _classify_current_fault(
             "oom_crash": "OOM (out-of-memory)",
             "db_pool_exhaustion": "DB connection pool exhaustion",
             "bad_deployment_cascade": "Bad deployment cascade",
+            "disk_full": "Disk space exhausted",
+            "slow_query": "Slow query / lock contention",
+            "cert_expiry": "TLS certificate expired",
         }.get(scenario or "", "unknown")
         narrative = f"Praetor classified the fault as **{sname}** based on " + ("; ".join(evidence) or "the site's reported status") + "."
 
@@ -650,24 +744,101 @@ def realtime_heal() -> Dict[str, Any]:
 
 @app.post("/realtime/codebase/link")
 def realtime_codebase_link(req: CodebaseLinkRequest) -> Dict[str, Any]:
-    """Link a remote git repo (GitHub or Azure DevOps) for tier-2 escalation."""
+    """Link a remote git repo (GitHub or Azure DevOps) for tier-2 escalation.
+
+    Performs an actual `git ls-remote` reachability check against the URL +
+    token so the user gets immediate feedback (not several minutes later when
+    tier-2 fires). Honest about what failed: bad URL, bad credentials, network.
+    """
+    import subprocess as _sp
+
     src = (req.source or "").lower().strip()
     if src not in ("github", "azure"):
         return {"linked": False, "error": "source must be 'github' or 'azure'"}
-    url = (req.repo_url or "").strip()
+    url = (req.repo_url or "").strip().rstrip("/")
     if not url:
         return {"linked": False, "error": "repo_url is required"}
-    # Light validation — we don't actually clone here. Tier-2 clones lazily.
-    if src == "github" and "github.com" not in url.lower():
-        return {"linked": False, "error": "GitHub source expects a github.com URL"}
-    if src == "azure" and "dev.azure.com" not in url.lower() and "visualstudio.com" not in url.lower():
-        return {"linked": False, "error": "Azure source expects a dev.azure.com URL"}
+
+    # Format validation — flexible but informative
+    if src == "github":
+        if "github.com" not in url.lower():
+            return {"linked": False, "error": "Expected a github.com URL (got: " + url + ")"}
+        # Append .git if it's missing — git tolerates either, but ls-remote prefers explicit
+        canonical = url if url.endswith(".git") else url + ".git"
+    elif src == "azure":
+        low = url.lower()
+        if "dev.azure.com" not in low and "visualstudio.com" not in low:
+            return {"linked": False, "error": "Expected a dev.azure.com or visualstudio.com URL"}
+        canonical = url
+
+    # Build authed URL for the reachability check (token in URL is standard for HTTPS git auth)
+    token = (req.repo_token or "").strip()
+    auth_url = canonical
+    if token:
+        if "https://" not in canonical:
+            return {"linked": False, "error": "Token-authed URL must be https://"}
+        if src == "github":
+            auth_url = canonical.replace(
+                "https://", f"https://x-access-token:{token}@", 1
+            )
+        else:  # azure: PAT goes in the user position
+            auth_url = canonical.replace(
+                "https://", f"https://anything:{token}@", 1
+            )
+
+    # Reachability test — does this URL respond to git protocol?
+    # GIT_TERMINAL_PROMPT=0 prevents git from blocking on credential prompts.
+    # GIT_ASKPASS=echo similarly disables GUI askpass helpers on some systems.
+    git_env = dict(os.environ)
+    git_env["GIT_TERMINAL_PROMPT"] = "0"
+    git_env["GIT_ASKPASS"] = "echo"
+    git_env["GCM_INTERACTIVE"] = "Never"
+    try:
+        proc = _sp.run(
+            ["git", "ls-remote", "--exit-code", auth_url, "HEAD"],
+            check=False, capture_output=True, text=True, timeout=12,
+            env=git_env,
+        )
+    except FileNotFoundError:
+        # `git` not installed on the server. Fall back to format-only validation
+        # — better than refusing every link request.
+        with _REALTIME_LOCK:
+            _REALTIME_CONFIG["repo_url"] = url
+            _REALTIME_CONFIG["repo_token"] = req.repo_token
+            _REALTIME_CONFIG["repo_source"] = src
+            _REALTIME_CONFIG["repo_local_path"] = None
+        return {
+            "linked": True, "source": src, "repo_url": url,
+            "warning": "git not installed on server — URL was format-validated but not pinged",
+        }
+    except _sp.TimeoutExpired:
+        return {"linked": False, "error": "git ls-remote timed out (network or unreachable host)"}
+
+    if proc.returncode != 0:
+        # Strip token from any error output before surfacing
+        err = (proc.stderr or proc.stdout or "").strip()
+        if token:
+            err = err.replace(token, "***")
+        # Common error mapping for nicer UX
+        low_err = err.lower()
+        if "authentication failed" in low_err or "could not read" in low_err or "401" in low_err or "403" in low_err:
+            friendly = "Authentication failed — check your token (PAT must have repo read access)"
+        elif "not found" in low_err or "repository not found" in low_err or "404" in low_err:
+            friendly = "Repository not found at that URL — check spelling and access permissions"
+        elif "could not resolve host" in low_err:
+            friendly = "Network error — could not resolve host"
+        elif "timeout" in low_err:
+            friendly = "Connection timed out"
+        else:
+            friendly = err.splitlines()[0] if err else f"git exit code {proc.returncode}"
+        return {"linked": False, "error": friendly, "git_stderr": err[:400]}
+
     with _REALTIME_LOCK:
         _REALTIME_CONFIG["repo_url"] = url
         _REALTIME_CONFIG["repo_token"] = req.repo_token
         _REALTIME_CONFIG["repo_source"] = src
         _REALTIME_CONFIG["repo_local_path"] = None
-    return {"linked": True, "source": src, "repo_url": url}
+    return {"linked": True, "source": src, "repo_url": url, "verified": True}
 
 
 @app.post("/realtime/codebase/upload")

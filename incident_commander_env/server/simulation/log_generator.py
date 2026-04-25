@@ -132,6 +132,50 @@ def frontend_generic_error_logs(service: str) -> List[str]:
     ]
 
 
+def disk_full_logs(service: str, mount: str = "/var/log") -> List[str]:
+    """Disk space exhausted on a mount — writes failing, reads working."""
+    return [
+        f"{_ts(11, 12, 0)} [INFO]  {service} - Request processed in 18ms",
+        f"{_ts(11, 14, 30)} [WARN]  {service} - Disk usage on {mount}: 91% (45GB / 50GB)",
+        f"{_ts(11, 16, 12)} [WARN]  {service} - Disk usage on {mount}: 96% (48GB / 50GB) — log rotation falling behind",
+        f"{_ts(11, 17, 5)} [ERROR] {service} - Failed to write log entry: [Errno 28] No space left on device",
+        f"{_ts(11, 17, 30)} [ERROR] {service} - Failed to persist transaction state: [Errno 28] No space left on device",
+        f"{_ts(11, 18, 0)} [ERROR] {service} - Database write rejected: out of disk space — query rolled back",
+        f"{_ts(11, 18, 14)} [ERROR] {service} - 47 buffered log entries dropped (disk full)",
+        f"{_ts(11, 19, 0)} [WARN]  {service} - Service marked DEGRADED: write operations are failing, read-only mode",
+        f"{_ts(11, 19, 30)} [INFO]  {service} - Operator action recommended: free disk space or roll the pod (restart triggers volume cleanup)",
+    ]
+
+
+def lock_contention_logs(service: str, query_ms: int = 28000) -> List[str]:
+    """Slow query / lock contention — long lock waits, throughput collapses."""
+    return [
+        f"{_ts(15, 4, 0)} [INFO]  {service} - Request processed in 12ms",
+        f"{_ts(15, 7, 12)} [WARN]  {service} - Slow query detected on `orders` table: SELECT … FOR UPDATE took 1480ms",
+        f"{_ts(15, 8, 30)} [WARN]  {service} - Lock wait exceeded threshold: txn=4521 waiting on row-lock for 8000ms",
+        f"{_ts(15, 9, 5)} [ERROR] {service} - Lock wait timeout exceeded: txn=4521 rolled back after {query_ms}ms",
+        f"{_ts(15, 9, 12)} [ERROR] {service} - Detected potential deadlock: txn=4521 vs txn=4530 — both waiting",
+        f"{_ts(15, 10, 0)} [WARN]  {service} - Active txns holding locks > 60s: 14 (up from 2 baseline)",
+        f"{_ts(15, 10, 30)} [ERROR] {service} - Throughput collapsed: 4 RPS (baseline: 38 RPS)",
+        f"{_ts(15, 11, 0)} [WARN]  {service} - Slow query introduced in deploy v2.5.0 (committed 2h ago) — consider rollback",
+        f"{_ts(15, 11, 30)} [ERROR] {service} - 23 client requests timed out at gateway (latency p99 > 8s)",
+    ]
+
+
+def cert_expired_logs(service: str) -> List[str]:
+    """TLS certificate expired — handshakes fail before any app code runs."""
+    return [
+        f"{_ts(8, 0, 0)} [INFO]  {service} - TLS certificate loaded: CN=svc.api.internal, validity until 2026-04-25T08:00:00Z",
+        f"{_ts(8, 0, 5)} [ERROR] {service} - TLS handshake failed: ssl.SSLError: certificate has expired",
+        f"{_ts(8, 0, 12)} [ERROR] {service} - HTTPS request from 10.0.4.21 dropped: SSL_ERROR_EXPIRED_CERT_ALERT",
+        f"{_ts(8, 0, 18)} [ERROR] {service} - HTTPS request from 10.0.4.34 dropped: SSL_ERROR_EXPIRED_CERT_ALERT",
+        f"{_ts(8, 1, 0)} [ERROR] {service} - 142 inbound TLS handshakes failed in last 60s — all connections refused",
+        f"{_ts(8, 1, 30)} [WARN]  {service} - Service health: process is alive but no traffic landing (TLS layer broken)",
+        f"{_ts(8, 2, 0)} [INFO]  {service} - Cert renewal hook is registered — restart will re-fetch from Let's Encrypt and reload listener",
+        f"{_ts(8, 2, 30)} [ERROR] {service} - Liveness probe (/health over HTTP): OK ; Readiness probe (over HTTPS): FAIL",
+    ]
+
+
 def service_starved_logs(service: str) -> List[str]:
     """Generate logs for a service starved of resources due to quota exhaustion."""
     return [

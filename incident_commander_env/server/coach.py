@@ -65,6 +65,52 @@ LEARNING_CONTEXT: Dict[str, Dict[str, Any]] = {
         "est_minutes": 20,
         "prerequisite": "db_pool_exhaustion",
     },
+    "disk_full": {
+        "skill_tag": "Out of space",
+        "backstory": (
+            "11:18 AM. Notification-service is suddenly throwing 5xx on every push. "
+            "Process is alive, latency is normal, error rate at 28%. Logs say "
+            "'No space left on device'. The disk is full."
+        ),
+        "learning_goals": [
+            "Recognizing the ENOSPC error pattern in logs",
+            "Knowing when a restart cycles a volume vs preserves it",
+            "Distinguishing degraded-mode (read-only) from fully-down",
+        ],
+        "est_minutes": 7,
+        "prerequisite": "oom_crash",
+    },
+    "slow_query": {
+        "skill_tag": "Quick fix vs real fix",
+        "backstory": (
+            "3:09 PM. p99 latency on order-service has gone from 80ms to 8 seconds. "
+            "Throughput collapsed. Connection pool full of txns waiting on row-locks. "
+            "A deploy went out two hours ago. What do you do — restart, or roll back?"
+        ),
+        "learning_goals": [
+            "Spotting lock-contention vs other latency causes",
+            "Why restart is a quick fix that doesn't last",
+            "Reading deployment history to tie latency to a recent change",
+        ],
+        "est_minutes": 14,
+        "prerequisite": "db_pool_exhaustion",
+    },
+    "cert_expiry": {
+        "skill_tag": "The embarrassing one",
+        "backstory": (
+            "8:00 AM. Frontend is returning 5xx to every external user. Liveness "
+            "probe passes. Internal services say it's healthy. Logs say "
+            "'TLS handshake failed: certificate has expired.' "
+            "It's the most embarrassing class of outage. It's still your problem."
+        ),
+        "learning_goals": [
+            "Why metrics can look normal while everything is broken",
+            "TLS / cert errors and how restart-renewal hooks work",
+            "Reading-logs-not-metrics as the first move on weird outages",
+        ],
+        "est_minutes": 8,
+        "prerequisite": "oom_crash",
+    },
 }
 
 
@@ -179,6 +225,57 @@ IDEAL_TRAJECTORIES: Dict[str, List[Dict[str, Any]]] = {
             },
             "why": "Resolution reflects both the origin (bad deploy) and the cascade.",
         },
+    ],
+    "disk_full": [
+        {"action": "list_services", "target": None,
+         "why": "Get the overview — notification-service is marked DEGRADED."},
+        {"action": "read_logs", "target": "notification-service",
+         "why": "The degraded service. Logs scream 'No space left on device' on every write."},
+        {"action": "check_metrics", "target": "notification-service",
+         "why": "CPU and memory normal — confirming this isn't OOM. The fault is at the volume layer."},
+        {"action": "restart_service", "target": "notification-service",
+         "why": "Restart cycles the pod, the volume gets cleaned + log-rotated, the service comes back."},
+        {"action": "resolve_incident", "target": None,
+         "params": {
+             "root_cause": "notification-service log volume hit 100% — writes returned ENOSPC",
+             "resolution": "Restarted to cycle the volume; will follow up with log retention config",
+         },
+         "why": "Honest postmortem: restart bought time; permanent fix is rotation policy."},
+    ],
+    "slow_query": [
+        {"action": "list_services", "target": None,
+         "why": "Confirm scope — order-service is degraded, others normal."},
+        {"action": "check_metrics", "target": "order-service",
+         "why": "Latency p99 is 8s, throughput at 4 RPS. Lock contention pattern."},
+        {"action": "read_logs", "target": "order-service",
+         "why": "Logs spell it out: 'Lock wait timeout exceeded' from a SELECT … FOR UPDATE."},
+        {"action": "describe_service", "target": "order-service",
+         "why": "Deployment history. v2.5.0 went out two hours ago — that's our suspect."},
+        {"action": "rollback_deployment", "target": "order-service",
+         "params": {"to_version": "v2.4.6"},
+         "why": "Restart would clear the active txns but the slow query is in the binary. Rollback reverts both."},
+        {"action": "resolve_incident", "target": None,
+         "params": {
+             "root_cause": "Slow query in v2.5.0 holding row-locks on `orders` table",
+             "resolution": "Rolled back order-service to v2.4.6; query will be re-introduced behind a feature flag",
+         },
+         "why": "Resolution names the offending version and the right next step."},
+    ],
+    "cert_expiry": [
+        {"action": "list_services", "target": None,
+         "why": "Frontend is unhealthy. Everything else looks fine. That's a clue."},
+        {"action": "check_metrics", "target": "frontend-bff",
+         "why": "CPU and memory tiny. Active connections near zero. Error rate at 99%. Doesn't match crash patterns."},
+        {"action": "read_logs", "target": "frontend-bff",
+         "why": "Right there: 'TLS handshake failed: certificate has expired'. Cert problem, not code."},
+        {"action": "restart_service", "target": "frontend-bff",
+         "why": "The cert renewal hook fires on restart — listener reloads with the renewed cert."},
+        {"action": "resolve_incident", "target": None,
+         "params": {
+             "root_cause": "Frontend TLS certificate expired at 08:00 UTC",
+             "resolution": "Restarted frontend-bff to trigger cert renewal; will add 30-day expiry alert",
+         },
+         "why": "Honest postmortem: the bigger lesson is the missing alert."},
     ],
 }
 
