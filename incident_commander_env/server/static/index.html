@@ -47,6 +47,114 @@
         .mode-dot{width:8px;height:8px;border-radius:50%;background:var(--accent-cyan);transition:all .25s}
         body[data-mode="pro"] .mode-dot{background:var(--accent-purple)}
         .tab-content{display:none;animation:fadeIn .3s ease}.tab-content.active{display:block}
+        .phase-num{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:rgba(99,115,148,0.18);color:var(--text-muted);font-size:10px;font-weight:700;margin-right:8px;transition:all .2s}
+        .nav-tab.active .phase-num{background:var(--accent-blue);color:#fff;box-shadow:0 0 8px rgba(59,130,246,.5)}
+        .nav-tab:hover .phase-num{background:rgba(99,179,255,0.3);color:var(--text-primary)}
+
+        /* ═══ Phase 1 — Observatory ═══ */
+        .obs-hero{padding:56px 32px 24px;text-align:center;position:relative;overflow:hidden;border-bottom:1px solid var(--border)}
+        .obs-hero::before{content:'';position:absolute;top:-200px;left:50%;transform:translateX(-50%);width:800px;height:800px;background:radial-gradient(circle,rgba(168,85,247,0.08)0%,transparent 70%);pointer-events:none}
+        .obs-hero h1{font-size:42px;font-weight:900;letter-spacing:-1.2px;line-height:1.1;margin-bottom:14px;background:linear-gradient(135deg,#f1f5f9 0%,#94a3b8 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+        .obs-hero h1 em{font-style:normal;background:linear-gradient(135deg,var(--accent-purple),var(--accent-cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+        .obs-hero .subtitle{font-size:16px;color:var(--text-secondary);max-width:620px;margin:0 auto 24px;line-height:1.6}
+        .obs-hero .stats-row{display:flex;justify-content:center;gap:36px;flex-wrap:wrap}
+        .obs-grid{display:grid;grid-template-columns:1fr 360px;gap:18px;padding:24px 32px;max-width:1280px;margin:0 auto;position:relative;z-index:1}
+        @media(max-width:1100px){.obs-grid{grid-template-columns:1fr}}
+        .obs-toolbar{background:var(--bg-card);border:1px solid var(--border);border-radius:14px;padding:14px 18px;margin:0 32px 18px;max-width:1216px;margin-left:auto;margin-right:auto;display:flex;flex-wrap:wrap;gap:14px;align-items:center}
+        .obs-toolbar .label{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);font-weight:600}
+        .obs-toolbar select{background:var(--bg-elevated);border:1px solid var(--border);color:var(--text-primary);font-size:13px;font-family:inherit;padding:7px 10px;border-radius:8px;min-width:160px}
+        .obs-toolbar select:focus{border-color:var(--accent-blue);outline:none}
+        .obs-chips{display:flex;gap:6px;flex-wrap:wrap;margin-left:auto}
+        .obs-chip{padding:5px 12px;border-radius:14px;background:var(--bg-elevated);border:1px solid var(--border);font-size:11px;color:var(--text-secondary);cursor:pointer;transition:all .2s;font-weight:500}
+        .obs-chip:hover{border-color:var(--border-active);color:var(--text-primary)}
+        .obs-chip.active{background:var(--accent-blue);color:#fff;border-color:var(--accent-blue)}
+        .obs-card{background:var(--bg-card);border:1px solid var(--border);border-radius:14px;padding:18px 20px;margin-bottom:18px}
+        .obs-card h3{font-size:11px;text-transform:uppercase;letter-spacing:.7px;color:var(--text-muted);margin-bottom:14px;font-weight:700;display:flex;align-items:center;gap:8px}
+        .obs-card h3 .h3-tag{font-size:10px;padding:2px 7px;border-radius:10px;background:rgba(168,85,247,0.13);color:var(--accent-purple);border:1px solid rgba(168,85,247,.3);letter-spacing:.4px}
+        .obs-meta-grid{display:grid;grid-template-columns:120px 1fr;row-gap:7px;column-gap:14px;font-size:13px}
+        .obs-meta-grid .key{color:var(--text-muted);font-size:12px}
+        .obs-meta-grid .val{color:var(--text-primary);font-family:'JetBrains Mono',monospace;font-size:12.5px}
+        .obs-pill{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:12px;font-size:11px;font-weight:600;letter-spacing:.3px}
+        .obs-pill.good{background:rgba(34,197,94,.13);color:var(--accent-green);border:1px solid rgba(34,197,94,.3)}
+        .obs-pill.bad{background:rgba(239,68,68,.13);color:var(--accent-red);border:1px solid rgba(239,68,68,.3)}
+        .obs-pill.warn{background:rgba(245,158,11,.13);color:var(--accent-orange);border:1px solid rgba(245,158,11,.3)}
+        .reward-stack{display:flex;height:14px;border-radius:7px;overflow:hidden;background:var(--bg-elevated);margin:6px 0 14px;border:1px solid var(--border)}
+        .reward-stack .seg{transition:width .4s}
+        .reward-table{display:grid;grid-template-columns:auto auto 1fr;row-gap:5px;column-gap:12px;font-size:12px;align-items:center}
+        .reward-sw{display:inline-block;width:8px;height:8px;border-radius:2px}
+        .reward-name{color:var(--text-secondary);font-weight:500}
+        .reward-val{color:var(--text-primary);font-family:'JetBrains Mono',monospace;font-size:12px;text-align:right;font-weight:500}
+        .spark{height:32px;border:1px solid var(--border);border-radius:6px;background:var(--bg-elevated);position:relative;overflow:hidden}
+        .spark svg{width:100%;height:100%;display:block}
+        .obs-spark-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+        .obs-spark-row{display:flex;align-items:center;gap:8px}
+        .obs-spark-row .label{flex:0 0 88px;font-size:11px;color:var(--text-secondary);text-transform:capitalize}
+        .obs-spark-row .total{flex:0 0 50px;font-size:11px;font-family:'JetBrains Mono',monospace;text-align:right;color:var(--text-primary)}
+        .obs-spark-row .spark{flex:1}
+        .obs-svc-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+        .obs-svc{background:var(--bg-elevated);border:1px solid var(--border);border-radius:9px;padding:10px 12px;transition:all .25s}
+        .obs-svc.healthy{border-color:rgba(34,197,94,.4)}
+        .obs-svc.degraded{border-color:rgba(245,158,11,.4)}
+        .obs-svc.unhealthy,.obs-svc.crashed{border-color:rgba(239,68,68,.5);box-shadow:0 0 0 1px rgba(239,68,68,.15) inset}
+        .obs-svc .nm{font-size:13px;font-weight:600;margin-bottom:4px}
+        .obs-svc .row{display:flex;justify-content:space-between;font-size:11px;color:var(--text-muted);margin-top:3px}
+        .timeline{display:flex;flex-direction:column;gap:7px;max-height:560px;overflow-y:auto;padding-right:4px}
+        .step{background:var(--bg-elevated);border:1px solid var(--border);border-left:3px solid var(--accent-purple);padding:9px 11px;border-radius:7px;cursor:pointer;transition:all .2s}
+        .step:hover{border-color:var(--border-active);transform:translateX(2px)}
+        .step.bad{border-left-color:var(--accent-red)}
+        .step.good{border-left-color:var(--accent-green)}
+        .step.escalate{border-left-color:var(--accent-orange);background:rgba(245,158,11,.05)}
+        .step .top{display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--text-muted)}
+        .step .top strong{color:var(--text-primary);font-weight:600}
+        .step .body{margin-top:5px;font-family:'JetBrains Mono',monospace;font-size:11.5px;white-space:pre-wrap;word-wrap:break-word;color:var(--text-secondary);max-height:48px;overflow:hidden;transition:max-height .3s}
+        .step.expanded .body{max-height:400px;overflow-y:auto}
+        .step .reward-chips{font-size:10px;color:var(--text-muted);margin-top:6px;display:flex;gap:7px;flex-wrap:wrap}
+        .step .reward-chips .chip{font-family:'JetBrains Mono',monospace}
+        .empty-state{padding:40px 20px;text-align:center;color:var(--text-muted);font-size:13px}
+        .empty-state .ic{font-size:32px;margin-bottom:10px;opacity:.4}
+        .obs-aggregate{margin:18px 32px 60px;max-width:1216px;margin-left:auto;margin-right:auto}
+        .agg-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}
+        .agg-bar-row{display:grid;grid-template-columns:120px 1fr 50px;align-items:center;gap:10px;margin-bottom:8px}
+        .agg-bar-row .nm{font-size:12px;color:var(--text-secondary)}
+        .agg-bar{height:18px;background:var(--bg-elevated);border-radius:4px;overflow:hidden;border:1px solid var(--border)}
+        .agg-bar .fill{height:100%;background:linear-gradient(90deg,var(--accent-blue),var(--accent-cyan));transition:width .6s}
+        .agg-bar-row .pct{font-size:11px;font-family:'JetBrains Mono',monospace;color:var(--text-primary);text-align:right}
+
+        /* ═══ Phase 3 — Real-Time ═══ */
+        .rt-hero{padding:48px 32px 24px;text-align:center;border-bottom:1px solid var(--border)}
+        .rt-hero h1{font-size:38px;font-weight:900;letter-spacing:-1px;line-height:1.1;margin-bottom:12px;background:linear-gradient(135deg,#f1f5f9 0%,#94a3b8 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+        .rt-hero h1 em{font-style:normal;background:linear-gradient(135deg,var(--accent-orange),var(--accent-red));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+        .rt-hero .subtitle{font-size:15px;color:var(--text-secondary);max-width:600px;margin:0 auto;line-height:1.6}
+        .rt-grid{display:grid;grid-template-columns:1fr 380px;gap:18px;padding:24px 32px;max-width:1280px;margin:0 auto}
+        @media(max-width:1100px){.rt-grid{grid-template-columns:1fr}}
+        .rt-step{margin-bottom:14px}
+        .rt-step-h{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+        .rt-step-num{width:26px;height:26px;border-radius:50%;background:var(--bg-elevated);border:2px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:var(--text-secondary);flex-shrink:0}
+        .rt-step-num.active{background:var(--accent-blue);border-color:var(--accent-blue);color:#fff;box-shadow:0 0 12px rgba(59,130,246,.4)}
+        .rt-step-num.done{background:var(--accent-green);border-color:var(--accent-green);color:#000}
+        .rt-step-h h4{font-size:13px;font-weight:600;color:var(--text-primary);text-transform:uppercase;letter-spacing:.6px}
+        .rt-input{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+        .rt-input input[type="text"]{flex:1;min-width:200px;background:var(--bg-elevated);border:1px solid var(--border);color:var(--text-primary);font-size:13px;font-family:'JetBrains Mono',monospace;padding:9px 12px;border-radius:8px}
+        .rt-input input[type="text"]:focus{border-color:var(--accent-blue);outline:none}
+        .rt-input input[type="text"]::placeholder{color:var(--text-muted)}
+        .rt-status{margin-top:10px;padding:10px 14px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:8px;font-size:12px;display:flex;align-items:center;gap:10px;font-family:'JetBrains Mono',monospace}
+        .rt-status.ok{border-color:rgba(34,197,94,.4);background:rgba(34,197,94,.05)}
+        .rt-status.bad{border-color:rgba(239,68,68,.4);background:rgba(239,68,68,.05)}
+        .rt-status .dot{width:7px;height:7px;border-radius:50%;background:var(--text-muted)}
+        .rt-status.ok .dot{background:var(--accent-green);box-shadow:0 0 6px var(--accent-green)}
+        .rt-status.bad .dot{background:var(--accent-red);box-shadow:0 0 6px var(--accent-red)}
+        .rt-chaos{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}
+        .rt-chaos-btn{background:var(--bg-elevated);border:1px solid var(--border);border-radius:10px;padding:14px 14px;cursor:pointer;text-align:left;transition:all .2s}
+        .rt-chaos-btn:hover:not(:disabled){border-color:var(--accent-orange);transform:translateY(-1px);box-shadow:0 4px 12px rgba(245,158,11,.15)}
+        .rt-chaos-btn:disabled{opacity:.4;cursor:not-allowed}
+        .rt-chaos-btn .ic{font-size:18px;margin-bottom:6px}
+        .rt-chaos-btn .ttl{font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:3px}
+        .rt-chaos-btn .desc{font-size:11px;color:var(--text-muted);line-height:1.4}
+        .rt-chaos-btn.fired{border-color:var(--accent-red);background:rgba(239,68,68,.07)}
+        .rt-tier-banner{padding:10px 14px;border-radius:8px;font-size:12px;font-weight:500;margin:12px 0;display:flex;align-items:center;gap:10px}
+        .rt-tier-banner.ops{background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.3);color:#a5d8ff}
+        .rt-tier-banner.escalate{background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.3);color:#fcd34d}
+        .rt-tier-banner.resolved{background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.3);color:#86efac}
 
         /* Buttons */
         .btn{padding:10px 22px;border-radius:10px;border:none;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s;font-family:inherit;display:inline-flex;align-items:center;gap:8px}
@@ -477,9 +585,11 @@
         IncidentCommanderEnv
     </div>
     <div class="nav-tabs">
-        <div class="nav-tab active" onclick="switchTab('home')">Overview</div>
-        <div class="nav-tab" onclick="switchTab('demo')">Training</div>
-        <div class="nav-tab" onclick="switchTab('api')">API Reference</div>
+        <div class="nav-tab active" onclick="switchTab('observatory')"><span class="phase-num">1</span> Observatory</div>
+        <div class="nav-tab" onclick="switchTab('apprentice')"><span class="phase-num">2</span> Apprentice</div>
+        <div class="nav-tab" onclick="switchTab('realtime')"><span class="phase-num">3</span> Real-Time</div>
+        <div class="nav-tab" onclick="switchTab('about')">About</div>
+        <div class="nav-tab" onclick="switchTab('api')">API</div>
     </div>
     <div class="nav-right">
         <button id="tutorial-restart" class="btn btn-outline btn-xs icon-btn" title="Restart tutorial" aria-label="Restart tutorial"></button>
@@ -493,14 +603,171 @@
     </div>
 </div>
 
-<!-- ═══════ HOME ═══════ -->
-<div id="tab-home" class="tab-content active">
+<!-- ═══════ PHASE 1 — OBSERVATORY (LLM agent) ═══════ -->
+<div id="tab-observatory" class="tab-content active">
+    <div class="obs-hero">
+        <div class="hero-label"><span class="dot"></span> Phase 1 · The trained LLM agent</div>
+        <h1>Watch the AI <em>solve real outages</em></h1>
+        <p class="subtitle">Every recorded run is the trained policy attempting one of three scenario families. Pick a run to see the action timeline, the 6-component reward decomposition, and the ideal-trajectory diff side-by-side.</p>
+        <div class="stats-row">
+            <div class="stat"><div class="stat-value blue" id="obs-stat-runs">—</div><div class="stat-label">Recorded Runs</div></div>
+            <div class="stat"><div class="stat-value green" id="obs-stat-resolved">—</div><div class="stat-label">Resolved</div></div>
+            <div class="stat"><div class="stat-value orange" id="obs-stat-avg-score">—</div><div class="stat-label">Avg Score</div></div>
+            <div class="stat"><div class="stat-value" id="obs-stat-conditions">—</div><div class="stat-label">Conditions</div></div>
+        </div>
+    </div>
+
+    <div class="obs-toolbar">
+        <span class="label">Run</span>
+        <select id="obs-run-picker"><option value="">— select a recorded run —</option></select>
+        <button class="btn btn-outline btn-xs" id="obs-replay">▶ Replay</button>
+        <button class="btn btn-outline btn-xs" id="obs-step">↳ Step</button>
+        <button class="btn btn-outline btn-xs" id="obs-pause">❚❚ Pause</button>
+        <div class="obs-chips" id="obs-filter-chips">
+            <span class="obs-chip active" data-filter="all">All families</span>
+            <span class="obs-chip" data-filter="oom_crash">OOM</span>
+            <span class="obs-chip" data-filter="db_pool_exhaustion">DB Pool</span>
+            <span class="obs-chip" data-filter="bad_deployment_cascade">Bad Deploy</span>
+            <span class="obs-chip" data-filter="resolved">✓ Resolved</span>
+        </div>
+    </div>
+
+    <div class="obs-grid">
+        <div class="obs-col">
+            <div class="obs-card">
+                <h3>Episode <span class="h3-tag" id="obs-ep-tag">—</span></h3>
+                <div class="obs-meta-grid">
+                    <div class="key">Run ID</div><div class="val" id="obs-run-id">—</div>
+                    <div class="key">Task</div><div class="val" id="obs-task">—</div>
+                    <div class="key">Seed</div><div class="val" id="obs-seed">—</div>
+                    <div class="key">Model</div><div class="val" id="obs-model">—</div>
+                    <div class="key">Alert</div><div class="val" id="obs-alert" style="white-space:normal">—</div>
+                    <div class="key">Verdict</div><div class="val" id="obs-verdict">—</div>
+                    <div class="key">Score</div><div class="val" id="obs-score">—</div>
+                    <div class="key">Steps used</div><div class="val" id="obs-steps">—</div>
+                </div>
+            </div>
+
+            <div class="obs-card">
+                <h3>Reward decomposition <span class="h3-tag">RLVR · 6 components</span></h3>
+                <div class="reward-stack" id="obs-reward-stack"></div>
+                <div class="reward-table" id="obs-reward-table"></div>
+            </div>
+
+            <div class="obs-card">
+                <h3>Per-component reward over the episode</h3>
+                <div class="obs-spark-grid" id="obs-sparklines"></div>
+            </div>
+
+            <div class="obs-card">
+                <h3>Service map <span class="h3-tag" id="obs-map-tag">final state</span></h3>
+                <div id="obs-map" class="obs-svc-grid"><div class="empty-state"><div class="ic">🗺️</div>Pick a run to see services</div></div>
+            </div>
+        </div>
+
+        <div class="obs-col">
+            <div class="obs-card">
+                <h3>Action timeline <span class="h3-tag" id="obs-timeline-tag">click to expand</span></h3>
+                <div id="obs-timeline" class="timeline"><div class="empty-state"><div class="ic">▶</div>Pick a run and hit Replay</div></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="obs-aggregate">
+        <div class="obs-card">
+            <h3>Aggregate — success rate by scenario family</h3>
+            <div class="agg-grid" id="obs-agg-grid"><div class="empty-state" style="grid-column:1/-1">Loading aggregate...</div></div>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════ PHASE 3 — REAL-TIME (sim-to-real on a deployed site) ═══════ -->
+<div id="tab-realtime" class="tab-content">
+    <div class="rt-hero">
+        <div class="hero-label"><span class="dot"></span> Phase 3 · Sim-to-real on a deployed site</div>
+        <h1>Connect a real site. <em>Inject a fault. Watch the agent fix it.</em></h1>
+        <p class="subtitle">The same trained policy from Phase 1, now talking to a real deployed website over HTTP. If runtime ops can't fully heal it, the agent escalates to code investigation.</p>
+    </div>
+
+    <div class="rt-grid">
+        <div class="rt-col">
+            <div class="obs-card rt-step">
+                <div class="rt-step-h">
+                    <div class="rt-step-num" id="rt-num-1">1</div>
+                    <h4>Connect to a deployed site</h4>
+                </div>
+                <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px">Paste the URL of a site that exposes the operator contract (<code style="font-size:11px">/ops/health</code>, <code style="font-size:11px">/ops/restart</code>, etc — see the <a href="#" onclick="switchTab('about');return false;">contract docs</a>). The site can be hosted anywhere — Render, Vercel, Fly, HF Space.</p>
+                <div class="rt-input">
+                    <input type="text" id="rt-site-url" placeholder="https://your-deployed-site.example.com" autocomplete="off">
+                    <button class="btn btn-primary btn-sm" id="rt-connect">Connect</button>
+                </div>
+                <p style="font-size:11px;color:var(--text-muted);margin-top:10px">Optional — for tier-2 code escalation, link a GitHub repo (read-only, public or token):</p>
+                <div class="rt-input" style="margin-top:6px">
+                    <input type="text" id="rt-repo-url" placeholder="https://github.com/owner/repo (optional)" autocomplete="off">
+                    <input type="text" id="rt-repo-token" placeholder="github token (optional)" autocomplete="off" style="max-width:200px">
+                </div>
+                <div class="rt-status" id="rt-status"><span class="dot"></span><span id="rt-status-text">Not connected</span></div>
+            </div>
+
+            <div class="obs-card rt-step">
+                <div class="rt-step-h">
+                    <div class="rt-step-num" id="rt-num-2">2</div>
+                    <h4>Inject a fault</h4>
+                </div>
+                <div class="rt-chaos">
+                    <button class="rt-chaos-btn" data-scenario="oom_crash" disabled>
+                        <div class="ic">⚡</div>
+                        <div class="ttl">OOM Crash</div>
+                        <div class="desc">/api memory limit too low — service crashes under load</div>
+                    </button>
+                    <button class="rt-chaos-btn" data-scenario="db_pool_exhaustion" disabled>
+                        <div class="ic">⚡</div>
+                        <div class="ttl">DB Pool Exhaustion</div>
+                        <div class="desc">connection leak from /checkout — postgres exhausted</div>
+                    </button>
+                    <button class="rt-chaos-btn" data-scenario="bad_deployment_cascade" disabled>
+                        <div class="ic">⚡</div>
+                        <div class="ttl">Bad Deployment</div>
+                        <div class="desc">v1.1 image bundles a memory leak — full cluster degrades</div>
+                    </button>
+                </div>
+            </div>
+
+            <div class="obs-card rt-step">
+                <div class="rt-step-h">
+                    <div class="rt-step-num" id="rt-num-3">3</div>
+                    <h4>Run the trained agent</h4>
+                </div>
+                <div style="display:flex;gap:10px;flex-wrap:wrap">
+                    <button class="btn btn-green btn-sm" id="rt-run" disabled>▶ Run trained agent</button>
+                    <button class="btn btn-outline btn-sm" id="rt-heal" disabled>↻ Reset site</button>
+                    <a class="btn btn-outline btn-sm" id="rt-view-site" target="_blank" rel="noopener" style="display:none">↗ Open site in new tab</a>
+                </div>
+                <div id="rt-tier-banner-slot"></div>
+            </div>
+        </div>
+
+        <div class="rt-col">
+            <div class="obs-card">
+                <h3>Live unified timeline <span class="h3-tag">tier 1 ops · tier 2 code</span></h3>
+                <div id="rt-timeline" class="timeline"><div class="empty-state"><div class="ic">⚡</div>Connect a site and inject a fault</div></div>
+            </div>
+            <div class="obs-card" id="rt-final-report" style="display:none">
+                <h3>Final report</h3>
+                <div id="rt-final-body"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════ ABOUT ═══════ -->
+<div id="tab-about" class="tab-content">
     <div class="hero">
         <div class="hero-label"><span class="dot"></span> Incident-response simulator · AI-coached</div>
         <h1>Train to fix production<br><em>before it breaks on you</em></h1>
         <p class="subtitle">A flight simulator for on-call engineers. You're paged at 3 AM, a real-looking outage unfolds across 9 microservices, and an AI coach nudges you toward the right fix. No production is harmed.</p>
         <div class="hero-actions">
-            <button class="btn btn-primary" onclick="switchTab('demo')">▶ Start Training</button>
+            <button class="btn btn-primary" onclick="switchTab('apprentice')">▶ Start Training</button>
             <button class="btn btn-outline" onclick="switchTab('api')">View API Docs</button>
         </div>
         <div class="stats-row">
@@ -644,8 +911,8 @@
     </div>
 </div>
 
-<!-- ═══════ TRAINING (DEMO) ═══════ -->
-<div id="tab-demo" class="tab-content">
+<!-- ═══════ APPRENTICE — JUNIOR SRE MODE ═══════ -->
+<div id="tab-apprentice" class="tab-content">
     <!-- Auth screen (shown when user is not signed in) -->
     <div id="auth-screen" class="auth-screen hidden">
         <div class="auth-left">
@@ -776,12 +1043,26 @@
 // Only the minimal top-level helpers that multiple tabs need.
 const API = window.location.origin;
 
+const TAB_ORDER = ['observatory', 'apprentice', 'realtime', 'about', 'api'];
 function switchTab(t) {
     document.querySelectorAll('.tab-content').forEach(e => e.classList.remove('active'));
     document.querySelectorAll('.nav-tab').forEach(e => e.classList.remove('active'));
-    document.getElementById('tab-' + t).classList.add('active');
-    document.querySelectorAll('.nav-tab')[['home', 'demo', 'api'].indexOf(t)].classList.add('active');
+    const target = document.getElementById('tab-' + t);
+    if (target) target.classList.add('active');
+    const idx = TAB_ORDER.indexOf(t);
+    if (idx >= 0) document.querySelectorAll('.nav-tab')[idx].classList.add('active');
+    // Lazy-init the rich tabs on first reveal
+    if (t === 'observatory' && window.Observatory && !window.Observatory._inited) Observatory.init();
+    if (t === 'realtime' && window.Realtime && !window.Realtime._inited) Realtime.init();
+    // Keep URL hash for direct linking
+    history.replaceState(null, '', '#' + t);
+    window.scrollTo({top: 0, behavior: 'smooth'});
 }
+// On load, honor #hash so video links can deep-link into a phase
+window.addEventListener('DOMContentLoaded', () => {
+    const h = (location.hash || '').replace('#', '');
+    if (TAB_ORDER.includes(h)) switchTab(h);
+});
 
 async function refreshCoachClick() {
     if (window.Coach) {
@@ -895,5 +1176,7 @@ async function runSc(id) {
 <script src="/static/coach.js?v=4"></script>
 <script src="/static/map.js?v=4"></script>
 <script src="/static/demo.js?v=4"></script>
+<script src="/static/observatory.js?v=1"></script>
+<script src="/static/realtime.js?v=1"></script>
 </body>
 </html>
