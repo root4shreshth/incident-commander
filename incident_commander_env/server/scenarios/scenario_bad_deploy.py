@@ -41,7 +41,27 @@ class BadDeployScenario(BaseScenario):
         "Bad deployment (order-service v2.4.0) caused memory leak, triggering autoscaler "
         "which exhausted cluster resource quota, starving inventory-service and notification-service"
     )
+    root_cause_keywords = [
+        "deploy", "deployment", "rollback", "v2.4.0", "order-service",
+        "memory leak", "autoscaler", "quota", "starved", "cascade"
+    ]
+    relevant_services = {
+        "order-service", "inventory-service", "notification-service",
+        "api-gateway", "frontend-bff",
+    }
     max_steps = 35
+
+    def __init__(self, seed=None, difficulty: float = 0.5) -> None:
+        # Accepts seed + difficulty for the env's parametric reset path. The
+        # version pair is fixed (v2.4.0 -> v2.3.1) for now since the rubric
+        # has rich logic tied to those specific values; difficulty scales the
+        # step budget so harder draws give less time to recover.
+        import random as _random
+        rng = _random.Random(seed) if seed is not None else _random.Random(0)
+        self.seed = seed
+        self.difficulty_factor = float(difficulty) if difficulty is not None else 0.5
+        # Step budget: difficulty=0 -> 50 steps, 1 -> 25 steps; default 0.5 -> ~37
+        self.max_steps = max(25, int(50 - 25 * max(0.0, min(1.0, self.difficulty_factor))))
 
     def setup(self, cluster: Cluster) -> None:
         # order-service: bad deployment with memory leak
@@ -191,6 +211,22 @@ class BadDeployScenario(BaseScenario):
             ("Resolved with accurate root cause", resolved_with_cause, 0.10),
             ("Efficient resolution (no harmful actions)", efficient_resolution, 0.10),
         ]
+
+    def is_correct_op(self, action, cluster):
+        """Bad-deploy is fixed by rolling back order-service then restarting starved deps.
+
+        Critically, restart of order-service is NOT correct — must be a rollback.
+        Restarting starved services (inventory, notification) IS correct because
+        they need to come back up after the bad deploy is reverted.
+        """
+        if action.action_type == "rollback_deployment":
+            if action.target_service != "order-service":
+                return False
+            target_v = action.parameters.get("to_version") if action.parameters else None
+            return target_v == STABLE_VERSION
+        if action.action_type == "restart_service":
+            return action.target_service in {"inventory-service", "notification-service"}
+        return False
 
     def compute_penalties(self, actions: List[ActionRecord], cluster: Cluster) -> float:
         penalty = 0.0

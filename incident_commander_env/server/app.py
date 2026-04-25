@@ -16,6 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from incident_commander_env.models import IncidentAction, IncidentObservation, IncidentState
+from incident_commander_env.server.backends import get_backend
 from incident_commander_env.server.environment import IncidentCommanderEnv
 from incident_commander_env.server.coach import (
     IDEAL_TRAJECTORIES,
@@ -46,7 +47,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-env = IncidentCommanderEnv()
+# BACKEND env var picks the substrate: "sim" (default), "real", or "code_aware".
+# Same OpenEnv API regardless; only the execution path differs.
+env = IncidentCommanderEnv(backend=get_backend())
 
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
@@ -74,6 +77,8 @@ def root():
 
 class ResetRequest(BaseModel):
     task_id: Optional[str] = None
+    seed: Optional[int] = None  # OpenEnv: deterministic episodes for reproducible training
+    difficulty: float = 0.5  # 0.0 easiest, 1.0 hardest; drives parametric scenario instance
 
 
 class StepRequest(BaseModel):
@@ -91,8 +96,17 @@ class StepResponse(BaseModel):
 
 @app.post("/reset")
 def reset(request: ResetRequest = ResetRequest()) -> Dict[str, Any]:
-    """Reset environment and start a new incident episode."""
-    obs = env.reset(task_id=request.task_id)
+    """Reset environment and start a new incident episode.
+
+    Optional `seed` makes the episode deterministic — same seed plus same
+    action sequence yields identical observations and rewards. This is the
+    OpenEnv contract for reproducible RL training.
+    """
+    obs = env.reset(
+        task_id=request.task_id,
+        seed=request.seed,
+        difficulty=request.difficulty,
+    )
     return {
         "observation": obs.model_dump(),
         "reward": 0.01,
@@ -101,6 +115,8 @@ def reset(request: ResetRequest = ResetRequest()) -> Dict[str, Any]:
             "task_id": env.state.task_id,
             "max_steps": env.state.max_steps,
             "episode_id": env.state.episode_id,
+            "seed": request.seed,
+            "difficulty": request.difficulty,
         },
     }
 
@@ -137,10 +153,39 @@ def state() -> Dict[str, Any]:
     return env.state.model_dump()
 
 
+@app.get("/reward-breakdown")
+def reward_breakdown() -> Dict[str, Any]:
+    """Per-component breakdown of the most recent step's reward.
+
+    Returns the six independent components (diagnostic, correct_op, resolution,
+    format, efficiency, penalty) plus their sum. Useful for the dashboard
+    observability mode and for confirming TRL's wandb logs match what the env
+    actually emitted.
+    """
+    bd = getattr(env, "_last_breakdown", None)
+    if bd is None:
+        return {"breakdown": None, "total": None, "step": env.state.step_count}
+    return {
+        "breakdown": bd.to_dict(),
+        "total": bd.total(),
+        "step": env.state.step_count,
+    }
+
+
 @app.get("/health")
 def health() -> Dict[str, str]:
     """Liveness check."""
     return {"status": "ok"}
+
+
+@app.get("/backend")
+def backend_info() -> Dict[str, Any]:
+    """Which backend is the env wired to (sim/real/code_aware)."""
+    return {
+        "name": env.backend.name,
+        "available_backends": ["sim", "real", "code_aware"],
+        "default": "sim",
+    }
 
 
 @app.get("/tasks")

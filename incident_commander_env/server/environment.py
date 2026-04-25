@@ -1,6 +1,14 @@
 """IncidentCommanderEnv — the core OpenEnv environment implementation.
 
-Wires together the cluster simulation, scenarios, action handlers, and grading.
+Delegates execution to a `Backend` (sim, real, or code-aware) so the same
+trained policy runs unchanged across substrates. The env's job is now:
+
+  - own the action history, episode state, and reward computation
+  - route actions through the backend's `execute()` method
+  - read state via the backend's `snapshot()` (typed view)
+  - compute multi-component reward against that snapshot
+
+The cluster, handlers, and scenario hooks all live below the backend layer.
 """
 
 from __future__ import annotations
@@ -14,16 +22,20 @@ from incident_commander_env.models import (
     IncidentObservation,
     IncidentState,
 )
-from incident_commander_env.server.actions.handlers import ACTION_HANDLERS
+from incident_commander_env.server.backends.protocol import Backend, BackendSnapshot
+from incident_commander_env.server.backends.sim import SimulatedBackend
 from incident_commander_env.server.grading.grader import IncidentGrader
-from incident_commander_env.server.grading.reward import compute_step_reward
+from incident_commander_env.server.grading.reward import (
+    TIME_DECAY,
+    compute_step_breakdown_scaled,
+)
 from incident_commander_env.server.scenarios import SCENARIO_REGISTRY
 from incident_commander_env.server.scenarios.base_scenario import BaseScenario
-from incident_commander_env.server.simulation.cluster import Cluster
-from incident_commander_env.server.simulation.service import ServiceHealth
 
 
-# Which services are relevant to each scenario (for reward computation)
+# Which services are relevant to each scenario (for reward computation).
+# Scenarios may define their own `relevant_services` class attribute that
+# overrides this; the dict here is a fallback for tasks that don't.
 SCENARIO_RELEVANT_SERVICES: Dict[str, Set[str]] = {
     "oom_crash": {"payment-service"},
     "db_pool_exhaustion": {
@@ -44,24 +56,45 @@ class IncidentCommanderEnv:
     """OpenEnv environment for SRE incident response.
 
     Implements the OpenEnv spec: reset(), step(), state property.
-    Manages a simulated microservices cluster, injects incident scenarios,
-    and grades agent performance via deterministic rubrics.
+    Routes through a `Backend` instance for execution + state queries; the
+    default backend is `SimulatedBackend` which wraps the in-memory cluster.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, backend: Optional[Backend] = None) -> None:
+        self._backend: Backend = backend or SimulatedBackend()
         self._state = IncidentState()
-        self._cluster: Optional[Cluster] = None
         self._scenario: Optional[BaseScenario] = None
         self._action_history: List[ActionRecord] = []
         self._grader = IncidentGrader()
         self._task_index = 0
+        # Per-step breakdown of the most recent reward, exposed via /reward-breakdown.
+        self._last_breakdown = None
 
-    def reset(self, task_id: Optional[str] = None, **kwargs: Any) -> IncidentObservation:
+    @property
+    def backend(self) -> Backend:
+        return self._backend
+
+    # Convenience accessor for legacy callers that expect `env._cluster`.
+    # Sim backend exposes the live Cluster; real backends return None.
+    @property
+    def _cluster(self):  # noqa: D401
+        return getattr(self._backend, "cluster", None)
+
+    def reset(
+        self,
+        task_id: Optional[str] = None,
+        seed: Optional[int] = None,
+        difficulty: float = 0.5,
+        **kwargs: Any,
+    ) -> IncidentObservation:
         """Initialize a new episode with the specified scenario.
 
         Args:
-            task_id: Scenario to run. One of: oom_crash, db_pool_exhaustion, bad_deployment_cascade.
+            task_id: One of: oom_crash, db_pool_exhaustion, bad_deployment_cascade.
                      If not provided, cycles through tasks in order.
+            seed: Optional integer for deterministic anomaly metric generation
+                     AND parametric scenario instantiation. OpenEnv contract.
+            difficulty: 0.0 (easiest) to 1.0 (hardest).
         """
         # Determine task
         if task_id is None:
@@ -75,15 +108,19 @@ class IncidentCommanderEnv:
                 done=True,
             )
 
-        # Create scenario and cluster
-        self._scenario = SCENARIO_REGISTRY[task_id]()
-        self._cluster = Cluster()
-        self._cluster.initialize()
+        # Create scenario (parametric — seed and difficulty go into __init__ for
+        # those scenarios that accept them; legacy scenarios fall back to a no-arg call)
+        scenario_cls = SCENARIO_REGISTRY[task_id]
+        try:
+            self._scenario = scenario_cls(seed=seed, difficulty=difficulty)
+        except TypeError:
+            self._scenario = scenario_cls()
 
-        # Inject the fault
-        self._scenario.setup(self._cluster)
+        # Tear down any previous episode and let the backend initialize cleanly.
+        self._backend.teardown()
+        self._backend.reset(self._scenario, seed=seed)
 
-        # Reset state
+        # Reset history + state
         self._action_history = []
         self._state = IncidentState(
             episode_id=str(uuid.uuid4()),
@@ -91,8 +128,15 @@ class IncidentCommanderEnv:
             task_id=task_id,
             max_steps=self._scenario.max_steps,
         )
+        self._last_breakdown = None
 
-        # Build initial observation
+        # Build initial observation. For the dependency graph we ask the
+        # underlying cluster (sim only) — real backends can return None here.
+        dep_graph = None
+        cluster = getattr(self._backend, "cluster", None)
+        if cluster is not None and hasattr(cluster, "dependency_graph"):
+            dep_graph = cluster.dependency_graph.to_dict()
+
         return IncidentObservation(
             message=(
                 f"INCIDENT ALERT\n"
@@ -108,12 +152,12 @@ class IncidentCommanderEnv:
                 f"run_diagnostic, update_config, resolve_incident"
             ),
             alert=self._scenario.alert_message,
-            dependency_graph=self._cluster.dependency_graph.to_dict(),
+            dependency_graph=dep_graph,
         )
 
     def step(self, action: IncidentAction) -> IncidentObservation:
         """Execute an action and return the resulting observation."""
-        if not self._cluster or not self._scenario:
+        if self._scenario is None:
             return IncidentObservation(
                 message="Error: environment not initialized. Call reset() first.",
                 error="Environment not initialized",
@@ -138,51 +182,61 @@ class IncidentCommanderEnv:
         if action.action_type == "restart_service" and action.target_service:
             self._state.services_restarted.append(action.target_service)
 
-        # Dispatch to handler
-        handler = ACTION_HANDLERS.get(action.action_type)
-        if not handler:
-            return IncidentObservation(
-                message=f"Unknown action: {action.action_type}",
-                error=f"Invalid action_type: {action.action_type}",
-            )
+        # Dispatch to backend
+        observation = self._backend.execute(action, self._scenario)
 
-        observation = handler(action, self._cluster, self._scenario)
+        # Determine termination state BEFORE computing reward
+        is_resolved = self._backend.check_resolved(self._scenario)
+        is_terminal = is_resolved or (self._state.step_count >= self._scenario.max_steps)
 
-        # Compute per-step reward
-        relevant = SCENARIO_RELEVANT_SERVICES.get(self._state.task_id, set())
+        # Read typed snapshot for reward components
+        snapshot: BackendSnapshot = self._backend.snapshot()
+
+        # Determine relevant + healthy service sets. Scenario can override the
+        # relevant set; otherwise fall back to the per-task default.
+        relevant = getattr(
+            self._scenario, "relevant_services", None
+        ) or SCENARIO_RELEVANT_SERVICES.get(self._state.task_id, set())
         healthy = {
-            name for name, svc in self._cluster.services.items()
-            if svc.health == ServiceHealth.HEALTHY and name not in relevant
+            name for name, s in snapshot.services.items()
+            if s.health == "healthy" and name not in relevant
         }
-        step_reward = compute_step_reward(
+
+        # Multi-component reward
+        cluster = self._cluster  # may be None for real backends; reward components handle that
+        breakdown = compute_step_breakdown_scaled(
             action=record,
             step=self._state.step_count,
             previous_actions=self._action_history[:-1],
-            relevant_services=relevant,
+            relevant_services=set(relevant),
             healthy_services=healthy,
+            scenario=self._scenario,
+            cluster=cluster,
+            is_terminal=is_terminal,
+            is_resolved=is_resolved,
+            max_steps=self._scenario.max_steps,
+            last_observation_error=observation.error,
         )
-        observation.reward = round(step_reward, 4)
+        scaled = breakdown.total() * (TIME_DECAY ** self._state.step_count)
+        if scaled == 0.0:
+            scaled = 0.01  # validator rejects exactly 0
+        observation.reward = round(scaled, 4)
+        self._last_breakdown = breakdown
 
-        # Check termination
-        if self._scenario.check_resolved(self._cluster):
+        # Compute terminal score
+        if is_resolved:
             self._state.incident_resolved = True
             observation.done = True
-            # Compute final score
-            final_score = self._grader.grade(
-                self._scenario, self._action_history, self._cluster
-            )
+            final_score = self._grade(cluster)
             self._state.current_score = round(final_score, 4)
             observation.message += (
                 f"\n\nINCIDENT RESOLVED\n"
                 f"Final score: {final_score:.2f}/1.00\n"
                 f"Steps used: {self._state.step_count}/{self._scenario.max_steps}"
             )
-        elif self._state.step_count >= self._scenario.max_steps:
+        elif is_terminal:
             observation.done = True
-            # Grade even on timeout
-            final_score = self._grader.grade(
-                self._scenario, self._action_history, self._cluster
-            )
+            final_score = self._grade(cluster)
             self._state.current_score = round(final_score, 4)
             observation.message += (
                 f"\n\nSTEP LIMIT REACHED — Incident unresolved.\n"
@@ -191,18 +245,25 @@ class IncidentCommanderEnv:
             )
 
         # Advance simulation
-        self._cluster.tick()
+        self._backend.tick()
 
         return observation
 
+    def _grade(self, cluster) -> float:
+        """Compute the final score; gracefully degrade if backend has no cluster."""
+        if cluster is None:
+            # Real backends: rubric checks rely on Cluster state today; for
+            # Phase 6 we'll wire an alternate grader against BackendSnapshot.
+            # For now, return a reasonable mid-range score so episodes terminate.
+            return 0.5
+        return self._grader.grade(self._scenario, self._action_history, cluster)
+
     @property
     def state(self) -> IncidentState:
-        """Return current episode state."""
         return self._state
 
     def get_grade_details(self) -> Dict[str, Any]:
-        """Return detailed grading breakdown (for debugging)."""
-        if not self._scenario or not self._cluster:
+        if self._scenario is None or self._cluster is None:
             return {"error": "No active episode"}
         return self._grader.grade_details(
             self._scenario, self._action_history, self._cluster

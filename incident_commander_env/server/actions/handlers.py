@@ -291,6 +291,17 @@ def handle_run_diagnostic(
 from incident_commander_env.server.simulation.service import ServiceHealth
 
 
+# Strict allowlist of config keys an SRE agent may set. Anything else is rejected,
+# closing the "any string containing 'pool' and 'size' heals the DB" exploit path.
+_KNOWN_CONFIG_KEYS = frozenset({
+    "db.pool.max_size",
+    "db.pool.min_size",
+    "memory.limit",
+    "cpu.limit",
+    "cluster.resource.quota.memory_mb",
+})
+
+
 def handle_update_config(
     action: IncidentAction, cluster: Cluster, scenario: BaseScenario
 ) -> IncidentObservation:
@@ -310,39 +321,66 @@ def handle_update_config(
             message="Error: 'key' parameter is required.",
             error="Missing key parameter",
         )
+    if key not in _KNOWN_CONFIG_KEYS:
+        return IncidentObservation(
+            message=(
+                f"Error: unknown config key '{key}'. Known keys: "
+                f"{sorted(_KNOWN_CONFIG_KEYS)}"
+            ),
+            error="Unknown config key",
+        )
 
-    # Handle known config keys
-    if "pool" in key.lower() and "size" in key.lower():
-        if isinstance(value, (int, float)) and value > 0:
-            old_val = svc.config.db_pool_size
-            svc.config.db_pool_size = int(value)
-            # If pool was exhausted, increasing pool fixes it
+    # Apply the config change to cluster/service state. The mutation is mechanical;
+    # whether it constitutes the *fix* for the active scenario is a question for
+    # `scenario.on_config_update`, which is the only place that may clear anomalies.
+    msg_tail = ""
+    if key == "db.pool.max_size":
+        if not isinstance(value, (int, float)) or value <= 0:
+            return IncidentObservation(
+                message=f"Error: invalid value for {key}: {value}",
+                error="Invalid config value",
+            )
+        old_val = svc.config.db_pool_size
+        svc.config.db_pool_size = int(value)
+        msg_tail = f" (was {old_val})"
+    elif key == "db.pool.min_size":
+        if not isinstance(value, (int, float)) or value < 0:
+            return IncidentObservation(
+                message=f"Error: invalid value for {key}: {value}",
+                error="Invalid config value",
+            )
+        # No dedicated field; recorded but no state mutation.
+    elif key == "memory.limit":
+        svc.config.memory_limit = str(value)
+        svc.metrics.memory_limit_mb = svc.config.memory_limit_mb()
+    elif key == "cpu.limit":
+        svc.config.cpu_limit = str(value)
+    elif key == "cluster.resource.quota.memory_mb":
+        if not isinstance(value, (int, float)):
+            return IncidentObservation(
+                message=f"Error: invalid value for {key}: {value}",
+                error="Invalid config value",
+            )
+        cluster.resource_quota.memory_total_mb = float(value)
+
+    # Delegate the heal-decision to the scenario. Only the scenario knows whether
+    # this exact config change is the right fix for the active fault.
+    if scenario is not None and scenario.on_config_update(
+        cluster, action.target_service, key, value
+    ):
+        # Scenario confirms this is the correct fix — clear the relevant anomalies
+        # it knows about. We clear all anomalies on the service because the scenario
+        # has full knowledge of which ones it injected.
+        if svc.has_anomaly("db_pool_exhaustion"):
             svc.clear_anomaly("db_pool_exhaustion")
-            svc.health = ServiceHealth.HEALTHY
-            svc.metrics.active_connections = int(value) // 2
+            svc.metrics.active_connections = max(1, int(value) // 2) if isinstance(value, (int, float)) else 5
             svc.metrics.error_rate_percent = 0.5
             svc.metrics.request_latency_p50_ms = 15.0
             svc.metrics.request_latency_p99_ms = 50.0
-            msg = f"Config updated: {action.target_service}.{key} = {value} (was {old_val})"
-        else:
-            return IncidentObservation(
-                message=f"Error: invalid value for pool size: {value}",
-                error="Invalid config value",
-            )
-    elif "memory" in key.lower() and "limit" in key.lower():
-        svc.config.memory_limit = str(value)
-        svc.metrics.memory_limit_mb = svc.config.memory_limit_mb()
-        msg = f"Config updated: {action.target_service}.{key} = {value}"
-    elif "quota" in key.lower():
-        # Update cluster resource quota
-        if isinstance(value, (int, float)):
-            cluster.resource_quota.memory_total_mb = float(value)
-            msg = f"Cluster resource quota memory updated to {value}MB"
-        else:
-            msg = f"Config updated: cluster.{key} = {value}"
-    else:
-        msg = f"Config updated: {action.target_service}.{key} = {value}"
+        if not svc._anomalies:
+            svc.health = ServiceHealth.HEALTHY
 
+    msg = f"Config updated: {action.target_service}.{key} = {value}{msg_tail}"
     return IncidentObservation(message=msg)
 
 

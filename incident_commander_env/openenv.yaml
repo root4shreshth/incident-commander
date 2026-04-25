@@ -1,3 +1,136 @@
 name: incident_commander_env
-version: "0.1.0"
-description: "SRE/DevOps Cloud Incident Response & Diagnostics - AI agent acts as on-call SRE diagnosing and remediating production incidents across a simulated microservices cluster"
+version: "0.2.0"
+description: >-
+  SRE/DevOps Cloud Incident Response & Diagnostics — an OpenEnv environment
+  for training LLM agents to diagnose and remediate cascading production
+  incidents across a simulated 9-service microservices cluster. Theme #3.1
+  Professional Tasks. Six-component verifiable reward, deterministic
+  rubric-based grading, parametric scenario families with seeded
+  reproducibility.
+
+# OpenEnv environment metadata for HuggingFace Hub rendering
+sdk: docker
+app_port: 8000
+license: MIT
+authors:
+  - root4shreshth
+tags:
+  - openenv
+  - sre
+  - ops
+  - incident-response
+  - rl
+  - llm
+  - agentic
+  - theme-professional-tasks
+
+# Action space — discriminated by action_type. Each action carries optional
+# typed parameters; see `incident_commander_env.models.IncidentAction`.
+action_space:
+  type: discrete-with-params
+  actions:
+    list_services:
+      description: Cluster-wide service health overview
+      target_required: false
+      parameters: []
+    describe_service:
+      description: Detailed service config + deployment history + dependencies
+      target_required: true
+      parameters: []
+    read_logs:
+      description: Recent log lines, optionally filtered by severity
+      target_required: true
+      parameters:
+        - {name: lines, type: int, default: 50, range: [1, 500]}
+        - {name: severity, type: str, options: [INFO, WARN, ERROR, CRITICAL], default: null}
+    check_metrics:
+      description: CPU, memory, latency, error_rate, RPS snapshot
+      target_required: true
+      parameters: []
+    run_diagnostic:
+      description: One of {check_health, check_connectivity, check_resources, check_dns}
+      target_required: true
+      parameters:
+        - {name: command, type: str, options: [check_health, check_connectivity, check_resources, check_dns]}
+    restart_service:
+      description: Bounce the service. Optionally raise the memory limit.
+      target_required: true
+      parameters:
+        - {name: memory_limit, type: str, default: null, examples: ["256Mi", "512Mi", "1024Mi"]}
+    rollback_deployment:
+      description: Revert the service to a prior deployed version
+      target_required: true
+      parameters:
+        - {name: to_version, type: str, required: true}
+    scale_service:
+      description: Change the replica count
+      target_required: true
+      parameters:
+        - {name: replicas, type: int, range: [0, 20]}
+    update_config:
+      description: Set a runtime config key (allowlist enforced)
+      target_required: true
+      parameters:
+        - {name: key, type: str, allowlist: [db.pool.max_size, db.pool.min_size, memory.limit, cpu.limit, cluster.resource.quota.memory_mb]}
+        - {name: value, type: union(int, float, str)}
+    resolve_incident:
+      description: Declare resolved with a root-cause and resolution narrative
+      target_required: false
+      parameters:
+        - {name: root_cause, type: str, required: true}
+        - {name: resolution, type: str, required: true}
+
+# Observation space — see `incident_commander_env.models.IncidentObservation`
+observation_space:
+  type: structured
+  fields:
+    message: {type: str, description: "Human-readable result of the action"}
+    done: {type: bool, description: "Episode terminated"}
+    reward: {type: float, range: [-1.0, 1.0]}
+    alert: {type: str, optional: true, description: "Initial PagerDuty-style alert (on reset)"}
+    services_summary: {type: array, optional: true}
+    service_detail: {type: object, optional: true}
+    logs: {type: array, optional: true}
+    metrics: {type: object, optional: true}
+    diagnostic_result: {type: str, optional: true}
+    dependency_graph: {type: object, optional: true}
+    error: {type: str, optional: true}
+
+reward_range: [-1.0, 1.0]
+
+reward:
+  decomposition:
+    - {component: r_diagnostic,  range: [0.0, 0.05],   description: "Investigative reads on relevant or adjacent services"}
+    - {component: r_correct_op,  range: [0.0, 0.15],   description: "Scenario-defined right-move (delegated to scenario.is_correct_op)"}
+    - {component: r_resolution,  range: [-0.05, 0.30], description: "Terminal — accurate root-cause declaration; -0.05 if false claim"}
+    - {component: r_format,      range: [0.0, 0.01],   description: "Per-step credit for well-formed action"}
+    - {component: r_efficiency,  range: [0.0, 0.10],   description: "Bonus when resolved within <=50% of step budget"}
+    - {component: r_penalty,     range: [-0.30, 0.0],  description: "Sum of harmful_restart, redundancy, handler_error penalties"}
+  time_decay: 0.995
+  validator_clamp: [0.01, 0.99]
+
+# Scenario families (parametric — seeded reset draws from the family distribution)
+scenarios:
+  oom_crash:
+    skill_tag: "Your first page"
+    difficulty: easy
+    max_steps: 15
+    description: "One service crashes with OutOfMemoryError. Identify, diagnose, restart with higher memory limit."
+  db_pool_exhaustion:
+    skill_tag: "Trace the cascade"
+    difficulty: medium
+    max_steps: 25
+    description: "Connection leak cascades through the stack. Trace symptoms past the surface to the real root cause."
+  bad_deployment_cascade:
+    skill_tag: "Under fire"
+    difficulty: hard
+    max_steps: 35
+    description: "Bad deploy + autoscaler exhausts cluster quota. Rollback before restarting starved dependents."
+
+# Reproducibility contract
+metadata:
+  reset_accepts_seed: true
+  deterministic_with_seed: true
+  parallel_rollouts: true
+  default_backend: sim
+  available_backends: [sim, real, code_aware]

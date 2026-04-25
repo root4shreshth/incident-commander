@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import copy
+import random
 from typing import Any, Dict, List, Optional
 
 from incident_commander_env.server.simulation.dependency_graph import (
@@ -58,21 +60,65 @@ class ResourceQuota:
 
 
 class Cluster:
-    """Top-level container for the simulated infrastructure."""
+    """Top-level container for the simulated infrastructure.
 
-    def __init__(self) -> None:
+    A `seed` argument makes anomaly metrics fully reproducible: the same seed
+    plus the same action sequence yields byte-identical observations and
+    rewards. This is required by the OpenEnv/Gymnasium contract and is what
+    makes RL training stable across runs.
+    """
+
+    def __init__(self, seed: Optional[int] = None) -> None:
         self.services: Dict[str, Service] = {}
         self.dependency_graph: DependencyGraph = create_default_graph()
         self.resource_quota = ResourceQuota()
         self._tick_count = 0
+        # The RNG is the *only* source of stochasticity in the simulation;
+        # everything that used to call random.uniform/random.randint at module
+        # level now threads through this rng (see metrics_engine.py).
+        self._rng = random.Random(seed)
+        self._seed = seed
+        # Also seed the global random module so any un-threaded callers
+        # (e.g. log_generator.py canned timestamps) are reproducible.
+        # NOTE: this is a deliberate side-effect that pins global random for
+        # the lifetime of the episode. Acceptable for serialized-episode
+        # workloads (training rollouts, judge replays). For parallel rollouts
+        # use vectorized envs in separate processes.
+        if seed is not None:
+            random.seed(seed)
 
-    def initialize(self, service_configs: List[ServiceConfig] | None = None) -> None:
-        """Create all services with default healthy state."""
+    def initialize(
+        self,
+        service_configs: List[ServiceConfig] | None = None,
+        seed: Optional[int] = None,
+    ) -> None:
+        """Create all services with default healthy state.
+
+        Optionally re-seed the RNG; useful when re-using a Cluster across
+        multiple episodes from a server singleton.
+        """
+        if seed is not None:
+            self._rng = random.Random(seed)
+            self._seed = seed
+            random.seed(seed)
         configs = service_configs or DEFAULT_SERVICES
+        # Deep-copy each config so scenario.setup() mutations (version bumps,
+        # replica scale-up, db_pool_size changes) don't leak into the
+        # module-level DEFAULT_SERVICES and pollute the next Cluster().
+        # Without this, BadDeployScenario.setup() permanently bumps
+        # order-service to v2.4.0 and 6 replicas across the test suite.
         self.services = {}
         for cfg in configs:
-            svc = Service(cfg)
+            svc = Service(copy.deepcopy(cfg))
             self.services[svc.name] = svc
+
+    @property
+    def seed(self) -> Optional[int]:
+        return self._seed
+
+    @property
+    def rng(self) -> random.Random:
+        return self._rng
 
     def get_service(self, name: str) -> Optional[Service]:
         return self.services.get(name)
@@ -92,5 +138,5 @@ class Cluster:
         """Advance simulation by one step. Recompute metrics for anomalous services."""
         self._tick_count += 1
         for svc in self.services.values():
-            apply_anomalies(svc)
+            apply_anomalies(svc, rng=self._rng)
         self.resource_quota.update_from_services(self.services)

@@ -34,7 +34,24 @@ class DBPoolScenario(BaseScenario):
         "Affected: frontend-bff, order-service, payment-service."
     )
     root_cause = "postgres-db connection pool exhausted by order-service connection leak"
+    root_cause_keywords = ["pool", "connection", "postgres", "db_pool_exhaustion", "order-service", "leak", "exhaust"]
+    relevant_services = {"postgres-db", "order-service", "payment-service", "inventory-service", "frontend-bff", "api-gateway"}
     max_steps = 25
+
+    def __init__(self, seed=None, difficulty: float = 0.5) -> None:
+        # The DB Pool family currently keeps fixed service names but accepts
+        # seed + difficulty so the env's parametric `reset(seed=..., difficulty=...)`
+        # threads through cleanly. `difficulty` scales the step budget so a
+        # harder draw forces the agent to find the root cause faster.
+        import random as _random
+        rng = _random.Random(seed) if seed is not None else _random.Random(0)
+        self.seed = seed
+        self.difficulty_factor = float(difficulty) if difficulty is not None else 0.5
+        # Pool size varies on seed (this is the value the DB starts with —
+        # the `value > 50` heal threshold remains the bar to clear).
+        self._pool_size_initial = rng.choice([16, 20, 24]) if seed is not None else 20
+        # Step budget scales: difficulty=0 -> 38 steps, 1 -> 18 steps; default 0.5 -> 28
+        self.max_steps = max(18, int(38 - 20 * max(0.0, min(1.0, self.difficulty_factor))))
 
     def setup(self, cluster: Cluster) -> None:
         # postgres-db: pool exhausted
@@ -158,3 +175,35 @@ class DBPoolScenario(BaseScenario):
             if a.action_type == "restart_service" and a.target_service in uninvolved:
                 penalty -= 0.05
         return penalty
+
+    def is_correct_op(self, action, cluster):
+        """DB pool exhaustion is fixed by raising postgres pool size sufficiently
+        AND restarting the leaking service (order-service) to clear stale conns.
+
+        Either move counts as a "correct op" — both are needed for full
+        resolution; reward fires once per move.
+        """
+        if action.action_type == "update_config":
+            if action.target_service != "postgres-db":
+                return False
+            if action.parameters.get("key") != "db.pool.max_size":
+                return False
+            try:
+                return int(action.parameters.get("value", 0)) > 50
+            except (ValueError, TypeError):
+                return False
+        if action.action_type == "restart_service":
+            return action.target_service == "order-service"
+        return False
+
+    def on_config_update(self, cluster: Cluster, target_service: str, key: str, value):
+        """Raising the postgres pool size to a sufficient value resolves the exhaustion."""
+        if target_service != "postgres-db":
+            return False
+        if key != "db.pool.max_size":
+            return False
+        if not isinstance(value, (int, float)):
+            return False
+        # Pool must be raised meaningfully above the leak draw rate. 20 is the original;
+        # require strictly larger than 50 to count as the fix (anti-cheat: no off-by-one heal).
+        return int(value) > 50

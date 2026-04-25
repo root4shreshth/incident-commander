@@ -68,6 +68,22 @@ class ServiceMetrics:
 class Service:
     """A simulated microservice in the cluster."""
 
+    # Anomalies that a plain restart genuinely fixes in the real world.
+    # The rest (memory_leak, db_pool_exhaustion, cascade_degradation) require
+    # their actual root-cause fix — restarting only masks them. This set drives
+    # the anti-cheat behaviour in restart().
+    #
+    # `resource_starved` is included because in the bad-deploy cascade scenario,
+    # once the upstream leak is rolled back and quota is freed, restarting the
+    # starved dependents does bring them back. The "ordering matters" lesson
+    # is enforced by the scenario's rubric (correct_order check), not by
+    # restart() refusing to heal.
+    _RESTART_CURABLE = frozenset({"oom", "connection_leak", "resource_starved"})
+
+    # Anomalies that a rollback genuinely fixes (because they were introduced
+    # by a bad deploy). Anything else survives a rollback.
+    _ROLLBACK_CURABLE = frozenset({"memory_leak", "oom"})
+
     def __init__(self, config: ServiceConfig) -> None:
         self.config = config
         self.health = ServiceHealth.HEALTHY
@@ -99,25 +115,57 @@ class Service:
         return anomaly_type in self._anomalies
 
     def restart(self, new_memory_limit: Optional[str] = None) -> str:
+        # Memory-limit bump is the operational fix for OOM; record it before clearing anomalies
+        # so the OOM-curable check can take new_memory_limit > old_memory_limit into account.
+        old_mem_limit_mb = self.metrics.memory_limit_mb
+        new_mem_limit_mb = old_mem_limit_mb
         if new_memory_limit:
             self.config.memory_limit = new_memory_limit
             self.metrics.memory_limit_mb = self.config.memory_limit_mb()
+            new_mem_limit_mb = self.metrics.memory_limit_mb
 
-        self.health = ServiceHealth.HEALTHY
-        self.metrics.cpu_percent = 15.0
-        self.metrics.memory_mb = min(128.0, self.metrics.memory_limit_mb * 0.25)
-        self.metrics.error_rate_percent = 0.1
-        self.metrics.request_latency_p50_ms = 12.0
-        self.metrics.request_latency_p99_ms = 45.0
-        self.clear_all_anomalies()
+        # Restart only cures the anomalies that a real bounce actually fixes.
+        # Memory leaks, pool exhaustion, resource starvation, and cascade
+        # degradation all return after the restart unless their root cause is
+        # addressed — this prevents the "just restart everything" reward hack.
+        # Special case: OOM is only cured if the memory limit actually went up.
+        cured: List[str] = []
+        for anomaly in list(self._anomalies):
+            if anomaly == "oom":
+                if new_mem_limit_mb > old_mem_limit_mb:
+                    cured.append(anomaly)
+            elif anomaly in self._RESTART_CURABLE:
+                cured.append(anomaly)
+        for a in cured:
+            self.clear_anomaly(a)
+
+        # If anomalies remain after restart, the service is at most degraded, not healthy.
+        if self._anomalies:
+            self.health = ServiceHealth.DEGRADED
+        else:
+            self.health = ServiceHealth.HEALTHY
+            self.metrics.cpu_percent = 15.0
+            self.metrics.memory_mb = min(128.0, self.metrics.memory_limit_mb * 0.25)
+            self.metrics.error_rate_percent = 0.1
+            self.metrics.request_latency_p50_ms = 12.0
+            self.metrics.request_latency_p99_ms = 45.0
 
         mem_info = f" with memory_limit={new_memory_limit}" if new_memory_limit else ""
+        if self._anomalies:
+            remaining = ", ".join(sorted(self._anomalies))
+            return f"Service {self.name} restarted{mem_info}. Anomalies remain: {remaining}. Health: DEGRADED."
         return f"Service {self.name} restarted successfully{mem_info}. Health: HEALTHY."
 
     def rollback(self, to_version: str) -> str:
         valid_versions = [d.version for d in self.deployment_history]
         if to_version not in valid_versions:
             return f"Error: version {to_version} not found in deployment history. Available: {valid_versions}"
+
+        # Anti-cheat: rollback to the currently-active version is a no-op.
+        # The previous behaviour silently appended a new "active" deployment
+        # row and cleared anomalies, which was an exploit path.
+        if to_version == self.config.version:
+            return f"Error: already running {to_version}; rollback to current version is a no-op."
 
         for dep in self.deployment_history:
             if dep.version == self.config.version:
@@ -128,12 +176,20 @@ class Service:
             Deployment(version=to_version, timestamp="2026-03-29T10:00:00Z", status="active")
         )
 
+        # Rollback only cures anomalies that a deploy actually introduced.
+        cured = [a for a in list(self._anomalies) if a in self._ROLLBACK_CURABLE]
+        for a in cured:
+            self.clear_anomaly(a)
+
+        if self._anomalies:
+            self.health = ServiceHealth.DEGRADED
+            remaining = ", ".join(sorted(self._anomalies))
+            return f"Service {self.name} rolled back to {to_version}. Anomalies remain: {remaining}. Health: DEGRADED."
+
         self.health = ServiceHealth.HEALTHY
         self.metrics.cpu_percent = 15.0
         self.metrics.memory_mb = min(128.0, self.metrics.memory_limit_mb * 0.25)
         self.metrics.error_rate_percent = 0.1
-        self.clear_all_anomalies()
-
         return f"Service {self.name} rolled back to {to_version}. Health: HEALTHY."
 
     def scale(self, replicas: int) -> str:

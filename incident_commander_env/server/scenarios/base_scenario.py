@@ -26,6 +26,12 @@ class BaseScenario(ABC):
     root_cause: str
     max_steps: int
 
+    # Keywords the scenario considers strong evidence that a `resolve_incident`
+    # action's `root_cause` argument is accurate. Used by `r_resolution` to
+    # distinguish a vague "yeah I fixed it" from "I correctly identified
+    # the OOM in payment-service caused by insufficient memory limit".
+    root_cause_keywords: List[str] = []
+
     @abstractmethod
     def setup(self, cluster: Cluster) -> None:
         """Inject the fault into the cluster. Called after cluster.initialize()."""
@@ -44,6 +50,41 @@ class BaseScenario(ABC):
     @abstractmethod
     def compute_penalties(self, actions: List[ActionRecord], cluster: Cluster) -> float:
         """Compute penalty score (negative) for harmful/unnecessary actions."""
+
+    # ---- Anti-cheat hooks (overridable; default behaviour is "no scenario-specific heal") ----
+
+    def on_config_update(
+        self, cluster: Cluster, target_service: str, key: str, value: Any
+    ) -> bool:
+        """Called when a known config key is set on a service.
+
+        Return True if this config change is the correct fix for *this* scenario
+        (in which case the relevant anomaly will be cleared by the handler).
+        Default: False — config alone does not heal.
+
+        Scenarios override this to declare what config change resolves their fault,
+        so the handler doesn't have to string-match parameter names heuristically.
+        """
+        return False
+
+    def is_correct_op(self, action: ActionRecord, cluster: Optional[Cluster]) -> bool:
+        """Return True if `action` is a correct remediation move for this scenario.
+
+        Default: any remediation action targeting a service in the scenario's
+        relevant set counts. Scenarios override for tighter behavior — e.g. the
+        bad-deploy scenario should reject restart-of-order-service in favor of
+        rollback.
+
+        Subclasses MUST be defensive — this is invoked from the reward path on
+        every step and a crash would corrupt training. Wrap risky logic in
+        try/except and return False on error.
+        """
+        from incident_commander_env.server.grading.components import REMEDIATIVE_ACTIONS
+        if action.action_type not in REMEDIATIVE_ACTIONS:
+            return False
+        # Subclasses can override this list; default looks at relevant_services.
+        relevant = getattr(self, "relevant_services", None) or set()
+        return bool(action.target_service) and action.target_service in relevant
 
     def grade(self, actions: List[ActionRecord], cluster: Cluster) -> float:
         """Compute final 0.0-1.0 score from rubric + penalties."""
