@@ -8,7 +8,7 @@
          (OAuth 2.0 Client IDs -> Web application). Add this Space's URL as an authorized JavaScript origin.
          Without a real Client ID, the Google button falls back to the demo flow. -->
     <meta name="google-client-id" content="YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500;9..144,600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <style>
         :root{--bg-primary:#0a0e17;--bg-secondary:#111827;--bg-card:#1a2035;--bg-elevated:#1e2943;--border:rgba(99,115,148,0.2);--border-active:rgba(99,179,255,0.4);--text-primary:#f1f5f9;--text-secondary:#94a3b8;--text-muted:#64748b;--accent-blue:#3b82f6;--accent-green:#22c55e;--accent-red:#ef4444;--accent-orange:#f59e0b;--accent-purple:#a855f7;--accent-cyan:#06b6d4;--glow-blue:rgba(59,130,246,0.15);--glow-red:rgba(239,68,68,0.15);--glow-green:rgba(34,197,94,0.15)}
@@ -50,6 +50,123 @@
         .phase-num{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:rgba(99,115,148,0.18);color:var(--text-muted);font-size:10px;font-weight:700;margin-right:8px;transition:all .2s}
         .nav-tab.active .phase-num{background:var(--accent-blue);color:#fff;box-shadow:0 0 8px rgba(59,130,246,.5)}
         .nav-tab:hover .phase-num{background:rgba(99,179,255,0.3);color:var(--text-primary)}
+
+        /* ═══ Editorial typography refinements ═══ */
+        body{font-weight:400;letter-spacing:-0.005em}
+        h1,h2,h3,h4{font-weight:500;letter-spacing:-0.02em}
+        .serif{font-family:'Fraunces',Georgia,serif;font-weight:400;letter-spacing:-0.01em;font-style:normal}
+        .serif-italic{font-family:'Fraunces',Georgia,serif;font-style:italic;font-weight:400}
+
+        /* Per-phase accent — sets a single CSS variable used by section headers,
+           button glows, and underlines so each tab has its own identity without
+           the page feeling chaotic. */
+        body[data-tab="home"]{--phase-accent:#fbbf24}        /* warm amber */
+        body[data-tab="observatory"]{--phase-accent:#a855f7} /* violet */
+        body[data-tab="apprentice"]{--phase-accent:#3b82f6}  /* blue (existing) */
+        body[data-tab="realtime"]{--phase-accent:#f97316}    /* orange */
+        body[data-tab="offer"]{--phase-accent:#10b981}       /* emerald */
+        body[data-tab="api"]{--phase-accent:#94a3b8}         /* neutral */
+
+        /* ═══════ HOME (landing page) ═══════ */
+        .home-wrap{max-width:1200px;margin:0 auto;padding:80px 32px 120px}
+        @media(max-width:768px){.home-wrap{padding:48px 22px 80px}}
+        .home-eyebrow{display:inline-flex;align-items:center;gap:10px;font-size:11px;text-transform:uppercase;letter-spacing:2.5px;color:var(--text-muted);font-weight:500;margin-bottom:32px}
+        .home-eyebrow::before{content:'';display:inline-block;width:24px;height:1px;background:var(--phase-accent)}
+        .home-h1{font-family:'Fraunces',Georgia,serif;font-weight:300;font-size:clamp(48px,7vw,92px);line-height:1.02;letter-spacing:-0.025em;margin-bottom:28px;color:var(--text-primary)}
+        .home-h1 .em{font-style:italic;color:var(--phase-accent);font-weight:400}
+        .home-lede{font-size:19px;line-height:1.6;color:var(--text-secondary);max-width:680px;font-weight:400;margin-bottom:48px}
+        .home-cta-row{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:96px}
+        .home-cta{padding:14px 24px;border-radius:10px;font-size:14px;font-weight:500;letter-spacing:-0.005em;cursor:pointer;transition:all .25s;border:1px solid transparent;font-family:inherit}
+        .home-cta-primary{background:var(--phase-accent);color:#0a0e17;font-weight:600}
+        .home-cta-primary:hover{transform:translateY(-1px);box-shadow:0 12px 32px -8px rgba(251,191,36,.3)}
+        .home-cta-ghost{background:transparent;color:var(--text-primary);border-color:var(--border)}
+        .home-cta-ghost:hover{border-color:var(--phase-accent);color:var(--phase-accent)}
+
+        .home-marquee{padding:32px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);margin-bottom:96px;display:grid;grid-template-columns:repeat(4,1fr);gap:32px}
+        @media(max-width:768px){.home-marquee{grid-template-columns:repeat(2,1fr)}}
+        .home-stat{display:flex;flex-direction:column;gap:6px}
+        .home-stat .num{font-family:'Fraunces',Georgia,serif;font-weight:400;font-size:42px;line-height:1;color:var(--text-primary);letter-spacing:-0.03em}
+        .home-stat .lbl{font-size:11px;text-transform:uppercase;letter-spacing:1.6px;color:var(--text-muted);font-weight:500}
+
+        .home-section{margin-bottom:96px}
+        .home-section-h{font-family:'Fraunces',Georgia,serif;font-weight:400;font-size:14px;text-transform:uppercase;letter-spacing:3px;color:var(--phase-accent);margin-bottom:18px}
+        .home-section h2{font-family:'Fraunces',Georgia,serif;font-weight:300;font-size:clamp(34px,4.5vw,52px);line-height:1.1;letter-spacing:-0.022em;color:var(--text-primary);margin-bottom:18px;max-width:820px}
+        .home-section h2 .em{font-style:italic;color:var(--phase-accent);font-weight:400}
+        .home-section .lede{font-size:17px;line-height:1.65;color:var(--text-secondary);max-width:680px;margin-bottom:44px}
+
+        .home-phase-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px}
+        @media(max-width:1024px){.home-phase-grid{grid-template-columns:1fr}}
+        .home-phase{background:var(--bg-card);border:1px solid var(--border);border-radius:18px;padding:34px 28px 28px;cursor:pointer;transition:all .3s;position:relative;overflow:hidden}
+        .home-phase::before{content:'';position:absolute;top:0;left:0;width:100%;height:3px;background:var(--p-color,var(--phase-accent));opacity:.5;transition:opacity .3s}
+        .home-phase:hover{transform:translateY(-3px);border-color:rgba(255,255,255,.15)}
+        .home-phase:hover::before{opacity:1}
+        .home-phase[data-color="violet"]{--p-color:#a855f7}
+        .home-phase[data-color="blue"]{--p-color:#3b82f6}
+        .home-phase[data-color="orange"]{--p-color:#f97316}
+        .home-phase .ph-num{font-family:'Fraunces',Georgia,serif;font-weight:300;font-size:48px;color:var(--p-color);letter-spacing:-0.03em;line-height:1;margin-bottom:18px}
+        .home-phase h3{font-family:'Inter',sans-serif;font-weight:600;font-size:19px;letter-spacing:-0.012em;margin-bottom:8px;color:var(--text-primary)}
+        .home-phase .role{font-size:12px;color:var(--p-color);text-transform:uppercase;letter-spacing:1.4px;font-weight:500;margin-bottom:16px}
+        .home-phase .desc{font-size:14px;line-height:1.6;color:var(--text-secondary);margin-bottom:24px}
+        .home-phase .arrow{font-size:13px;color:var(--text-muted);font-weight:500;display:inline-flex;align-items:center;gap:6px;transition:gap .25s,color .25s}
+        .home-phase:hover .arrow{color:var(--p-color);gap:10px}
+
+        .home-quote{padding:64px 0;border-top:1px solid var(--border);text-align:center}
+        .home-quote blockquote{font-family:'Fraunces',Georgia,serif;font-weight:300;font-style:italic;font-size:clamp(24px,3.2vw,38px);line-height:1.35;letter-spacing:-0.015em;color:var(--text-primary);max-width:840px;margin:0 auto 18px}
+        .home-quote cite{font-style:normal;font-size:13px;color:var(--text-muted);font-weight:500;letter-spacing:.4px}
+
+        .home-twocol{display:grid;grid-template-columns:1fr 1fr;gap:64px;align-items:start}
+        @media(max-width:900px){.home-twocol{grid-template-columns:1fr;gap:32px}}
+        .home-twocol .col h3{font-family:'Inter',sans-serif;font-weight:500;font-size:20px;letter-spacing:-0.012em;margin-bottom:14px;color:var(--text-primary)}
+        .home-twocol .col p{font-size:15px;line-height:1.7;color:var(--text-secondary);font-weight:400}
+        .home-twocol .col p+p{margin-top:14px}
+        .home-twocol .col .pull{font-family:'Fraunces',Georgia,serif;font-weight:300;font-style:italic;font-size:21px;line-height:1.45;color:var(--text-primary);padding-left:18px;border-left:2px solid var(--phase-accent);margin:18px 0}
+
+        /* ═══════ WHAT WE OFFER ═══════ */
+        .offer-wrap{max-width:1200px;margin:0 auto;padding:80px 32px 120px}
+        .offer-hero{display:grid;grid-template-columns:1.4fr 1fr;gap:80px;align-items:end;margin-bottom:96px;padding-bottom:48px;border-bottom:1px solid var(--border)}
+        @media(max-width:900px){.offer-hero{grid-template-columns:1fr;gap:32px}}
+        .offer-h1{font-family:'Fraunces',Georgia,serif;font-weight:300;font-size:clamp(40px,6vw,72px);line-height:1.05;letter-spacing:-0.025em;color:var(--text-primary)}
+        .offer-h1 .em{font-style:italic;color:var(--phase-accent);font-weight:400}
+        .offer-h1-sub{font-size:16px;color:var(--text-secondary);line-height:1.65;font-weight:400}
+
+        .offer-personas{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-bottom:96px}
+        @media(max-width:900px){.offer-personas{grid-template-columns:1fr}}
+        .persona{background:var(--bg-card);border:1px solid var(--border);border-radius:14px;padding:32px 26px 28px;transition:border-color .25s}
+        .persona:hover{border-color:rgba(16,185,129,.4)}
+        .persona .for{font-family:'Fraunces',Georgia,serif;font-style:italic;font-size:14px;color:var(--phase-accent);margin-bottom:6px;font-weight:400}
+        .persona h3{font-family:'Inter',sans-serif;font-weight:500;font-size:24px;letter-spacing:-0.018em;margin-bottom:18px;color:var(--text-primary)}
+        .persona ul{list-style:none;padding:0;margin:0}
+        .persona li{font-size:14px;line-height:1.65;color:var(--text-secondary);padding:8px 0 8px 22px;position:relative;border-bottom:1px solid rgba(99,115,148,.1)}
+        .persona li:last-child{border-bottom:none}
+        .persona li::before{content:'';position:absolute;left:0;top:14px;width:10px;height:1px;background:var(--phase-accent)}
+
+        .offer-matrix{margin-bottom:96px}
+        .matrix-table{width:100%;border-collapse:collapse;background:var(--bg-card);border:1px solid var(--border);border-radius:14px;overflow:hidden}
+        .matrix-table th{text-align:left;padding:18px 22px;font-size:11px;text-transform:uppercase;letter-spacing:2px;color:var(--text-muted);font-weight:500;background:rgba(99,115,148,0.05);border-bottom:1px solid var(--border)}
+        .matrix-table td{padding:18px 22px;font-size:14px;color:var(--text-secondary);line-height:1.55;border-bottom:1px solid rgba(99,115,148,.08);font-weight:400}
+        .matrix-table tr:last-child td{border-bottom:none}
+        .matrix-table td:first-child{font-weight:500;color:var(--text-primary);font-size:15px}
+        .matrix-table .cap{display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;text-transform:uppercase;letter-spacing:1.2px;background:rgba(16,185,129,.13);color:var(--phase-accent);border:1px solid rgba(16,185,129,.3);font-weight:600;margin-left:6px}
+
+        .offer-stack{margin-bottom:96px}
+        .stack-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+        @media(max-width:900px){.stack-grid{grid-template-columns:repeat(2,1fr)}}
+        .stack-card{background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:22px 20px}
+        .stack-card .layer{font-size:10px;text-transform:uppercase;letter-spacing:2px;color:var(--phase-accent);font-weight:600;margin-bottom:8px}
+        .stack-card h4{font-family:'Inter',sans-serif;font-weight:500;font-size:15px;color:var(--text-primary);margin-bottom:6px;letter-spacing:-0.01em}
+        .stack-card p{font-size:12.5px;line-height:1.6;color:var(--text-secondary);font-weight:400}
+
+        .offer-roadmap{padding:48px 0;border-top:1px solid var(--border)}
+        .roadmap-list{display:flex;flex-direction:column;gap:0}
+        .roadmap-item{display:grid;grid-template-columns:140px 1fr;gap:32px;padding:24px 0;border-bottom:1px solid rgba(99,115,148,.1)}
+        .roadmap-item:last-child{border-bottom:none}
+        .roadmap-stage{font-family:'Fraunces',Georgia,serif;font-weight:300;font-style:italic;font-size:18px;color:var(--phase-accent);letter-spacing:-0.01em}
+        .roadmap-content h4{font-family:'Inter',sans-serif;font-weight:500;font-size:18px;letter-spacing:-0.012em;margin-bottom:6px;color:var(--text-primary)}
+        .roadmap-content p{font-size:14px;line-height:1.65;color:var(--text-secondary);font-weight:400}
+
+        /* Polish: existing observatory + realtime hero typography aligned with new system */
+        .obs-hero h1, .rt-hero h1, .hero h1{font-family:'Fraunces',Georgia,serif;font-weight:300;letter-spacing:-0.025em}
+        .obs-hero h1 em, .rt-hero h1 em, .hero h1 em{font-style:italic;font-weight:400}
 
         /* ═══ Phase 1 — Observatory ═══ */
         .obs-hero{padding:56px 32px 24px;text-align:center;position:relative;overflow:hidden;border-bottom:1px solid var(--border)}
@@ -585,10 +702,11 @@
         IncidentCommanderEnv
     </div>
     <div class="nav-tabs">
-        <div class="nav-tab active" onclick="switchTab('observatory')"><span class="phase-num">1</span> Observatory</div>
+        <div class="nav-tab active" onclick="switchTab('home')">Home</div>
+        <div class="nav-tab" onclick="switchTab('observatory')"><span class="phase-num">1</span> Observatory</div>
         <div class="nav-tab" onclick="switchTab('apprentice')"><span class="phase-num">2</span> Apprentice</div>
         <div class="nav-tab" onclick="switchTab('realtime')"><span class="phase-num">3</span> Real-Time</div>
-        <div class="nav-tab" onclick="switchTab('about')">About</div>
+        <div class="nav-tab" onclick="switchTab('offer')">What we offer</div>
         <div class="nav-tab" onclick="switchTab('api')">API</div>
     </div>
     <div class="nav-right">
@@ -603,8 +721,80 @@
     </div>
 </div>
 
+<!-- ═══════ HOME (landing page) ═══════ -->
+<div id="tab-home" class="tab-content active">
+    <div class="home-wrap">
+        <div class="home-eyebrow">Meta OpenEnv Hackathon · Theme #3.1</div>
+        <h1 class="home-h1">An RL environment that<br>teaches LLMs to be the<br><span class="em">on-call engineer.</span></h1>
+        <p class="home-lede">Production outages cost enterprises $1–5M per hour. The average mean-time-to-resolution is nearly 9 hours. There has been no standardized way to train AI agents on this work — until IncidentCommanderEnv.</p>
+        <div class="home-cta-row">
+            <button class="home-cta home-cta-primary" onclick="switchTab('observatory')">Watch the trained agent →</button>
+            <button class="home-cta home-cta-ghost" onclick="switchTab('apprentice')">Try a scenario yourself</button>
+            <button class="home-cta home-cta-ghost" onclick="switchTab('offer')">What we built</button>
+        </div>
+
+        <div class="home-marquee">
+            <div class="home-stat"><div class="num" id="home-stat-runs">—</div><div class="lbl">Recorded Runs</div></div>
+            <div class="home-stat"><div class="num" id="home-stat-resolved">—</div><div class="lbl">Resolved</div></div>
+            <div class="home-stat"><div class="num">3</div><div class="lbl">Scenario Families</div></div>
+            <div class="home-stat"><div class="num">10</div><div class="lbl">Typed Actions</div></div>
+        </div>
+
+        <div class="home-section">
+            <div class="home-section-h">A three-phase product</div>
+            <h2>One environment.<br>Three ways to <span class="em">use it.</span></h2>
+            <p class="lede">The same nine-service simulated cluster, the same six-component verifiable reward, three different audiences experiencing it. The LLM agent learning, the human practicing, the real deployed site being rescued.</p>
+            <div class="home-phase-grid">
+                <div class="home-phase" data-color="violet" onclick="switchTab('observatory')">
+                    <div class="ph-num">01</div>
+                    <div class="role">For ML Researchers</div>
+                    <h3>Observatory</h3>
+                    <p class="desc">Replay any recorded trained-agent run. Inspect the six-component reward decomposition, watch the per-component sparklines rise across the episode, see the action timeline tier-by-tier.</p>
+                    <span class="arrow">Open observatory →</span>
+                </div>
+                <div class="home-phase" data-color="blue" onclick="switchTab('apprentice')">
+                    <div class="ph-num">02</div>
+                    <div class="role">For SREs &amp; Engineers</div>
+                    <h3>Apprentice Mode</h3>
+                    <p class="desc">Solve the same incidents the AI was trained on. PagerDuty alert lands, you investigate a real-feeling cluster with an AI coach nudging you. Three scenarios, easy to hard.</p>
+                    <span class="arrow">Start training →</span>
+                </div>
+                <div class="home-phase" data-color="orange" onclick="switchTab('realtime')">
+                    <div class="ph-num">03</div>
+                    <div class="role">For Hackathon Judges</div>
+                    <h3>Real-Time</h3>
+                    <p class="desc">Plug a real deployed site into the trained agent. Inject a fault, watch ops actions stream in, escalate to code investigation if the site stays degraded. Sim-to-real, live.</p>
+                    <span class="arrow">Connect a site →</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="home-quote">
+            <blockquote>“Six independent reward components, every one a pure verifiable function — no learned reward model, no LLM-as-judge, no exploits.”</blockquote>
+            <cite>— from our hackathon submission · RLVR design note</cite>
+        </div>
+
+        <div class="home-section" style="margin-top:96px">
+            <div class="home-section-h">Why this matters</div>
+            <h2><span class="em">No public RL environment</span><br>existed for SRE incident response.</h2>
+            <div class="home-twocol">
+                <div class="col">
+                    <h3>The market</h3>
+                    <p>Every tech company runs an on-call rotation. Outages cost $1–5M per hour at enterprise scale, and MTTR is climbing as systems get more distributed, not shrinking. The observability and incident management market is $45B and the workflow has barely changed in fifteen years.</p>
+                    <div class="pull">If the work is methodical reasoning under uncertainty — exactly what RL-trained LLM agents should be good at — why is there no benchmark?</div>
+                </div>
+                <div class="col">
+                    <h3>What we shipped</h3>
+                    <p>An OpenEnv-compatible environment with a fast deterministic simulator, a six-axis verifiable reward (RLVR — no learned reward model), parametric scenario families instead of hardcoded test cases, and a Backend Protocol that lets one trained policy run unchanged on either simulator or real Docker / real HTTP services.</p>
+                    <p>Trained with the hackathon's recommended recipe: SFT warm-start from senior-SRE behavioral-clone trajectories, then GRPO fine-tuning. Same policy then runs against a live deployed site for sim-to-real validation.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- ═══════ PHASE 1 — OBSERVATORY (LLM agent) ═══════ -->
-<div id="tab-observatory" class="tab-content active">
+<div id="tab-observatory" class="tab-content">
     <div class="obs-hero">
         <div class="hero-label"><span class="dot"></span> Phase 1 · The trained LLM agent</div>
         <h1>Watch the AI <em>solve real outages</em></h1>
@@ -760,8 +950,8 @@
     </div>
 </div>
 
-<!-- ═══════ ABOUT ═══════ -->
-<div id="tab-about" class="tab-content">
+<!-- (legacy About tab removed — replaced by Home + What We Offer) -->
+<div id="tab-about-legacy" class="tab-content" style="display:none">
     <div class="hero">
         <div class="hero-label"><span class="dot"></span> Incident-response simulator · AI-coached</div>
         <h1>Train to fix production<br><em>before it breaks on you</em></h1>
@@ -876,6 +1066,195 @@
         </div>
     </div>
     <div class="footer">Built for the <strong>Meta PyTorch OpenEnv Hackathon 2026</strong> by Team MetaMorphs</div>
+</div>
+
+<!-- ═══════ WHAT WE OFFER ═══════ -->
+<div id="tab-offer" class="tab-content">
+    <div class="offer-wrap">
+        <div class="offer-hero">
+            <h1 class="offer-h1">An <span class="em">end-to-end</span><br>SRE training system,<br>not just an environment.</h1>
+            <p class="offer-h1-sub">A full RL substrate, a behavioral-clone seed dataset, an SFT+GRPO training notebook, an interactive observability dashboard, a sim-to-real bridge, and a tier-2 code escalation module — packaged as one product.</p>
+        </div>
+
+        <div class="home-section-h">Built for three audiences</div>
+        <h2 class="offer-h1" style="font-size:clamp(28px,3.5vw,44px);margin-bottom:32px">Different needs.<br><span class="em">Same substrate.</span></h2>
+        <div class="offer-personas">
+            <div class="persona">
+                <div class="for">For ML researchers</div>
+                <h3>A clean RL benchmark</h3>
+                <ul>
+                    <li>OpenEnv-compatible spec with full <code>action_space</code> / <code>observation_space</code> declarations</li>
+                    <li>Six independent reward components — RLVR with no learned reward model to game</li>
+                    <li>Parametric scenario families with seed-deterministic trajectories</li>
+                    <li>Out-of-the-box SFT + GRPO Colab notebook (Qwen2.5-Coder-1.5B, 4-bit LoRA via Unsloth)</li>
+                    <li>Anti-reward-hacking regression tests pinning the four common exploits</li>
+                </ul>
+            </div>
+            <div class="persona">
+                <div class="for">For SREs &amp; engineering teams</div>
+                <h3>A flight simulator</h3>
+                <ul>
+                    <li>Three difficulty-graded scenarios (OOM, DB pool exhaustion, bad deployment cascade)</li>
+                    <li>Real-feeling 9-service cluster with cascading dependencies and live metrics</li>
+                    <li>AI coach that nudges you toward the right move with <em>Why?</em> explanations on every action</li>
+                    <li>Structured post-mortem at the end with senior-SRE comparison</li>
+                    <li>Per-user progress tracking, no production at risk</li>
+                </ul>
+            </div>
+            <div class="persona">
+                <div class="for">For hackathon judges</div>
+                <h3>A complete submission</h3>
+                <ul>
+                    <li>Reward curves across four conditions × three families × thirty seeds (360 episodes)</li>
+                    <li>Sim-to-real demo: same trained policy, deployed HTTP site, real chaos injection</li>
+                    <li>Tier-2 code escalation: when ops can't fully heal, the agent investigates the codebase</li>
+                    <li>268 passing tests covering every critical path</li>
+                    <li>Public Space, Colab notebook, blog, video — all linked in the README</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="offer-matrix">
+            <div class="home-section-h">Capability matrix</div>
+            <h2 class="offer-h1" style="font-size:clamp(28px,3.5vw,44px);margin-bottom:32px">Every claim, <span class="em">verifiable.</span></h2>
+            <table class="matrix-table">
+                <thead>
+                    <tr><th style="width:30%">Capability</th><th>Where it lives</th><th>Verified by</th></tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Six-component verifiable reward</td>
+                        <td><code>incident_commander_env/server/grading/components.py</code></td>
+                        <td>29 unit tests in <code>test_reward_components.py</code></td>
+                    </tr>
+                    <tr>
+                        <td>Anti-reward-hacking <span class="cap">×4 exploits closed</span></td>
+                        <td><code>scenarios/</code> + <code>actions/handlers.py</code></td>
+                        <td>15 regression tests in <code>test_reward_hacks.py</code></td>
+                    </tr>
+                    <tr>
+                        <td>Seeded reproducibility</td>
+                        <td><code>simulation/cluster.py</code> + <code>metrics_engine.py</code></td>
+                        <td>3 tests in <code>test_seeded_reproducibility.py</code></td>
+                    </tr>
+                    <tr>
+                        <td>Parametric scenario families <span class="cap">3 families</span></td>
+                        <td><code>scenarios/scenario_*.py</code></td>
+                        <td>integration tests in <code>test_environment.py</code></td>
+                    </tr>
+                    <tr>
+                        <td>Backend Protocol</td>
+                        <td><code>server/backends/protocol.py</code></td>
+                        <td>19 contract tests in <code>test_backend_protocol.py</code></td>
+                    </tr>
+                    <tr>
+                        <td>WebsiteBackend (HTTP) <span class="cap">sim-to-real</span></td>
+                        <td><code>server/backends/website.py</code></td>
+                        <td>23 mock-HTTP tests in <code>test_website_backend.py</code></td>
+                    </tr>
+                    <tr>
+                        <td>Tier-2 code escalation</td>
+                        <td><code>training/code_investigator.py</code></td>
+                        <td>9 tests with synthetic repo in <code>test_code_investigator.py</code></td>
+                    </tr>
+                    <tr>
+                        <td>Episode JSONL traces &amp; observatory</td>
+                        <td><code>training/episode_logger.py</code> + <code>/runs</code> + <code>/watch</code></td>
+                        <td>9 tests in <code>test_observe_mode.py</code></td>
+                    </tr>
+                    <tr>
+                        <td>Training pipeline (SFT → GRPO)</td>
+                        <td><code>training/train_grpo.ipynb</code></td>
+                        <td>20 plumbing tests in <code>test_training_modules.py</code></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="offer-stack">
+            <div class="home-section-h">Technical stack</div>
+            <h2 class="offer-h1" style="font-size:clamp(28px,3.5vw,44px);margin-bottom:32px">Boring tools.<br><span class="em">Sharp choices.</span></h2>
+            <div class="stack-grid">
+                <div class="stack-card">
+                    <div class="layer">Environment</div>
+                    <h4>FastAPI · Pydantic v2</h4>
+                    <p>Typed action / observation / state contracts, OpenEnv-compatible reset / step / state surface.</p>
+                </div>
+                <div class="stack-card">
+                    <div class="layer">Simulator</div>
+                    <h4>Pure-Python cluster</h4>
+                    <p>9-service in-memory simulation, deterministic with a seed, zero external dependencies.</p>
+                </div>
+                <div class="stack-card">
+                    <div class="layer">Training</div>
+                    <h4>HuggingFace TRL · Unsloth</h4>
+                    <p>SFTTrainer + GRPOTrainer, 4-bit Qwen2.5-Coder-1.5B with LoRA r=16. Self-contained Colab.</p>
+                </div>
+                <div class="stack-card">
+                    <div class="layer">Sim-to-real</div>
+                    <h4>HTTP Operator API</h4>
+                    <p>Minimal <code>/ops/*</code> contract any deployable site can implement. No Docker required.</p>
+                </div>
+                <div class="stack-card">
+                    <div class="layer">Tier 2</div>
+                    <h4>Heuristic + LLM</h4>
+                    <p>Shallow git clone, scenario-keyword grep, ranked code findings, optional LLM summary.</p>
+                </div>
+                <div class="stack-card">
+                    <div class="layer">Frontend</div>
+                    <h4>Vanilla, no framework</h4>
+                    <p>Hand-written HTML/CSS/JS. Loads instantly, no build step, no bundle.</p>
+                </div>
+                <div class="stack-card">
+                    <div class="layer">Telemetry</div>
+                    <h4>JSONL episode logs</h4>
+                    <p>Every run writes a structured trace under <code>runs/&lt;id&gt;/episode.jsonl</code>. Replayable forever.</p>
+                </div>
+                <div class="stack-card">
+                    <div class="layer">Quality</div>
+                    <h4>268 tests, &lt; 9 s</h4>
+                    <p>Covers every critical path. CI-friendly. Mock-HTTP suites isolate from network.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="offer-roadmap">
+            <div class="home-section-h">What we ship next</div>
+            <h2 class="offer-h1" style="font-size:clamp(28px,3.5vw,44px);margin-bottom:32px"><span class="em">Phase 2 roadmap.</span></h2>
+            <div class="roadmap-list">
+                <div class="roadmap-item">
+                    <div class="roadmap-stage">Q3 · 2026</div>
+                    <div class="roadmap-content">
+                        <h4>CodeAwareBackend</h4>
+                        <p>RL-train tier-2. Add <code>ReadFile</code>, <code>GrepCode</code>, <code>GitDiff</code>, <code>ApplyPatch</code>, <code>RunTests</code>, <code>OpenPullRequest</code> to the action space. The agent doesn't just restart services — it ships the patch.</p>
+                    </div>
+                </div>
+                <div class="roadmap-item">
+                    <div class="roadmap-stage">Q4 · 2026</div>
+                    <div class="roadmap-content">
+                        <h4>Discriminated typed action union</h4>
+                        <p>Replace <code>parameters: Dict[str, Any]</code> with per-action typed sub-models. Compile-time safety. Better tooling. Cleaner schema in <code>openenv.yaml</code>.</p>
+                    </div>
+                </div>
+                <div class="roadmap-item">
+                    <div class="roadmap-stage">Q1 · 2027</div>
+                    <div class="roadmap-content">
+                        <h4>Crowdsourced scenario library</h4>
+                        <p>YAML scenario authoring DSL. Community PRs. Real-world incident postmortems converted into reproducible RL scenarios.</p>
+                    </div>
+                </div>
+                <div class="roadmap-item">
+                    <div class="roadmap-stage">Q2 · 2027</div>
+                    <div class="roadmap-content">
+                        <h4>Sandboxed shell action</h4>
+                        <p>20-command allowlist for diagnostic flexibility beyond the typed action vocabulary. Same safety posture, more expressiveness.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer" style="margin-top:80px;padding-top:32px;border-top:1px solid var(--border);text-align:center;color:var(--text-muted);font-size:13px">Built for the <strong style="color:var(--text-secondary);font-weight:500">Meta OpenEnv Hackathon · April 2026</strong> by Team MetaMorphs</div>
+    </div>
 </div>
 
 <!-- ═══════ API ═══════ -->
@@ -1043,7 +1422,22 @@
 // Only the minimal top-level helpers that multiple tabs need.
 const API = window.location.origin;
 
-const TAB_ORDER = ['observatory', 'apprentice', 'realtime', 'about', 'api'];
+const TAB_ORDER = ['home', 'observatory', 'apprentice', 'realtime', 'offer', 'api'];
+// Auto-create a guest user so the apprentice tab opens straight to the
+// scenario picker. Real sign-in (Google/email) still works for users who
+// want their progress namespaced — this is just a clean default.
+(function ensureGuestUser() {
+    try {
+        if (!localStorage.getItem('ic_user')) {
+            localStorage.setItem('ic_user', JSON.stringify({
+                email: 'guest@incidentcommander.local',
+                name: 'Guest',
+                provider: 'Guest mode',
+                signedInAt: Date.now(),
+            }));
+        }
+    } catch (e) {}
+})();
 function switchTab(t) {
     document.querySelectorAll('.tab-content').forEach(e => e.classList.remove('active'));
     document.querySelectorAll('.nav-tab').forEach(e => e.classList.remove('active'));
@@ -1051,17 +1445,22 @@ function switchTab(t) {
     if (target) target.classList.add('active');
     const idx = TAB_ORDER.indexOf(t);
     if (idx >= 0) document.querySelectorAll('.nav-tab')[idx].classList.add('active');
+    // Set body[data-tab] so per-phase CSS accents activate
+    document.body.setAttribute('data-tab', t);
     // Lazy-init the rich tabs on first reveal
+    if (t === 'home' && window.Home && !window.Home._inited) Home.init();
     if (t === 'observatory' && window.Observatory && !window.Observatory._inited) Observatory.init();
     if (t === 'realtime' && window.Realtime && !window.Realtime._inited) Realtime.init();
     // Keep URL hash for direct linking
     history.replaceState(null, '', '#' + t);
     window.scrollTo({top: 0, behavior: 'smooth'});
 }
-// On load, honor #hash so video links can deep-link into a phase
+// On load, honor #hash so video links can deep-link into a phase.
+// Default to Home (which sets data-tab and triggers Home.init).
 window.addEventListener('DOMContentLoaded', () => {
     const h = (location.hash || '').replace('#', '');
     if (TAB_ORDER.includes(h)) switchTab(h);
+    else switchTab('home');
 });
 
 async function refreshCoachClick() {
@@ -1170,6 +1569,28 @@ async function runSc(id) {
     btn.innerHTML = 'Run Test';
     btn.classList.remove('loading');
 }
+</script>
+<script>
+// Home tab — pulls live counts from /runs so the marquee shows real data.
+window.Home = {
+    _inited: false,
+    async init() {
+        if (this._inited) return;
+        this._inited = true;
+        try {
+            const r = await fetch('/runs');
+            if (!r.ok) return;
+            const data = await r.json();
+            const runs = data.runs || [];
+            const total = runs.length;
+            const resolved = runs.filter(x => x.resolved).length;
+            const totalEl = document.getElementById('home-stat-runs');
+            const resEl = document.getElementById('home-stat-resolved');
+            if (totalEl) totalEl.textContent = String(total);
+            if (resEl) resEl.textContent = total ? `${Math.round(100 * resolved / total)}%` : '—';
+        } catch (e) {}
+    },
+};
 </script>
 <script src="/static/icons.js?v=4"></script>
 <script src="/static/auth.js?v=4"></script>
