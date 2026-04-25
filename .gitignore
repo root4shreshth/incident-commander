@@ -21,6 +21,9 @@ runs/
 # Local site target for sim-to-real demo (vibecoded separately)
 targets/
 
+# Uploaded codebases (Phase 3 ZIP upload destination)
+uploaded_codebase/
+
 # Local dev caches
 .pytest_cache/
 .ruff_cache/

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>IncidentCommanderEnv — Train to respond to production incidents</title>
+    <title>Praetor — Incident Commander for SREs</title>
     <!-- Google OAuth Client ID. Create one at https://console.cloud.google.com/apis/credentials
          (OAuth 2.0 Client IDs -> Web application). Add this Space's URL as an authorized JavaScript origin.
          Without a real Client ID, the Google button falls back to the demo flow. -->
@@ -35,7 +35,12 @@
 
         /* Nav */
         .nav{background:rgba(17,24,39,0.85);backdrop-filter:blur(20px);border-bottom:1px solid var(--border);padding:0 32px;display:flex;align-items:center;height:56px;position:sticky;top:0;z-index:100}
-        .nav-brand{font-size:17px;font-weight:700;display:flex;align-items:center;gap:10px}.nav-brand svg{width:28px;height:28px}
+        .nav-brand{display:flex;align-items:center;gap:11px}
+        .brand-mark{width:22px;height:22px;border-radius:6px;background:linear-gradient(135deg,#fbbf24,#f97316);position:relative;flex-shrink:0;box-shadow:0 0 12px rgba(251,191,36,.35)}
+        .brand-mark::before{content:'';position:absolute;inset:5px;border:1.5px solid rgba(10,14,23,0.85);border-radius:50%;border-bottom-color:transparent;border-left-color:transparent;transform:rotate(-45deg)}
+        .brand-text{font-family:'Fraunces',Georgia,serif;font-weight:500;font-size:18px;letter-spacing:-0.015em;color:var(--text-primary);display:inline-flex;align-items:baseline;gap:8px}
+        .brand-sub{font-family:'Inter',sans-serif;font-weight:400;font-size:11px;color:var(--text-muted);letter-spacing:.2px;text-transform:none}
+        @media(max-width:760px){.brand-sub{display:none}}
         .nav-tabs{display:flex;margin-left:48px;gap:4px;height:100%}
         .nav-tab{padding:0 18px;height:100%;display:flex;align-items:center;font-size:13px;font-weight:500;color:var(--text-muted);cursor:pointer;border-bottom:2px solid transparent;transition:all .2s}
         .nav-tab:hover{color:var(--text-secondary);background:rgba(255,255,255,.03)}.nav-tab.active{color:var(--text-primary);border-bottom-color:var(--accent-blue)}
@@ -272,6 +277,41 @@
         .rt-tier-banner.ops{background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.3);color:#a5d8ff}
         .rt-tier-banner.escalate{background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.3);color:#fcd34d}
         .rt-tier-banner.resolved{background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.3);color:#86efac}
+
+        /* Codebase source tabs */
+        .cb-tabs{display:flex;gap:4px;background:var(--bg-elevated);padding:4px;border-radius:9px;margin-bottom:14px;border:1px solid var(--border)}
+        .cb-tab{flex:1;background:transparent;border:none;color:var(--text-muted);padding:8px 14px;font-size:12.5px;font-family:inherit;font-weight:500;cursor:pointer;border-radius:6px;transition:all .2s;letter-spacing:-0.005em}
+        .cb-tab:hover{color:var(--text-secondary)}
+        .cb-tab.active{background:var(--bg-card);color:var(--text-primary);box-shadow:0 1px 3px rgba(0,0,0,.2)}
+        .cb-panel{animation:fadeIn .25s ease}
+        .cb-drop{border:1.5px dashed var(--border);border-radius:11px;padding:28px 20px;text-align:center;cursor:pointer;transition:all .25s;background:rgba(99,115,148,.03)}
+        .cb-drop:hover,.cb-drop.dragover{border-color:var(--phase-accent);background:rgba(249,115,22,.05)}
+        .cb-drop-inner{pointer-events:none}
+        .cb-drop-ic{font-size:32px;color:var(--text-muted);margin-bottom:10px;font-weight:300}
+        .cb-drop:hover .cb-drop-ic,.cb-drop.dragover .cb-drop-ic{color:var(--phase-accent)}
+        .cb-drop-text{font-size:13px;color:var(--text-secondary);line-height:1.5}
+        .cb-drop-text strong{color:var(--text-primary)}
+
+        /* Evidence chips for the auto-classify card */
+        .rt-evidence-list{display:flex;flex-direction:column;gap:6px}
+        .rt-evidence-item{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text-secondary);padding:6px 10px;background:var(--bg-elevated);border:1px solid var(--border);border-left:2px solid var(--phase-accent);border-radius:6px}
+        .rt-classify-verdict{display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border-radius:18px;font-size:12px;font-weight:600;margin-bottom:10px;letter-spacing:.3px}
+        .rt-classify-verdict.fault{background:rgba(249,115,22,.13);color:var(--phase-accent);border:1px solid rgba(249,115,22,.35)}
+        .rt-classify-verdict.healthy{background:rgba(34,197,94,.13);color:var(--accent-green);border:1px solid rgba(34,197,94,.35)}
+
+        /* Home footer */
+        .home-footer{margin-top:40px;padding:48px 0 0;border-top:1px solid var(--border)}
+        .home-footer-grid{display:grid;grid-template-columns:1.6fr 1fr 1fr 1fr;gap:32px;padding-bottom:32px}
+        @media(max-width:760px){.home-footer-grid{grid-template-columns:1fr 1fr}}
+        .home-footer .ft-brand{display:flex;align-items:center;gap:11px;margin-bottom:14px}
+        .home-footer .ft-brand .brand-mark{width:18px;height:18px}
+        .home-footer .ft-brand-text{font-family:'Fraunces',Georgia,serif;font-weight:500;font-size:18px;color:var(--text-primary)}
+        .home-footer p{font-size:13px;line-height:1.6;color:var(--text-secondary);max-width:380px}
+        .home-footer .ft-col h5{font-family:'Inter',sans-serif;font-weight:500;font-size:11px;text-transform:uppercase;letter-spacing:1.6px;color:var(--text-muted);margin-bottom:14px}
+        .home-footer .ft-col a{display:block;font-size:13px;color:var(--text-secondary);text-decoration:none;padding:5px 0;transition:color .2s}
+        .home-footer .ft-col a:hover{color:var(--phase-accent)}
+        .home-footer .ft-bottom{padding:20px 0;border-top:1px solid var(--border);font-size:11.5px;color:var(--text-muted);display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px;letter-spacing:.2px}
+        .home-footer .ft-bottom strong{font-weight:500;color:var(--text-secondary)}
 
         /* Buttons */
         .btn{padding:10px 22px;border-radius:10px;border:none;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s;font-family:inherit;display:inline-flex;align-items:center;gap:8px}
@@ -698,8 +738,8 @@
 
 <div class="nav">
     <div class="nav-brand">
-        <svg viewBox="0 0 24 24" fill="none" stroke="var(--accent-red)" stroke-width="2"><path d="M12 9v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-        IncidentCommanderEnv
+        <span class="brand-mark"></span>
+        <span class="brand-text">Praetor<span class="brand-sub">— Incident Commander for SREs</span></span>
     </div>
     <div class="nav-tabs">
         <div class="nav-tab active" onclick="switchTab('home')">Home</div>
@@ -724,9 +764,9 @@
 <!-- ═══════ HOME (landing page) ═══════ -->
 <div id="tab-home" class="tab-content active">
     <div class="home-wrap">
-        <div class="home-eyebrow">Meta OpenEnv Hackathon · Theme #3.1</div>
-        <h1 class="home-h1">An RL environment that<br>teaches LLMs to be the<br><span class="em">on-call engineer.</span></h1>
-        <p class="home-lede">Production outages cost enterprises $1–5M per hour. The average mean-time-to-resolution is nearly 9 hours. There has been no standardized way to train AI agents on this work — until IncidentCommanderEnv.</p>
+        <div class="home-eyebrow">Praetor · The autonomous SRE commander</div>
+        <h1 class="home-h1">When production goes<br>down, <span class="em">Praetor takes</span><br><span class="em">the call.</span></h1>
+        <p class="home-lede">Production outages cost enterprises $1–5M per hour. Mean-time-to-resolution averages 8.85 hours. Praetor is an autonomous incident commander — once the alert lands, it investigates, decides, remediates, verifies, and escalates to code if the runtime fix isn't enough. No humans in the loop between page and verdict.</p>
         <div class="home-cta-row">
             <button class="home-cta home-cta-primary" onclick="switchTab('observatory')">Watch the trained agent →</button>
             <button class="home-cta home-cta-ghost" onclick="switchTab('apprentice')">Try a scenario yourself</button>
@@ -784,21 +824,58 @@
                     <div class="pull">If the work is methodical reasoning under uncertainty — exactly what RL-trained LLM agents should be good at — why is there no benchmark?</div>
                 </div>
                 <div class="col">
-                    <h3>What we shipped</h3>
-                    <p>An OpenEnv-compatible environment with a fast deterministic simulator, a six-axis verifiable reward (RLVR — no learned reward model), parametric scenario families instead of hardcoded test cases, and a Backend Protocol that lets one trained policy run unchanged on either simulator or real Docker / real HTTP services.</p>
-                    <p>Trained with the hackathon's recommended recipe: SFT warm-start from senior-SRE behavioral-clone trajectories, then GRPO fine-tuning. Same policy then runs against a live deployed site for sim-to-real validation.</p>
+                    <h3>What Praetor is</h3>
+                    <p>An autonomous incident commander. Once paged, Praetor investigates with a typed action vocabulary (10 SRE-shaped actions), decides what to fix using the trained policy, executes via the same Backend Protocol that the simulator uses, verifies recovery, and escalates to <em>code investigation</em> if runtime ops aren't enough.</p>
+                    <p>Trained with the hackathon's recommended recipe: SFT warm-start from senior-SRE behavioral-clone trajectories, then GRPO fine-tuning over a six-axis verifiable reward. Same policy runs against the simulator, against a real deployed site, and against the codebase.</p>
                 </div>
             </div>
         </div>
+
+        <!-- ═══ Footer ═══ -->
+        <footer class="home-footer">
+            <div class="home-footer-grid">
+                <div>
+                    <div class="ft-brand">
+                        <span class="brand-mark"></span>
+                        <span class="ft-brand-text">Praetor</span>
+                    </div>
+                    <p>The autonomous SRE commander — an OpenEnv-compatible RL environment + trained policy + sim-to-real bridge for production incident response.</p>
+                </div>
+                <div class="ft-col">
+                    <h5>Submission</h5>
+                    <a href="https://hype4raj-incident-commander-env.hf.space" target="_blank" rel="noopener">HuggingFace Space ↗</a>
+                    <a href="https://github.com/root4shreshth/incident-commander" target="_blank" rel="noopener">GitHub repo ↗</a>
+                    <a href="#" onclick="switchTab('api');return false;">API reference</a>
+                    <a href="#" onclick="switchTab('offer');return false;">What we offer</a>
+                </div>
+                <div class="ft-col">
+                    <h5>Reproduce</h5>
+                    <a href="https://github.com/root4shreshth/incident-commander/blob/main/training/train_grpo.ipynb" target="_blank" rel="noopener">Colab notebook ↗</a>
+                    <a href="https://github.com/root4shreshth/incident-commander/blob/main/docs/blog.md" target="_blank" rel="noopener">Blog post ↗</a>
+                    <a href="https://github.com/root4shreshth/incident-commander/blob/main/docs/video_script.md" target="_blank" rel="noopener">Video script ↗</a>
+                    <a href="#" onclick="switchTab('observatory');return false;">Recorded runs</a>
+                </div>
+                <div class="ft-col">
+                    <h5>Try it</h5>
+                    <a href="#" onclick="switchTab('apprentice');return false;">Apprentice mode</a>
+                    <a href="#" onclick="switchTab('realtime');return false;">Real-time on a deployed site</a>
+                    <a href="#" onclick="switchTab('observatory');return false;">Watch the agent</a>
+                </div>
+            </div>
+            <div class="ft-bottom">
+                <span>Built for the <strong>Meta OpenEnv Hackathon · April 2026</strong> by Team MetaMorphs · <span style="color:var(--phase-accent)">Praetor</span> for SRE incident response.</span>
+                <span>MIT · No telemetry · Reproducible by seed</span>
+            </div>
+        </footer>
     </div>
 </div>
 
 <!-- ═══════ PHASE 1 — OBSERVATORY (LLM agent) ═══════ -->
 <div id="tab-observatory" class="tab-content">
     <div class="obs-hero">
-        <div class="hero-label"><span class="dot"></span> Phase 1 · The trained LLM agent</div>
-        <h1>Watch the AI <em>solve real outages</em></h1>
-        <p class="subtitle">Every recorded run is the trained policy attempting one of three scenario families. Pick a run to see the action timeline, the 6-component reward decomposition, and the ideal-trajectory diff side-by-side.</p>
+        <div class="hero-label"><span class="dot"></span> Phase 1 · Watch Praetor work</div>
+        <h1>Every page becomes a <em>recorded run.</em></h1>
+        <p class="subtitle">Each row is Praetor — the autonomous incident commander — attempting one of three scenario families. Pick a run to see the action timeline, the 6-component reward decomposition, and the per-step service map evolve from red to green.</p>
         <div class="stats-row">
             <div class="stat"><div class="stat-value blue" id="obs-stat-runs">—</div><div class="stat-label">Recorded Runs</div></div>
             <div class="stat"><div class="stat-value green" id="obs-stat-resolved">—</div><div class="stat-label">Resolved</div></div>
@@ -874,9 +951,9 @@
 <!-- ═══════ PHASE 3 — REAL-TIME (sim-to-real on a deployed site) ═══════ -->
 <div id="tab-realtime" class="tab-content">
     <div class="rt-hero">
-        <div class="hero-label"><span class="dot"></span> Phase 3 · Sim-to-real on a deployed site</div>
-        <h1>Connect a real site. <em>Inject a fault. Watch the agent fix it.</em></h1>
-        <p class="subtitle">The same trained policy from Phase 1, now talking to a real deployed website over HTTP. If runtime ops can't fully heal it, the agent escalates to code investigation.</p>
+        <div class="hero-label"><span class="dot"></span> Phase 3 · Praetor on a live site</div>
+        <h1>Point Praetor at a deployed site. <em>It takes it from there.</em></h1>
+        <p class="subtitle">Praetor probes the site, classifies what's wrong on its own, runs the runtime fix, and if that's not enough, opens the codebase you point it at and tells you which lines to look at.</p>
     </div>
 
     <div class="rt-grid">
@@ -886,54 +963,101 @@
                     <div class="rt-step-num" id="rt-num-1">1</div>
                     <h4>Connect to a deployed site</h4>
                 </div>
-                <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px">Paste the URL of a site that exposes the operator contract (<code style="font-size:11px">/ops/health</code>, <code style="font-size:11px">/ops/restart</code>, etc — see the <a href="#" onclick="switchTab('about');return false;">contract docs</a>). The site can be hosted anywhere — Render, Vercel, Fly, HF Space.</p>
+                <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px">Paste the URL of a site that exposes the operator contract (<code style="font-size:11px">/ops/health</code>, <code style="font-size:11px">/ops/restart</code>, etc). The site can be hosted anywhere — Render, Vercel, Fly, HF Space.</p>
                 <div class="rt-input">
                     <input type="text" id="rt-site-url" placeholder="https://your-deployed-site.example.com" autocomplete="off">
                     <button class="btn btn-primary btn-sm" id="rt-connect">Connect</button>
                 </div>
-                <p style="font-size:11px;color:var(--text-muted);margin-top:10px">Optional — for tier-2 code escalation, link a GitHub repo (read-only, public or token):</p>
-                <div class="rt-input" style="margin-top:6px">
-                    <input type="text" id="rt-repo-url" placeholder="https://github.com/owner/repo (optional)" autocomplete="off">
-                    <input type="text" id="rt-repo-token" placeholder="github token (optional)" autocomplete="off" style="max-width:200px">
-                </div>
                 <div class="rt-status" id="rt-status"><span class="dot"></span><span id="rt-status-text">Not connected</span></div>
             </div>
 
-            <div class="obs-card rt-step">
+            <!-- Auto-classification card (revealed after connect) -->
+            <div class="obs-card rt-step" id="rt-classify-card" style="display:none">
                 <div class="rt-step-h">
                     <div class="rt-step-num" id="rt-num-2">2</div>
-                    <h4>Inject a fault</h4>
+                    <h4>Praetor's classification</h4>
                 </div>
-                <div class="rt-chaos">
-                    <button class="rt-chaos-btn" data-scenario="oom_crash" disabled>
-                        <div class="ic">⚡</div>
-                        <div class="ttl">OOM Crash</div>
-                        <div class="desc">/api memory limit too low — service crashes under load</div>
-                    </button>
-                    <button class="rt-chaos-btn" data-scenario="db_pool_exhaustion" disabled>
-                        <div class="ic">⚡</div>
-                        <div class="ttl">DB Pool Exhaustion</div>
-                        <div class="desc">connection leak from /checkout — postgres exhausted</div>
-                    </button>
-                    <button class="rt-chaos-btn" data-scenario="bad_deployment_cascade" disabled>
-                        <div class="ic">⚡</div>
-                        <div class="ttl">Bad Deployment</div>
-                        <div class="desc">v1.1 image bundles a memory leak — full cluster degrades</div>
-                    </button>
-                </div>
+                <div id="rt-classify-body" style="font-size:13.5px;line-height:1.6;color:var(--text-secondary)"></div>
+                <div id="rt-evidence" style="margin-top:10px"></div>
             </div>
 
+            <!-- Codebase source — three options as a single card with tabbed source picker -->
             <div class="obs-card rt-step">
                 <div class="rt-step-h">
                     <div class="rt-step-num" id="rt-num-3">3</div>
-                    <h4>Run the trained agent</h4>
+                    <h4>Link your codebase <span style="font-weight:400;color:var(--text-muted);font-size:12px;margin-left:8px">— for tier-2 escalation when ops can't fully heal</span></h4>
                 </div>
+                <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px">For toy sites, runtime ops are usually enough. For real sites at Paytm / Amazon / Airbnb scale, the bug often lives in the code itself. Praetor reads the code only when ops actions don't fully heal the fault.</p>
+                <div class="cb-tabs">
+                    <button class="cb-tab active" data-cbsrc="github">GitHub</button>
+                    <button class="cb-tab" data-cbsrc="azure">Azure Repos</button>
+                    <button class="cb-tab" data-cbsrc="zip">ZIP upload</button>
+                </div>
+                <div class="cb-panel" data-cbsrc="github">
+                    <div class="rt-input">
+                        <input type="text" id="cb-github-url" placeholder="https://github.com/owner/repo" autocomplete="off">
+                    </div>
+                    <div class="rt-input" style="margin-top:8px">
+                        <input type="text" id="cb-github-token" placeholder="ghp_xxx (only needed for private repos)" autocomplete="off">
+                        <button class="btn btn-outline btn-sm" id="cb-github-link">Link repo</button>
+                    </div>
+                </div>
+                <div class="cb-panel" data-cbsrc="azure" style="display:none">
+                    <div class="rt-input">
+                        <input type="text" id="cb-azure-url" placeholder="https://dev.azure.com/org/project/_git/repo" autocomplete="off">
+                    </div>
+                    <div class="rt-input" style="margin-top:8px">
+                        <input type="text" id="cb-azure-token" placeholder="Azure DevOps PAT (read-only)" autocomplete="off">
+                        <button class="btn btn-outline btn-sm" id="cb-azure-link">Link repo</button>
+                    </div>
+                </div>
+                <div class="cb-panel" data-cbsrc="zip" style="display:none">
+                    <p style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Drag a <code>.zip</code> of your codebase here, or click to select. Max 25MB.</p>
+                    <div class="cb-drop" id="cb-zip-drop">
+                        <input type="file" id="cb-zip-input" accept=".zip,application/zip" style="display:none">
+                        <div class="cb-drop-inner">
+                            <div class="cb-drop-ic">⤓</div>
+                            <div class="cb-drop-text" id="cb-drop-text">Drop your <strong>.zip</strong> codebase here<br>or click to choose a file</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="rt-status" id="cb-status" style="margin-top:10px;display:none"><span class="dot"></span><span id="cb-status-text">No codebase linked</span></div>
+            </div>
+
+            <!-- Run + recovery controls -->
+            <div class="obs-card rt-step">
+                <div class="rt-step-h">
+                    <div class="rt-step-num" id="rt-num-4">4</div>
+                    <h4>Run Praetor</h4>
+                </div>
+                <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px">Praetor uses the classification it just made. No need to tell it what's wrong — it figured that out.</p>
                 <div style="display:flex;gap:10px;flex-wrap:wrap">
-                    <button class="btn btn-green btn-sm" id="rt-run" disabled>▶ Run trained agent</button>
+                    <button class="btn btn-green btn-sm" id="rt-run" disabled>▶ Run Praetor</button>
                     <button class="btn btn-outline btn-sm" id="rt-heal" disabled>↻ Reset site</button>
                     <a class="btn btn-outline btn-sm" id="rt-view-site" target="_blank" rel="noopener" style="display:none">↗ Open site in new tab</a>
                 </div>
                 <div id="rt-tier-banner-slot"></div>
+
+                <details style="margin-top:18px">
+                    <summary style="cursor:pointer;font-size:12px;color:var(--text-muted);user-select:none">No fault detected? Inject a test fault →</summary>
+                    <div class="rt-chaos" style="margin-top:14px">
+                        <button class="rt-chaos-btn" data-scenario="oom_crash" disabled>
+                            <div class="ic">⚡</div>
+                            <div class="ttl">OOM Crash</div>
+                            <div class="desc">memory limit too low — service crashes</div>
+                        </button>
+                        <button class="rt-chaos-btn" data-scenario="db_pool_exhaustion" disabled>
+                            <div class="ic">⚡</div>
+                            <div class="ttl">DB Pool Exhaustion</div>
+                            <div class="desc">connection leak — postgres exhausted</div>
+                        </button>
+                        <button class="rt-chaos-btn" data-scenario="bad_deployment_cascade" disabled>
+                            <div class="ic">⚡</div>
+                            <div class="ttl">Bad Deployment</div>
+                            <div class="desc">v1.1 image bundles a memory leak</div>
+                        </button>
+                    </div>
+                </details>
             </div>
         </div>
 

@@ -1,5 +1,5 @@
 ---
-title: IncidentCommanderEnv
+title: Praetor — Incident Commander for SREs
 emoji: "\U0001F6A8"
 colorFrom: red
 colorTo: yellow
@@ -17,9 +17,11 @@ tags:
   - llm-agents
 ---
 
-# IncidentCommanderEnv
+# Praetor — Incident Commander for SREs
 
-> An OpenEnv RL environment that trains LLM agents to be on-call SREs — they receive a real PagerDuty-style alert, investigate a microservices cluster, identify root cause, and remediate it under time pressure. Same trained policy then runs unchanged against a real Docker stack to fix a real outage.
+> The autonomous SRE commander. An OpenEnv-compatible RL environment that trains LLM agents to take the on-call page: investigate a microservices cluster, identify root cause, remediate under time pressure, verify recovery, and escalate to code investigation when runtime ops aren't enough. The same trained policy runs unchanged against a real deployed site for sim-to-real validation.
+>
+> **Codebase package name** stays `incident_commander_env` for stability — the rename is product-level.
 
 **Meta OpenEnv Hackathon · April 2026 · Theme #3.1: Professional Tasks**
 

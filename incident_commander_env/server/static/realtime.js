@@ -1,14 +1,19 @@
-/* Phase 3 — Real-Time / Sim-to-Real on a deployed site.
+/* Phase 3 — Real-Time / Praetor on a deployed site.
  *
- * UI flow:
- *   1) User pastes deployed URL (and optionally a GitHub repo for tier 2).
- *      → POST /realtime/connect  (validates /ops/health on the site)
- *   2) Three chaos buttons get enabled.
- *      → POST /realtime/inject  (calls site's /ops/break)
- *   3) "Run trained agent" enabled.
- *      → POST /realtime/run-agent
- *      → poll GET /realtime/status/<run_id> every 700ms
- *      → render unified tier-1 + tier-2 timeline as events stream in
+ * Flow:
+ *   1) User pastes deployed URL → POST /realtime/connect
+ *      ⤷ server probes /ops/health, /ops/metrics, /ops/logs and
+ *        AUTO-CLASSIFIES the fault. UI renders the verdict card.
+ *   2) (Optional) link a codebase: GitHub URL, Azure DevOps URL, or ZIP upload
+ *      ⤷ POST /realtime/codebase/{link,upload-multipart}
+ *   3) User clicks "Run Praetor" → POST /realtime/run-agent (no scenario param —
+ *      the server uses the auto-classified one).
+ *      ⤷ poll GET /realtime/status/<run_id> every 700ms
+ *      ⤷ stream events into the unified tier-1 + tier-2 timeline.
+ *
+ * The "inject test fault" buttons are SECONDARY (collapsed in a <details>) —
+ * useful when the connected site is healthy and we want to demo the agent's
+ * response without waiting for a real outage.
  */
 
 (function () {
@@ -19,11 +24,12 @@
   const state = {
     connected: false,
     siteUrl: null,
-    repoLinked: false,
     services: [],
+    classification: null,
+    codebaseLinked: false,
+    codebaseSource: null,
     runId: null,
     pollTimer: null,
-    activeScenario: null,
     seenEventIdx: 0,
   };
 
@@ -47,8 +53,7 @@
   // ---- Step indicator -------------------------------------------------------
 
   function setStep(n, status) {
-    // status ∈ {'pending','active','done'}
-    [1, 2, 3].forEach(i => {
+    [1, 2, 3, 4].forEach(i => {
       const el = $(`rt-num-${i}`);
       if (!el) return;
       el.classList.remove('active', 'done');
@@ -59,14 +64,22 @@
 
   // ---- Status panel ---------------------------------------------------------
 
-  function setStatus(text, kind /* 'ok' | 'bad' | null */) {
+  function setStatus(text, kind) {
     const panel = $('rt-status');
     panel.classList.remove('ok', 'bad');
     if (kind) panel.classList.add(kind);
     $('rt-status-text').textContent = text;
   }
 
-  // ---- Connect --------------------------------------------------------------
+  function setCbStatus(text, kind) {
+    const panel = $('cb-status');
+    panel.style.display = 'flex';
+    panel.classList.remove('ok', 'bad');
+    if (kind) panel.classList.add(kind);
+    $('cb-status-text').textContent = text;
+  }
+
+  // ---- Connect → auto-classify ----------------------------------------------
 
   async function onConnect() {
     const url = ($('rt-site-url').value || '').trim();
@@ -76,34 +89,22 @@
     }
     setStatus('Connecting…', null);
     $('rt-connect').disabled = true;
-    const repoUrl = ($('rt-repo-url').value || '').trim();
-    const repoToken = ($('rt-repo-token').value || '').trim();
-    const data = await api('POST', '/realtime/connect', {
-      site_url: url,
-      repo_url: repoUrl || null,
-      repo_token: repoToken || null,
-    });
+    const data = await api('POST', '/realtime/connect', { site_url: url });
     $('rt-connect').disabled = false;
     if (!data.connected) {
       setStatus(`Connection failed — ${data.error || 'unknown error'}`, 'bad');
       state.connected = false;
-      enableChaosButtons(false);
       return;
     }
     state.connected = true;
     state.siteUrl = data.site_url;
-    state.repoLinked = !!data.repo_linked;
     state.services = data.services_discovered || [];
-    const svcText = state.services.length
-      ? state.services.join(', ')
-      : '(no services advertised)';
-    setStatus(
-      `Connected · /ops/health = ${data.status || '?'} · services: ${svcText}` +
-      (state.repoLinked ? ' · repo linked' : ''),
-      'ok'
-    );
+    state.classification = data.classification || null;
+    const svcText = state.services.length ? state.services.join(', ') : '(no services advertised)';
+    setStatus(`Connected · /ops/health = ${data.status || '?'} · services: ${svcText}`, 'ok');
     setStep(1, 'done');
     setStep(2, 'active');
+    renderClassification(state.classification);
     enableChaosButtons(true);
     const viewBtn = $('rt-view-site');
     if (viewBtn) {
@@ -111,42 +112,153 @@
       viewBtn.style.display = 'inline-flex';
     }
     $('rt-heal').disabled = false;
+    $('rt-run').disabled = false;  // even on healthy site: agent will probe + report
+  }
+
+  function renderClassification(cls) {
+    const card = $('rt-classify-card');
+    const body = $('rt-classify-body');
+    const ev = $('rt-evidence');
+    if (!cls) {
+      card.style.display = 'none';
+      return;
+    }
+    card.style.display = 'block';
+    let verdict, narrative;
+    if (cls.fault_detected) {
+      verdict = `<div class="rt-classify-verdict fault">⚡ ${escapeHtml((cls.scenario || 'unknown').replace(/_/g, ' ').toUpperCase())} · confidence ${(cls.confidence * 100).toFixed(0)}%</div>`;
+    } else {
+      verdict = `<div class="rt-classify-verdict healthy">✓ Site healthy</div>`;
+    }
+    narrative = (cls.narrative || '').replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    body.innerHTML = verdict + '<div>' + narrative + '</div>';
+    if (cls.evidence && cls.evidence.length) {
+      let html = '<div class="rt-evidence-list">';
+      cls.evidence.forEach(e => { html += `<div class="rt-evidence-item">${escapeHtml(e)}</div>`; });
+      html += '</div>';
+      ev.innerHTML = html;
+    } else {
+      ev.innerHTML = '';
+    }
   }
 
   function enableChaosButtons(on) {
-    document.querySelectorAll('.rt-chaos-btn').forEach(b => {
-      b.disabled = !on;
+    document.querySelectorAll('.rt-chaos-btn').forEach(b => { b.disabled = !on; });
+  }
+
+  // ---- Codebase source tabs -------------------------------------------------
+
+  function wireCodebaseTabs() {
+    document.querySelectorAll('.cb-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        const src = tab.dataset.cbsrc;
+        document.querySelectorAll('.cb-tab').forEach(t => t.classList.toggle('active', t === tab));
+        document.querySelectorAll('.cb-panel').forEach(p => {
+          p.style.display = p.dataset.cbsrc === src ? '' : 'none';
+        });
+      });
+    });
+    $('cb-github-link').addEventListener('click', () => linkRemote('github'));
+    $('cb-azure-link').addEventListener('click', () => linkRemote('azure'));
+
+    // ZIP drag-and-drop + click-to-pick
+    const drop = $('cb-zip-drop');
+    const input = $('cb-zip-input');
+    drop.addEventListener('click', () => input.click());
+    input.addEventListener('change', e => {
+      if (e.target.files && e.target.files[0]) uploadZip(e.target.files[0]);
+    });
+    drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('dragover'); });
+    drop.addEventListener('dragleave', () => drop.classList.remove('dragover'));
+    drop.addEventListener('drop', e => {
+      e.preventDefault();
+      drop.classList.remove('dragover');
+      if (e.dataTransfer.files && e.dataTransfer.files[0]) uploadZip(e.dataTransfer.files[0]);
     });
   }
 
-  // ---- Inject chaos ---------------------------------------------------------
+  async function linkRemote(source) {
+    const url = ($(`cb-${source}-url`).value || '').trim();
+    const token = ($(`cb-${source}-token`).value || '').trim() || null;
+    if (!url) {
+      setCbStatus(`Please paste the ${source === 'github' ? 'GitHub' : 'Azure DevOps'} repo URL`, 'bad');
+      return;
+    }
+    setCbStatus('Linking…', null);
+    const data = await api('POST', '/realtime/codebase/link', {
+      source, repo_url: url, repo_token: token,
+    });
+    if (!data.linked) {
+      setCbStatus(`Link failed — ${data.error}`, 'bad');
+      state.codebaseLinked = false;
+      return;
+    }
+    state.codebaseLinked = true;
+    state.codebaseSource = source;
+    setCbStatus(`Linked (${source}): ${data.repo_url}`, 'ok');
+  }
+
+  async function uploadZip(file) {
+    if (!file.name.toLowerCase().endsWith('.zip')) {
+      setCbStatus('Expected a .zip file', 'bad');
+      return;
+    }
+    if (file.size > 25 * 1024 * 1024) {
+      setCbStatus(`File too large (${(file.size/1024/1024).toFixed(1)} MB > 25 MB)`, 'bad');
+      return;
+    }
+    setCbStatus(`Uploading ${file.name} (${(file.size/1024).toFixed(0)} KB)…`, null);
+    $('cb-drop-text').innerHTML = `<strong>${escapeHtml(file.name)}</strong> — uploading…`;
+    const fd = new FormData();
+    fd.append('file', file);
+    try {
+      const r = await fetch('/realtime/codebase/upload-multipart', {
+        method: 'POST', body: fd,
+      });
+      const data = await r.json();
+      if (!data.linked) {
+        setCbStatus(`Upload failed — ${data.error}`, 'bad');
+        return;
+      }
+      state.codebaseLinked = true;
+      state.codebaseSource = 'zip';
+      setCbStatus(`Uploaded ${data.filename} (${(data.size_bytes/1024).toFixed(0)} KB)`, 'ok');
+      $('cb-drop-text').innerHTML = `✓ <strong>${escapeHtml(data.filename)}</strong> ready for tier-2 escalation`;
+    } catch (e) {
+      setCbStatus('Upload failed: ' + e.message, 'bad');
+    }
+  }
+
+  // ---- Inject chaos (secondary path) ----------------------------------------
 
   async function onInject(scenario, btnEl) {
     if (!state.connected) return;
     document.querySelectorAll('.rt-chaos-btn').forEach(b => b.classList.remove('fired'));
     btnEl.classList.add('fired');
-    btnEl.style.opacity = 0.6;
     btnEl.disabled = true;
     const res = await api('POST', '/realtime/inject', { scenario });
     if (!res.injected) {
       setStatus(`Injection failed — ${res.error || 'unknown'}`, 'bad');
       btnEl.classList.remove('fired');
-      btnEl.style.opacity = 1;
       btnEl.disabled = false;
       return;
     }
-    state.activeScenario = scenario;
-    setStep(2, 'done');
-    setStep(3, 'active');
-    $('rt-run').disabled = false;
     pushTimelineLog({
       type: 'inject',
-      message: `Injected scenario "${scenario}" — site now in fault state.`,
+      message: `Injected scenario "${scenario}" — site is now in a fault state. Re-classifying…`,
     });
-    document.querySelectorAll('.rt-chaos-btn').forEach((b) => {
-      if (b !== btnEl) b.disabled = true;
-    });
-    setTimeout(() => { btnEl.style.opacity = 1; }, 800);
+    // Re-fetch classification by reconnecting with same URL
+    setTimeout(async () => {
+      const cfg = await api('GET', '/realtime/config');
+      if (cfg && cfg.site_url) {
+        const data = await api('POST', '/realtime/connect', { site_url: cfg.site_url });
+        if (data.classification) {
+          state.classification = data.classification;
+          renderClassification(data.classification);
+        }
+      }
+      btnEl.disabled = false;
+    }, 800);
   }
 
   // ---- Heal -----------------------------------------------------------------
@@ -160,12 +272,18 @@
     if (r.healed) {
       setStatus('Site healed — ready for another run', 'ok');
       pushTimelineLog({ type: 'heal', message: 'Site reset to clean state.' });
-      // Re-enable chaos buttons
       enableChaosButtons(true);
       document.querySelectorAll('.rt-chaos-btn').forEach(b => b.classList.remove('fired'));
-      $('rt-run').disabled = true;
-      setStep(2, 'active');
       hideFinalReport();
+      // Re-classify after heal
+      const cfg = await api('GET', '/realtime/config');
+      if (cfg && cfg.site_url) {
+        const data = await api('POST', '/realtime/connect', { site_url: cfg.site_url });
+        if (data.classification) {
+          state.classification = data.classification;
+          renderClassification(data.classification);
+        }
+      }
     } else {
       setStatus(`Heal failed — ${r.error}`, 'bad');
     }
@@ -174,17 +292,15 @@
   // ---- Run agent ------------------------------------------------------------
 
   async function onRunAgent() {
-    if (!state.connected || !state.activeScenario) return;
+    if (!state.connected) return;
     $('rt-run').disabled = true;
     $('rt-heal').disabled = true;
     state.seenEventIdx = 0;
     clearTimeline();
     hideFinalReport();
-    showTierBanner('ops', 'Tier 1 — runtime ops · trained policy is investigating');
-    const data = await api('POST', '/realtime/run-agent', {
-      scenario: state.activeScenario,
-      enable_tier2: true,
-    });
+    showTierBanner('ops', 'Tier 1 — runtime ops · Praetor is investigating');
+    // Don't pass scenario — let the server auto-classify
+    const data = await api('POST', '/realtime/run-agent', { enable_tier2: true });
     if (!data.run_id) {
       setStatus(`Could not start agent run — ${data.error || 'unknown'}`, 'bad');
       $('rt-run').disabled = false;
@@ -192,6 +308,12 @@
       return;
     }
     state.runId = data.run_id;
+    if (data.auto_classified) {
+      pushTimelineLog({
+        type: 'classify',
+        message: `Praetor classified the fault as "${(data.scenario || '').replace(/_/g, ' ')}" and is now acting on it.`,
+      });
+    }
     pollStatus();
   }
 
@@ -202,14 +324,9 @@
       const data = await api('GET', '/realtime/status/' + encodeURIComponent(state.runId));
       if (data.error) return;
       const events = data.events || [];
-      // Stream new events into the timeline
       while (state.seenEventIdx < events.length) {
         renderEvent(events[state.seenEventIdx]);
         state.seenEventIdx++;
-      }
-      // Tier banner switches when status changes
-      if (data.tier === 'tier2' || (data.tier2_report && !data.tier1_resolved)) {
-        // banner already pushed by escalate event
       }
       if (data.status && data.status !== 'running') {
         clearInterval(state.pollTimer);
@@ -219,9 +336,7 @@
     }, 700);
   }
 
-  function clearTimeline() {
-    $('rt-timeline').innerHTML = '';
-  }
+  function clearTimeline() { $('rt-timeline').innerHTML = ''; }
 
   function pushTimelineLog(payload) {
     const tl = $('rt-timeline');
@@ -240,10 +355,7 @@
 
   function renderEvent(ev) {
     if (ev.type === 'start') {
-      pushTimelineLog({
-        type: 'start',
-        message: `Agent started against ${ev.site_url} · scenario=${ev.scenario}`,
-      });
+      pushTimelineLog({ type: 'start', message: `Praetor started · ${ev.site_url} · scenario=${ev.scenario}` });
       return;
     }
     if (ev.type === 'step') {
@@ -272,7 +384,7 @@
       if (ev.resolved) {
         showTierBanner('resolved', '✓ Tier 1 brought the site back to healthy.');
       } else {
-        showTierBanner('escalate', '⚠ Tier 1 left the site degraded — preparing tier 2…');
+        showTierBanner('escalate', '⚠ Tier 1 left the site degraded — preparing tier 2 (code investigation)…');
       }
       return;
     }
@@ -283,24 +395,19 @@
     if (ev.type === 'tier2_done') {
       pushTimelineLog({
         type: 'tier2_done',
-        message: `Tier 2 complete · ${ev.n_findings || 0} candidate code locations`,
+        message: `Tier 2 complete · ${ev.n_findings || 0} candidate code locations identified`,
       });
       return;
     }
     if (ev.type === 'tier2_error') {
-      pushTimelineLog({
-        type: 'tier2_error',
-        message: 'Tier 2 escalation failed: ' + (ev.error || ''),
-      });
+      pushTimelineLog({ type: 'tier2_error', message: 'Tier 2 escalation failed: ' + (ev.error || '') });
       return;
     }
-    if (ev.type === 'inject' || ev.type === 'heal') {
-      pushTimelineLog(ev);
-      return;
+    if (ev.type === 'inject' || ev.type === 'heal' || ev.type === 'classify') {
+      pushTimelineLog(ev); return;
     }
     if (ev.type === 'error') {
-      pushTimelineLog({ type: 'error', message: ev.message || 'error' });
-      return;
+      pushTimelineLog({ type: 'error', message: ev.message || 'error' }); return;
     }
   }
 
@@ -319,27 +426,24 @@
   }
 
   function finalizeRun(data) {
-    setStep(3, 'done');
+    setStep(4, 'done');
     $('rt-heal').disabled = false;
+    $('rt-run').disabled = false;
     const card = $('rt-final-report');
     const body = $('rt-final-body');
     card.style.display = 'block';
-
     let html = '';
     if (data.tier1_resolved) {
       html += `<div class="obs-pill good" style="margin-bottom:10px">RESOLVED in tier 1</div>`;
-      html += `<p style="font-size:13px;color:var(--text-secondary);line-height:1.5">The trained agent's runtime ops actions brought the site back to healthy without needing code investigation. Site is now responding 200 on /ops/health.</p>`;
+      html += `<p style="font-size:13px;color:var(--text-secondary);line-height:1.5">Praetor's runtime ops actions brought the site back to healthy without needing code investigation. Site is now responding 200 on /ops/health.</p>`;
     } else if (data.tier2_report) {
       html += `<div class="obs-pill warn" style="margin-bottom:10px">ESCALATED — tier 1 ops did not fully heal</div>`;
       html += renderTier2Report(data.tier2_report);
     } else {
       html += `<div class="obs-pill bad" style="margin-bottom:10px">UNRESOLVED</div>`;
-      html += `<p style="font-size:13px;color:var(--text-secondary)">Tier 1 ops actions did not fully heal the site, and tier 2 was not enabled (no GitHub repo linked).</p>`;
+      html += `<p style="font-size:13px;color:var(--text-secondary)">Tier 1 ops actions did not fully heal the site, and tier 2 was not enabled (no codebase linked).</p>`;
     }
     body.innerHTML = html;
-
-    // Re-enable controls so the user can heal + try again
-    $('rt-run').disabled = false;
   }
 
   function renderTier2Report(report) {
@@ -352,7 +456,7 @@
     html += `<p style="font-size:13px;line-height:1.55;color:var(--text-secondary);margin-bottom:12px">${escapeHtml(report.summary || '')}</p>`;
     if (report.suggested_fix) {
       html += `<div style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:12px">
-        <div style="font-size:11px;color:var(--accent-orange);text-transform:uppercase;letter-spacing:.6px;font-weight:700;margin-bottom:4px">Suggested fix</div>
+        <div style="font-size:11px;color:var(--phase-accent);text-transform:uppercase;letter-spacing:.6px;font-weight:700;margin-bottom:4px">Suggested fix</div>
         <div style="font-size:13px;color:var(--text-primary);line-height:1.5">${escapeHtml(report.suggested_fix)}</div>
       </div>`;
     }
@@ -381,12 +485,17 @@
     document.querySelectorAll('.rt-chaos-btn').forEach(btn => {
       btn.addEventListener('click', () => onInject(btn.dataset.scenario, btn));
     });
+    wireCodebaseTabs();
     setStep(1, 'active');
-    // Pre-populate from /realtime/config if a previous session connected
     api('GET', '/realtime/config').then(cfg => {
       if (cfg && cfg.site_url) {
         $('rt-site-url').value = cfg.site_url;
         setStatus(`Previously connected: ${cfg.site_url}`, null);
+      }
+      if (cfg && cfg.repo_linked) {
+        state.codebaseLinked = true;
+        state.codebaseSource = cfg.repo_source;
+        setCbStatus(`Codebase linked (${cfg.repo_source})`, 'ok');
       }
     });
     if (window.Realtime) window.Realtime._inited = true;

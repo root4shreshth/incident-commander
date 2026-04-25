@@ -335,6 +335,44 @@ def observe_page():
 
 
 # ---------------------------------------------------------------------------
+# Auto-populate demo runs on first boot.
+#
+# When a fresh deploy comes up with no recorded runs, the Observatory dropdown
+# is empty and the home-page marquee shows zeros. To fix that, on startup we
+# check if the runs directory has any traces; if not, we generate a small
+# baseline (random_policy across the 3 scenario families × a few seeds) so the
+# dashboard is immediately useful. Runs in a daemon thread so we don't block
+# the server from accepting requests.
+# ---------------------------------------------------------------------------
+
+def _seed_demo_runs_if_empty() -> None:
+    try:
+        if RUNS_ROOT.exists():
+            for child in RUNS_ROOT.iterdir():
+                if child.is_dir():
+                    return  # already populated
+        else:
+            RUNS_ROOT.mkdir(parents=True, exist_ok=True)
+        from training.datasets import SYSTEM_PROMPT
+        from training.eval_runner import evaluate, random_policy
+        evaluate(
+            "demo-baseline",
+            random_policy(rng_seed=42),
+            families=["oom_crash", "db_pool_exhaustion", "bad_deployment_cascade"],
+            seeds=list(range(1, 11)),
+            system_prompt=SYSTEM_PROMPT,
+            runs_root=str(RUNS_ROOT),
+        )
+    except Exception as exc:  # pragma: no cover — never crash on this
+        print(f"[praetor] demo-runs seeding skipped: {exc}")
+
+
+@app.on_event("startup")
+def _startup_seed_demo_runs() -> None:
+    threading.Thread(target=_seed_demo_runs_if_empty, daemon=True).start()
+
+
+# ---------------------------------------------------------------------------
 # Phase 3 — Real-time / sim-to-real on a deployed site.
 #
 # State machine: connect → inject chaos → run agent → (if not healed) escalate.
@@ -347,10 +385,17 @@ _REALTIME_RUNS: Dict[str, Dict[str, Any]] = {}
 _REALTIME_LOCK = threading.Lock()
 _REALTIME_CONFIG: Dict[str, Any] = {
     "site_url": None,
-    "repo_url": None,
-    "repo_token": None,
+    # Tier 2 codebase config — one of three sources, mutually exclusive
+    "repo_url": None,           # github or azure-devops URL
+    "repo_token": None,         # PAT for either provider
+    "repo_source": None,        # "github" | "azure" | "zip" | None
+    "repo_local_path": None,    # populated when source="zip" — the extracted dir
     "service_names": ["frontend", "api", "postgres"],
 }
+
+# Where uploaded ZIPs are extracted. Cleaned up across server restarts.
+_CODEBASE_ROOT = Path(os.getenv("CODEBASE_ROOT", "uploaded_codebase")).resolve()
+_MAX_ZIP_BYTES = 25 * 1024 * 1024  # 25 MB — big enough for most codebases, small enough to be safe
 
 
 # Demo policy — replays a known-good action sequence per scenario family.
@@ -393,9 +438,20 @@ _DEMO_PLAYBOOK: Dict[str, List[Dict[str, Any]]] = {
 
 class RealtimeConnectRequest(BaseModel):
     site_url: str
+    # Tier-2 codebase wiring is OPTIONAL on connect. The dedicated
+    # /realtime/codebase endpoint is the canonical path; this is just a
+    # convenience for "I have a github URL ready when I connect."
     repo_url: Optional[str] = None
     repo_token: Optional[str] = None
+    repo_source: Optional[str] = None  # "github" | "azure"
     service_names: Optional[List[str]] = None
+
+
+class CodebaseLinkRequest(BaseModel):
+    """Link a remote git repo (GitHub or Azure DevOps) for tier-2."""
+    source: str  # "github" | "azure"
+    repo_url: str
+    repo_token: Optional[str] = None
 
 
 class RealtimeInjectRequest(BaseModel):
@@ -403,19 +459,23 @@ class RealtimeInjectRequest(BaseModel):
 
 
 class RealtimeRunRequest(BaseModel):
-    scenario: str
+    # If omitted, Praetor will classify the fault from the connected site's
+    # current state (auto-detect). The UI normally lets that happen.
+    scenario: Optional[str] = None
     # If true, attempt the tier-2 code escalation when tier 1 doesn't fully heal.
     enable_tier2: bool = True
 
 
 @app.post("/realtime/connect")
 def realtime_connect(req: RealtimeConnectRequest) -> Dict[str, Any]:
-    """Validate that a deployed site implements the operator contract."""
+    """Validate that a deployed site implements the operator contract,
+    AND auto-classify the current fault (if any). Praetor doesn't ask the
+    user what's wrong — it figures it out from the site's metrics and
+    health response. The user just hits "Run agent."""
     backend = WebsiteBackend(
         site_url=req.site_url,
         service_names=req.service_names or _REALTIME_CONFIG["service_names"],
     )
-    # Probe /ops/health
     if not backend.site_url:
         return {"connected": False, "error": "site_url is required"}
     health = _site_http("GET", backend.site_url + "/ops/health", timeout=6.0)
@@ -429,16 +489,138 @@ def realtime_connect(req: RealtimeConnectRequest) -> Dict[str, Any]:
     discovered = [s.get("name") for s in services_arr if isinstance(s, dict) and s.get("name")]
     with _REALTIME_LOCK:
         _REALTIME_CONFIG["site_url"] = backend.site_url
-        _REALTIME_CONFIG["repo_url"] = req.repo_url
-        _REALTIME_CONFIG["repo_token"] = req.repo_token
+        if req.repo_url:
+            _REALTIME_CONFIG["repo_url"] = req.repo_url
+            _REALTIME_CONFIG["repo_token"] = req.repo_token
+            _REALTIME_CONFIG["repo_source"] = req.repo_source or "github"
+            _REALTIME_CONFIG["repo_local_path"] = None
         if discovered:
             _REALTIME_CONFIG["service_names"] = discovered
+
+    # ---- Auto-classify fault from current site state ----
+    classification = _classify_current_fault(
+        backend.site_url, discovered or _REALTIME_CONFIG["service_names"], body,
+    )
+
     return {
         "connected": True,
         "site_url": backend.site_url,
         "status": body.get("status"),
         "services_discovered": discovered,
         "repo_linked": bool(req.repo_url),
+        "classification": classification,
+    }
+
+
+def _classify_current_fault(
+    site_url: str, service_names: List[str], health_body: Dict[str, Any]
+) -> Dict[str, Any]:
+    """Probe /ops/metrics for each service and infer the fault category.
+
+    Returns a structured dict the UI can render directly:
+      {
+        "fault_detected": True/False,
+        "scenario": "oom_crash" | "db_pool_exhaustion" | "bad_deployment_cascade" | None,
+        "confidence": 0.0..1.0,
+        "evidence": ["api memory at 96% of limit", ...],
+        "narrative": "Detected OOM-like state on api ..."
+      }
+    """
+    evidence: List[str] = []
+    scenario: Optional[str] = None
+    confidence = 0.0
+
+    # Look at /ops/health first — it sometimes reports the verdict directly
+    overall_status = (health_body.get("status") or "").lower()
+    services_arr = health_body.get("services") or []
+    degraded = [
+        s for s in services_arr
+        if isinstance(s, dict) and (s.get("health") or s.get("status") or "").lower() not in ("healthy", "ok", "")
+    ]
+    if degraded:
+        for d in degraded:
+            evidence.append(f"{d.get('name')} health = {d.get('health') or d.get('status')}")
+
+    # Probe metrics for each service
+    metrics_per_svc: Dict[str, Dict[str, Any]] = {}
+    for svc in service_names[:5]:  # cap for latency
+        m = _site_http(
+            "GET", site_url + "/ops/metrics?service=" + svc, timeout=4.0,
+        )
+        if m.ok and isinstance(m.body, dict):
+            metrics_per_svc[svc] = m.body
+
+    # Heuristic: high memory util on any service → OOM
+    for svc, m in metrics_per_svc.items():
+        try:
+            mem = float(m.get("memory_mb", 0) or 0)
+            limit = float(m.get("memory_limit_mb", 0) or 0)
+            if limit > 0 and (mem / limit) > 0.85:
+                evidence.append(f"{svc} memory at {int(100*mem/limit)}% of {int(limit)}MB limit")
+                if scenario is None or scenario == "oom_crash":
+                    scenario = "oom_crash"
+                    confidence = max(confidence, min(1.0, (mem / limit - 0.6) / 0.4))
+        except (TypeError, ValueError):
+            pass
+        # High active connections OR error rate on a db-ish service → pool exhaustion
+        try:
+            conn = int(m.get("active_connections", 0) or 0)
+            if conn >= 18 and "postgres" in svc.lower():
+                evidence.append(f"{svc} at {conn} active connections (pool likely exhausted)")
+                scenario = scenario or "db_pool_exhaustion"
+                confidence = max(confidence, 0.7)
+        except (TypeError, ValueError):
+            pass
+        try:
+            err = float(m.get("error_rate_percent", 0) or 0)
+            if err > 30:
+                evidence.append(f"{svc} error rate at {err:.0f}% — sustained 5xx")
+                if scenario is None:
+                    scenario = "bad_deployment_cascade"
+                    confidence = max(confidence, 0.5)
+        except (TypeError, ValueError):
+            pass
+
+    # Look at logs for telltale strings (cheap heuristic)
+    if scenario is None and overall_status in ("degraded", "down"):
+        for svc in service_names[:3]:
+            r = _site_http(
+                "GET", site_url + "/ops/logs?service=" + svc + "&lines=20", timeout=4.0,
+            )
+            if not r.ok or not isinstance(r.body, dict):
+                continue
+            text = " ".join(map(str, (r.body.get("logs") or [])))[:4000].lower()
+            if "outofmemory" in text or "oom" in text or "memory" in text:
+                scenario = "oom_crash"; confidence = 0.65
+                evidence.append(f"{svc} logs mention OOM / memory")
+                break
+            if "pool" in text and "connection" in text:
+                scenario = "db_pool_exhaustion"; confidence = 0.65
+                evidence.append(f"{svc} logs mention connection pool")
+                break
+            if "version" in text and ("rollout" in text or "v1.1" in text or "deploy" in text):
+                scenario = "bad_deployment_cascade"; confidence = 0.55
+                evidence.append(f"{svc} logs mention deployment / version")
+                break
+
+    fault_detected = scenario is not None or overall_status in ("degraded", "down")
+    if not fault_detected:
+        narrative = "Site is healthy. Praetor has nothing to fix yet — connect with a fault, or use the test-fault buttons below to simulate one."
+    else:
+        sname = {
+            "oom_crash": "OOM (out-of-memory)",
+            "db_pool_exhaustion": "DB connection pool exhaustion",
+            "bad_deployment_cascade": "Bad deployment cascade",
+        }.get(scenario or "", "unknown")
+        narrative = f"Praetor classified the fault as **{sname}** based on " + ("; ".join(evidence) or "the site's reported status") + "."
+
+    return {
+        "fault_detected": fault_detected,
+        "scenario": scenario,
+        "confidence": round(confidence, 2),
+        "evidence": evidence,
+        "narrative": narrative,
+        "site_overall_status": overall_status,
     }
 
 
@@ -466,22 +648,144 @@ def realtime_heal() -> Dict[str, Any]:
     return {"healed": r.ok, "error": (None if r.ok else (r.error or f"HTTP {r.status}"))}
 
 
+@app.post("/realtime/codebase/link")
+def realtime_codebase_link(req: CodebaseLinkRequest) -> Dict[str, Any]:
+    """Link a remote git repo (GitHub or Azure DevOps) for tier-2 escalation."""
+    src = (req.source or "").lower().strip()
+    if src not in ("github", "azure"):
+        return {"linked": False, "error": "source must be 'github' or 'azure'"}
+    url = (req.repo_url or "").strip()
+    if not url:
+        return {"linked": False, "error": "repo_url is required"}
+    # Light validation — we don't actually clone here. Tier-2 clones lazily.
+    if src == "github" and "github.com" not in url.lower():
+        return {"linked": False, "error": "GitHub source expects a github.com URL"}
+    if src == "azure" and "dev.azure.com" not in url.lower() and "visualstudio.com" not in url.lower():
+        return {"linked": False, "error": "Azure source expects a dev.azure.com URL"}
+    with _REALTIME_LOCK:
+        _REALTIME_CONFIG["repo_url"] = url
+        _REALTIME_CONFIG["repo_token"] = req.repo_token
+        _REALTIME_CONFIG["repo_source"] = src
+        _REALTIME_CONFIG["repo_local_path"] = None
+    return {"linked": True, "source": src, "repo_url": url}
+
+
+@app.post("/realtime/codebase/upload")
+async def realtime_codebase_upload(file_b64: str = "", filename: str = "codebase.zip") -> Dict[str, Any]:
+    """Accept a base64-encoded ZIP. The browser sends the file via multipart;
+    FastAPI's UploadFile handles binary cleanly. We use base64 in JSON for
+    simplicity here, but we also expose a multipart variant below."""
+    return {"linked": False, "error": "use POST /realtime/codebase/upload-multipart for ZIP uploads"}
+
+
+from fastapi import File, UploadFile  # placed here to keep the import local to this section
+
+
+@app.post("/realtime/codebase/upload-multipart")
+async def realtime_codebase_upload_multipart(file: UploadFile = File(...)) -> Dict[str, Any]:
+    """Accept a ZIP file upload, extract it to CODEBASE_ROOT/<id>, register
+    it as the tier-2 codebase source. Size-capped, path-traversal-checked."""
+    import io
+    import shutil
+    import zipfile
+
+    if not file.filename or not file.filename.lower().endswith(".zip"):
+        return {"linked": False, "error": "expected a .zip file"}
+    contents = await file.read()
+    if len(contents) > _MAX_ZIP_BYTES:
+        return {"linked": False, "error": f"file too large ({len(contents)} > {_MAX_ZIP_BYTES})"}
+    _CODEBASE_ROOT.mkdir(parents=True, exist_ok=True)
+    extract_id = uuid.uuid4().hex[:8]
+    dest = _CODEBASE_ROOT / extract_id
+    dest.mkdir()
+    try:
+        with zipfile.ZipFile(io.BytesIO(contents)) as zf:
+            # Path-traversal defense — reject any member whose resolved path escapes dest
+            for member in zf.namelist():
+                norm = os.path.normpath(member).replace("\\", "/")
+                if norm.startswith("/") or norm.startswith(".."):
+                    raise ValueError(f"unsafe path in zip: {member}")
+                if ".." in norm.split("/"):
+                    raise ValueError(f"unsafe path in zip: {member}")
+            zf.extractall(dest)
+    except (zipfile.BadZipFile, ValueError) as exc:
+        shutil.rmtree(dest, ignore_errors=True)
+        return {"linked": False, "error": f"invalid zip: {exc}"}
+    # If the zip has a single top-level dir, descend into it
+    children = [c for c in dest.iterdir() if c.is_dir()]
+    if len(children) == 1 and not any(c.is_file() for c in dest.iterdir()):
+        actual_root = children[0]
+    else:
+        actual_root = dest
+    with _REALTIME_LOCK:
+        # Cleanup previous upload
+        prev = _REALTIME_CONFIG.get("repo_local_path")
+        if prev and prev != str(actual_root):
+            try:
+                pp = Path(prev)
+                if pp.exists() and _CODEBASE_ROOT in pp.parents:
+                    shutil.rmtree(pp, ignore_errors=True)
+            except Exception:
+                pass
+        _REALTIME_CONFIG["repo_url"] = f"zip://{file.filename}"
+        _REALTIME_CONFIG["repo_token"] = None
+        _REALTIME_CONFIG["repo_source"] = "zip"
+        _REALTIME_CONFIG["repo_local_path"] = str(actual_root)
+    return {
+        "linked": True,
+        "source": "zip",
+        "filename": file.filename,
+        "size_bytes": len(contents),
+        "path": str(actual_root),
+    }
+
+
+@app.post("/realtime/codebase/clear")
+def realtime_codebase_clear() -> Dict[str, Any]:
+    """Forget any linked / uploaded codebase."""
+    import shutil
+    with _REALTIME_LOCK:
+        prev = _REALTIME_CONFIG.get("repo_local_path")
+        _REALTIME_CONFIG["repo_url"] = None
+        _REALTIME_CONFIG["repo_token"] = None
+        _REALTIME_CONFIG["repo_source"] = None
+        _REALTIME_CONFIG["repo_local_path"] = None
+    if prev:
+        try:
+            pp = Path(prev)
+            if pp.exists() and _CODEBASE_ROOT in pp.parents:
+                shutil.rmtree(pp, ignore_errors=True)
+        except Exception:
+            pass
+    return {"cleared": True}
+
+
 @app.post("/realtime/run-agent")
 def realtime_run_agent(req: RealtimeRunRequest) -> Dict[str, Any]:
-    """Kick off the trained agent against the connected site.
+    """Kick off Praetor against the connected site.
 
-    Runs in a background thread; the UI polls /realtime/status/<run_id> for
-    streaming events.
+    Runs in a background thread; the UI polls /realtime/status/<run_id>
+    for streaming events. If `scenario` is omitted, Praetor classifies the
+    fault from the site's current state.
     """
     site_url = _REALTIME_CONFIG.get("site_url")
     if not site_url:
         return {"error": "no site connected", "run_id": None}
-    if req.scenario not in _DEMO_PLAYBOOK:
-        return {"error": f"unknown scenario: {req.scenario}", "run_id": None}
+
+    # Auto-detect scenario if not explicitly passed
+    scenario = req.scenario
+    if not scenario:
+        cls = _classify_current_fault(
+            site_url, _REALTIME_CONFIG.get("service_names", []), {},
+        )
+        scenario = cls.get("scenario") or "oom_crash"  # safe default
+    if scenario not in _DEMO_PLAYBOOK:
+        return {"error": f"unknown scenario: {scenario}", "run_id": None}
     run_id = "rt-" + uuid.uuid4().hex[:10]
     record: Dict[str, Any] = {
         "run_id": run_id,
-        "scenario": req.scenario,
+        "scenario": scenario,
+        "auto_classified": req.scenario is None,
         "site_url": site_url,
         "status": "running",
         "tier": "tier1",
@@ -495,10 +799,10 @@ def realtime_run_agent(req: RealtimeRunRequest) -> Dict[str, Any]:
         _REALTIME_RUNS[run_id] = record
     threading.Thread(
         target=_realtime_run_worker,
-        args=(run_id, req.scenario, req.enable_tier2),
+        args=(run_id, scenario, req.enable_tier2),
         daemon=True,
     ).start()
-    return {"run_id": run_id, "scenario": req.scenario}
+    return {"run_id": run_id, "scenario": scenario, "auto_classified": req.scenario is None}
 
 
 @app.get("/realtime/status/{run_id}")
@@ -514,10 +818,12 @@ def realtime_status(run_id: str) -> Dict[str, Any]:
 
 @app.get("/realtime/config")
 def realtime_config() -> Dict[str, Any]:
-    """Inspect the current real-time configuration (site URL, repo, etc.)."""
+    """Inspect the current real-time configuration (site URL, codebase source, etc.)."""
     return {
         "site_url": _REALTIME_CONFIG.get("site_url"),
-        "repo_linked": bool(_REALTIME_CONFIG.get("repo_url")),
+        "repo_linked": bool(_REALTIME_CONFIG.get("repo_url") or _REALTIME_CONFIG.get("repo_local_path")),
+        "repo_source": _REALTIME_CONFIG.get("repo_source"),
+        "repo_url_display": _REALTIME_CONFIG.get("repo_url"),
         "service_names": _REALTIME_CONFIG.get("service_names"),
     }
 
@@ -622,28 +928,40 @@ def _realtime_run_worker(run_id: str, scenario: str, enable_tier2: bool) -> None
     })
 
     repo_url = _REALTIME_CONFIG.get("repo_url")
-    if not enable_tier2 or not repo_url:
+    repo_local = _REALTIME_CONFIG.get("repo_local_path")
+    repo_source = _REALTIME_CONFIG.get("repo_source")
+    if not enable_tier2 or not (repo_url or repo_local):
         with _REALTIME_LOCK:
             _REALTIME_RUNS[run_id]["status"] = "unresolved_no_tier2"
             _REALTIME_RUNS[run_id]["finished_at"] = time.time()
         return
 
     # ---- TIER 2: code escalation ------------------------------------------
+    if repo_source == "zip":
+        msg = f"Escalating to code investigation: scanning uploaded codebase…"
+    elif repo_source == "azure":
+        msg = "Escalating to code investigation: cloning Azure DevOps repo…"
+    else:
+        msg = "Escalating to code investigation: cloning GitHub repo…"
     _realtime_append(run_id, {
         "type": "escalate",
         "tier": "tier2",
-        "message": "Escalating to code investigation: cloning repo and grepping for matches…",
+        "message": msg,
     })
     try:
+        from pathlib import Path as _P
         from training.code_investigator import investigate
         target_service = _infer_target_service(scenario)
-        report = investigate(
-            repo_url=repo_url,
-            scenario=scenario,
-            target_service=target_service,
-            repo_token=_REALTIME_CONFIG.get("repo_token"),
-            llm_call=None,  # Phase 1: rule-based summary; Phase 2 wires real LLM
-        )
+        kwargs: Dict[str, Any] = {
+            "repo_url": repo_url or f"local://{repo_local}",
+            "scenario": scenario,
+            "target_service": target_service,
+            "repo_token": _REALTIME_CONFIG.get("repo_token"),
+            "llm_call": None,
+        }
+        if repo_source == "zip" and repo_local:
+            kwargs["cloned_root"] = _P(repo_local)
+        report = investigate(**kwargs)
         with _REALTIME_LOCK:
             _REALTIME_RUNS[run_id]["tier2_report"] = report.to_dict()
         _realtime_append(run_id, {
