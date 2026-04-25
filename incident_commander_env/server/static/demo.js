@@ -247,7 +247,17 @@
     const grid = $('#scenario-grid');
     if (!grid) return;
     grid.innerHTML = '';
-    const order = ['oom_crash', 'db_pool_exhaustion', 'bad_deployment_cascade'];
+    // Curriculum order — easier scenarios first, each unlocking the next.
+    // The /tasks endpoint may return more than this list (server-side experimental
+    // scenarios); we only render scenarios we know how to caption nicely.
+    const order = [
+      'oom_crash',                  // unlocked by default
+      'cert_expiry',                // prereq: oom_crash
+      'disk_full',                  // prereq: oom_crash
+      'db_pool_exhaustion',         // prereq: oom_crash
+      'slow_query',                 // prereq: db_pool_exhaustion
+      'bad_deployment_cascade',     // prereq: db_pool_exhaustion
+    ];
     order.forEach(tid => {
       const t = state.tasks[tid];
       if (!t) return;
@@ -288,6 +298,9 @@
       oom_crash: 'OOM Crash',
       db_pool_exhaustion: 'DB Pool Exhaustion',
       bad_deployment_cascade: 'Bad Deployment Cascade',
+      disk_full: 'Disk Full',
+      slow_query: 'Slow Query / Lock Contention',
+      cert_expiry: 'TLS Certificate Expired',
     }[tid]) || tid;
   }
 
