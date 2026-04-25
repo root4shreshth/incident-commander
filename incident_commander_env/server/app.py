@@ -12,7 +12,7 @@ import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -28,6 +28,13 @@ from incident_commander_env.server.coach import (
     build_postmortem,
     compute_hint,
     explain_observation,
+)
+from incident_commander_env.server.incidents import (
+    classify_scenario,
+    normalize_generic,
+    normalize_pagerduty,
+    normalize_prometheus,
+    webhook_token_check,
 )
 
 STATIC_DIR = Path(__file__).parent / "static"
@@ -996,6 +1003,429 @@ def realtime_config() -> Dict[str, Any]:
         "repo_source": _REALTIME_CONFIG.get("repo_source"),
         "repo_url_display": _REALTIME_CONFIG.get("repo_url"),
         "service_names": _REALTIME_CONFIG.get("service_names"),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Phase 2 — Webhook ingestion. Closes the "continuously monitors a fleet for
+# new incidents" gap from the roadmap. PagerDuty, Prometheus, and a minimal
+# generic contract all converge to the same `/realtime/run-agent` background
+# worker — the dispatcher just classifies the alert and kicks it off.
+# ---------------------------------------------------------------------------
+
+
+def _kickoff_webhook_run(
+    signal: Dict[str, Any], scenario: str, scenario_evidence: List[str],
+) -> Dict[str, Any]:
+    """Spin up an autonomous run from a webhook signal.
+
+    If a real-time site is configured (/realtime/connect was called), the
+    agent runs against that site. Otherwise it runs against the simulator,
+    which is the right default for staging-environment webhook testing.
+    """
+    site_url = _REALTIME_CONFIG.get("site_url")
+    run_id = "wh-" + uuid.uuid4().hex[:10]
+    record: Dict[str, Any] = {
+        "run_id": run_id,
+        "scenario": scenario,
+        "auto_classified": True,
+        "site_url": site_url,
+        "trigger": "webhook",
+        "provider": signal.get("provider"),
+        "alert_title": signal.get("title"),
+        "alert_summary": signal.get("summary"),
+        "scenario_evidence": scenario_evidence,
+        "severity": signal.get("severity"),
+        "status": "running",
+        "tier": "tier1",
+        "events": [],
+        "started_at": time.time(),
+        "finished_at": None,
+        "tier1_resolved": None,
+        "tier2_report": None,
+    }
+    with _REALTIME_LOCK:
+        _REALTIME_RUNS[run_id] = record
+    if site_url:
+        threading.Thread(
+            target=_realtime_run_worker,
+            args=(run_id, scenario, True),
+            daemon=True,
+        ).start()
+    else:
+        # Sim-only fallback: run in-process against a simulator backend.
+        threading.Thread(
+            target=_webhook_sim_worker, args=(run_id, scenario), daemon=True,
+        ).start()
+    return {"run_id": run_id, "scenario": scenario}
+
+
+def _webhook_sim_worker(run_id: str, scenario: str) -> None:
+    """When no real site is connected, run the autonomous loop against the
+    simulator. Same trace shape as a real-time run so the dashboard can
+    replay it identically."""
+    try:
+        from training.episode_logger import EpisodeLogger
+        env_local = IncidentCommanderEnv()
+        env_local.reset(task_id=scenario, seed=int(time.time()) % 10000)
+        log = EpisodeLogger.for_run(str(RUNS_ROOT), scenario)
+        log.__enter__()
+        log.start({
+            "task_id": scenario, "seed": env_local.state.episode_id,
+            "model": "webhook-baseline", "trigger": "webhook",
+            "alert": env_local.state.task_id,
+            "max_steps": env_local.state.max_steps,
+        })
+        _realtime_append(run_id, {
+            "type": "start", "tier": "tier1",
+            "scenario": scenario, "site_url": None, "substrate": "simulator",
+        })
+        # Replay the demo playbook against the sim.
+        playbook = _DEMO_PLAYBOOK.get(scenario, [])
+        # Translate website service names back to sim service names. For OOM
+        # ("api" → "payment-service") we just default to whatever the scenario
+        # injected as the target.
+        sim_target = getattr(env_local._scenario, "target_service", None)
+        steps_used = 0
+        for i, step_def in enumerate(playbook, start=1):
+            target = step_def.get("target_service")
+            if target == "api" and sim_target:
+                target = sim_target
+            if target == "postgres":
+                target = "postgres-db"
+            action = IncidentAction(
+                action_type=step_def["action_type"],
+                target_service=target,
+                parameters=step_def.get("parameters") or {},
+            )
+            obs = env_local.step(action)
+            steps_used = env_local.state.step_count
+            _realtime_append(run_id, {
+                "type": "step", "step": i, "tier": "tier1",
+                "action": {
+                    "action_type": action.action_type,
+                    "target_service": action.target_service,
+                    "parameters": action.parameters,
+                },
+                "message": obs.message, "error": obs.error, "done": obs.done,
+            })
+            log.step(steps_used, action, obs)
+            if obs.done:
+                break
+        resolved = bool(env_local.state.incident_resolved)
+        with _REALTIME_LOCK:
+            r = _REALTIME_RUNS.get(run_id, {})
+            r["tier1_resolved"] = resolved
+            r["status"] = "resolved" if resolved else "unresolved_no_tier2"
+            r["finished_at"] = time.time()
+        _realtime_append(run_id, {
+            "type": "tier1_done", "resolved": resolved,
+            "message": ("Resolved on simulator." if resolved
+                        else "Unresolved on simulator after demo playbook."),
+        })
+        log.end({
+            "resolved": resolved,
+            "score": float(env_local.state.current_score or 0.0),
+            "steps_used": steps_used,
+        })
+        log.close()
+    except Exception as exc:  # pragma: no cover — defensive
+        _realtime_append(run_id, {"type": "error", "message": f"{type(exc).__name__}: {exc}"})
+        with _REALTIME_LOCK:
+            _REALTIME_RUNS[run_id]["status"] = "error"
+            _REALTIME_RUNS[run_id]["finished_at"] = time.time()
+
+
+@app.post("/incidents/webhook/pagerduty")
+async def webhook_pagerduty(request: Request) -> Dict[str, Any]:
+    return await _handle_webhook(request, normalize_pagerduty, "pagerduty")
+
+
+@app.post("/incidents/webhook/prometheus")
+async def webhook_prometheus(request: Request) -> Dict[str, Any]:
+    return await _handle_webhook(request, normalize_prometheus, "prometheus")
+
+
+@app.post("/incidents/webhook/generic")
+async def webhook_generic(request: Request) -> Dict[str, Any]:
+    return await _handle_webhook(request, normalize_generic, "generic")
+
+
+async def _handle_webhook(request, normalizer, provider_name: str) -> Dict[str, Any]:
+    token = request.headers.get("X-Praetor-Token")
+    ok, why = webhook_token_check(token)
+    if not ok:
+        return {"accepted": False, "error": why}
+
+    try:
+        payload = await request.json()
+    except Exception as exc:
+        return {"accepted": False, "error": f"invalid JSON: {exc}"}
+
+    try:
+        signal = normalizer(payload)
+    except Exception as exc:
+        return {"accepted": False, "error": f"failed to normalize {provider_name} payload: {exc}"}
+
+    scenario, confidence, evidence = classify_scenario(signal)
+    if scenario is None:
+        return {
+            "accepted": False,
+            "error": "could not classify alert into a known scenario family",
+            "signal": {
+                "title": signal.get("title"),
+                "summary": signal.get("summary"),
+            },
+        }
+
+    response = _kickoff_webhook_run(signal, scenario, evidence)
+    response["accepted"] = True
+    response["classification"] = {
+        "scenario": scenario,
+        "confidence": confidence,
+        "evidence": evidence,
+    }
+    response["alert"] = {
+        "title": signal.get("title"),
+        "service": signal.get("service"),
+        "severity": signal.get("severity"),
+    }
+    response["substrate"] = "real" if _REALTIME_CONFIG.get("site_url") else "simulator"
+    if not os.environ.get("PRAETOR_WEBHOOK_TOKEN"):
+        response["warning"] = (
+            "PRAETOR_WEBHOOK_TOKEN env var is unset — webhook is in demo mode "
+            "and accepts all requests. Set the token before pointing real "
+            "alerts at this endpoint."
+        )
+    return response
+
+
+# ---------------------------------------------------------------------------
+# Phase 2 — Sandboxed shell action endpoint.
+# Lets a client (or the UI) exercise the agent's diagnostic shell with
+# the 20-command allowlist. Useful for debugging + showing judges that
+# Praetor has a safe escape hatch beyond the typed action vocabulary.
+# ---------------------------------------------------------------------------
+
+
+class ShellRequest(BaseModel):
+    command: str
+    cwd: Optional[str] = None  # only used if it points inside RUNS_ROOT or CODEBASE_ROOT
+
+
+@app.get("/shell/allowlist")
+def shell_allowlist() -> Dict[str, Any]:
+    """Return the 20-command sandboxed-shell allowlist."""
+    from incident_commander_env.server.actions.sandboxed_shell import list_allowed
+    return {"commands": list_allowed(), "max_output_bytes": 8192, "timeout_seconds": 10}
+
+
+@app.post("/shell/run")
+def shell_run(req: ShellRequest) -> Dict[str, Any]:
+    """Execute a single allowlisted command. Read-mostly probe surface."""
+    from incident_commander_env.server.actions.sandboxed_shell import run_shell
+    cwd_path: Optional[Path] = None
+    if req.cwd:
+        try:
+            cwd_path = Path(req.cwd).resolve()
+            # Restrict to runs/ or uploaded_codebase/ for safety
+            ok = (
+                cwd_path.is_relative_to(RUNS_ROOT)
+                or cwd_path.is_relative_to(_CODEBASE_ROOT)
+            )
+            if not ok:
+                return {
+                    "ok": False,
+                    "error": f"cwd must be inside {RUNS_ROOT} or {_CODEBASE_ROOT}",
+                }
+        except Exception as exc:
+            return {"ok": False, "error": f"invalid cwd: {exc}"}
+    result = run_shell(req.command, cwd=cwd_path)
+    # Convert the dataclass to a plain dict
+    return {
+        "ok": result.ok,
+        "command": result.command,
+        "stdout": result.stdout,
+        "stderr": result.stderr,
+        "returncode": result.returncode,
+        "elapsed_s": result.elapsed_s,
+        "error": result.error,
+        "truncated": result.truncated,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Phase 2 — Postmortem endpoint. Returns the auto-generated postmortem.md
+# for a run id (sim or real-time). Lets the dashboard render it.
+# ---------------------------------------------------------------------------
+
+
+@app.get("/runs/{run_id}/postmortem")
+def get_postmortem(run_id: str) -> Dict[str, Any]:
+    safe = run_id.replace("..", "").replace("/", "").replace("\\", "")
+    target = RUNS_ROOT / safe
+    if not target.exists():
+        return {"error": f"unknown run_id: {safe}"}
+    pm_path = target / "postmortem.md"
+    # Lazy-generate if missing — useful for older runs that pre-date the writer.
+    if not pm_path.exists():
+        ep = target / "episode.jsonl"
+        if not ep.exists():
+            return {"error": "no episode trace for this run"}
+        try:
+            from training.postmortem_writer import write_postmortem
+            write_postmortem(ep, runbook_path=RUNS_ROOT / "RUNBOOK.md")
+        except Exception as exc:
+            return {"error": f"failed to generate postmortem: {exc}"}
+    return {
+        "run_id": safe,
+        "markdown": pm_path.read_text(encoding="utf-8"),
+        "path": str(pm_path),
+    }
+
+
+@app.get("/runbook")
+def get_runbook() -> Dict[str, Any]:
+    """Return the project-level runbook (incident ledger)."""
+    rb = RUNS_ROOT / "RUNBOOK.md"
+    if not rb.exists():
+        return {"markdown": "# Praetor Runbook\n\n(empty — run an incident to populate)\n"}
+    return {"markdown": rb.read_text(encoding="utf-8"), "path": str(rb)}
+
+
+# ---------------------------------------------------------------------------
+# Phase 2 — Tier-2 patch / test / PR endpoints. Wraps code_investigator's
+# new propose_patch / apply_patch / run_tests / open_pull_request fns.
+# ---------------------------------------------------------------------------
+
+
+class CodeProposeRequest(BaseModel):
+    scenario: str
+    target_service: Optional[str] = None
+    enable_pr_open: bool = False
+    base_branch: str = "main"
+    pr_title_prefix: str = "Praetor auto-fix"
+
+
+@app.post("/codebase/propose-and-test")
+def codebase_propose_and_test(req: CodeProposeRequest) -> Dict[str, Any]:
+    """Run the full tier-2 chain: investigate → propose_patch → apply_patch
+    → run_tests → optionally open_pull_request. Returns a structured report
+    the dashboard can render."""
+    repo_url = _REALTIME_CONFIG.get("repo_url")
+    repo_local = _REALTIME_CONFIG.get("repo_local_path")
+    repo_token = _REALTIME_CONFIG.get("repo_token")
+    repo_source = _REALTIME_CONFIG.get("repo_source")
+    if not (repo_url or repo_local):
+        return {"error": "no codebase linked — link via /realtime/codebase/link or upload a ZIP"}
+    from training.code_investigator import (
+        apply_patch, investigate, open_pull_request, propose_patch, run_tests, _clone_repo,
+    )
+    # Clone (or reuse uploaded path)
+    if repo_source == "zip" and repo_local:
+        cloned = Path(repo_local)
+        own_clone = False
+    else:
+        cloned = _clone_repo(repo_url, repo_token)
+        own_clone = True
+        if cloned is None:
+            return {"error": "git clone failed"}
+    try:
+        report = investigate(
+            repo_url=repo_url or f"local://{repo_local}",
+            scenario=req.scenario,
+            target_service=req.target_service,
+            repo_token=repo_token,
+            cloned_root=cloned,
+        )
+        if report.error:
+            return {"investigate_error": report.error}
+        patch = propose_patch(report)
+        if patch is None:
+            return {
+                "investigation": report.to_dict(),
+                "patch": None,
+                "message": "Investigation surfaced findings but no auto-patch template matched.",
+            }
+        applied = apply_patch(cloned, patch)
+        if not applied:
+            return {
+                "investigation": report.to_dict(),
+                "patch": {"file_path": patch.file_path, "line_no": patch.line_no, "diff": patch.diff},
+                "applied": False,
+                "error": "could not apply the proposed patch (file may have changed)",
+            }
+        tests = run_tests(cloned)
+        out: Dict[str, Any] = {
+            "investigation": report.to_dict(),
+            "patch": {
+                "file_path": patch.file_path, "line_no": patch.line_no,
+                "diff": patch.diff, "rationale": patch.rationale,
+                "confidence": patch.confidence,
+            },
+            "applied": True,
+            "tests": {
+                "framework": tests.framework, "passed": tests.passed,
+                "n_tests": tests.n_tests, "n_failed": tests.n_failed,
+                "duration_s": tests.duration_s,
+                "stdout_tail": tests.stdout_tail[-1500:],
+                "stderr_tail": tests.stderr_tail[-1500:],
+                "error": tests.error,
+            },
+        }
+        if repo_url and "github.com" in repo_url.lower():
+            pr_title = f"{req.pr_title_prefix}: {req.scenario} on {req.target_service or 'cluster'}"
+            pr_body = (
+                f"Praetor (autonomous SRE commander) ran tier-1 ops on this "
+                f"incident, the runtime fix didn't fully heal, and tier-2 "
+                f"escalation surfaced this candidate fix.\n\n"
+                f"**Scenario:** `{req.scenario}`\n"
+                f"**File:** `{patch.file_path}:{patch.line_no}`\n"
+                f"**Confidence:** {patch.confidence:.2f}\n\n"
+                f"### Rationale\n\n{patch.rationale}\n\n"
+                f"### Tests after applying\n\n"
+                f"`{tests.framework}` reports {tests.n_tests} tests, "
+                f"{tests.n_failed} failed, "
+                f"verdict: {'PASS' if tests.passed else 'FAIL'}.\n\n"
+                f"---\nThis PR was opened automatically. Review carefully "
+                f"before merging."
+            )
+            pr_result = open_pull_request(
+                repo_root=cloned, repo_url=repo_url,
+                branch="praetor/auto-fix", title=pr_title, body=pr_body,
+                token=repo_token, enable_pr_open=req.enable_pr_open,
+                base_branch=req.base_branch,
+            )
+            out["pr"] = {
+                "opened": pr_result.opened, "dry_run": pr_result.dry_run,
+                "branch": pr_result.branch, "pr_url": pr_result.pr_url,
+                "error": pr_result.error,
+            }
+        return out
+    finally:
+        if own_clone and cloned:
+            try:
+                from training.code_investigator import cleanup_repo
+                cleanup_repo(cloned)
+            except Exception:
+                pass
+
+
+@app.get("/incidents/webhooks")
+def list_webhooks() -> Dict[str, Any]:
+    """Show the configured webhook endpoints + token status."""
+    base = "/incidents/webhook"
+    return {
+        "endpoints": [
+            {"provider": "pagerduty",  "path": f"{base}/pagerduty",  "method": "POST"},
+            {"provider": "prometheus", "path": f"{base}/prometheus", "method": "POST"},
+            {"provider": "generic",    "path": f"{base}/generic",    "method": "POST"},
+        ],
+        "auth": {
+            "header": "X-Praetor-Token",
+            "configured": bool(os.environ.get("PRAETOR_WEBHOOK_TOKEN")),
+        },
+        "supported_scenarios": list(_DEMO_PLAYBOOK.keys()),
     }
 
 

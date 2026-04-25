@@ -306,6 +306,17 @@ def run_episode(
             "breakdown_totals": dict(breakdown_totals),
         })
         logger.close()
+        # Phase 2 — auto-write postmortem.md alongside episode.jsonl and append
+        # a row to runs/RUNBOOK.md. Failures are non-fatal: trace data is the
+        # source of truth, postmortem is a derived artifact.
+        try:
+            from training.postmortem_writer import write_postmortem
+            from pathlib import Path as _Path
+            jsonl_path = _Path(logger.file_path)
+            runs_root_path = jsonl_path.parent.parent
+            write_postmortem(jsonl_path, runbook_path=runs_root_path / "RUNBOOK.md")
+        except Exception:
+            pass
 
     return EpisodeRecord(
         task_id=task_id,

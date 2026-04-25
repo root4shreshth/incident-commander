@@ -1,0 +1,42 @@
+# Rate-limit exhaustion scenario — community-contributed via the YAML DSL.
+#
+# A traffic spike trips an API gateway's rate limiter; clients see 429s
+# from the gateway even though the backing services are fine. Resolution:
+# raise the rate-limit ceiling via update_config, or scale up the gateway
+# replicas to spread the budget. We model the config-update path here.
+#
+# Real outages of this shape: Twitter 2023 (read-rate-limited launch),
+# GitHub Actions throttling, npm registry 2019 spike.
+
+task_id: rate_limit_exhaustion
+difficulty: medium
+description: "API gateway rate limiter tripped — clients seeing 429s"
+target_service: api-gateway
+anomaly: connection_leak
+max_steps: 18
+
+alert: "WARNING: api-gateway returning HTTP 429 to ~30% of clients. Backend services healthy. Spike traffic from a marketing campaign."
+
+root_cause: "Rate limiter on api-gateway is below the spike traffic ceiling — needs to be raised or sharded"
+root_cause_keywords: [rate, limit, 429, throttle, quota]
+
+correct_action:
+  action_type: scale_service
+  target_service: api-gateway
+
+log_lines:
+  - "[WARN]  api-gateway - Rate limit exceeded for client_id=mobile_v2: 240/200 requests in 60s window"
+  - "[WARN]  api-gateway - Returned HTTP 429 Too Many Requests"
+  - "[WARN]  api-gateway - 412 requests rejected with 429 in last minute (baseline: 4)"
+  - "[INFO]  api-gateway - Rate limit budget per replica: 200 RPS — current incoming: 540 RPS"
+  - "[INFO]  api-gateway - Scaling out spreads the budget; restart alone does not help"
+
+rubric:
+  - description: "Investigated the api-gateway"
+    weight: 0.30
+    required_action: read_logs
+    required_target: api-gateway
+  - description: "Scaled api-gateway to spread the rate-limit budget"
+    weight: 0.70
+    required_action: scale_service
+    required_target: api-gateway

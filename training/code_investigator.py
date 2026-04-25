@@ -396,4 +396,370 @@ __all__ = [
     "SCENARIO_KEYWORDS",
     "investigate",
     "cleanup_repo",
+    # Phase 2 — actually ship the fix
+    "Patch",
+    "TestResult",
+    "PullRequestResult",
+    "propose_patch",
+    "apply_patch",
+    "run_tests",
+    "open_pull_request",
 ]
+
+
+# ===========================================================================
+# Phase 2 — code-shipping actions (propose, apply, test, PR).
+#
+# Tier-2 is no longer diagnosis-only. Given a CodeEscalationReport, Praetor
+# can:
+#   1. propose_patch  — synthesize a unified diff for the most-suspect line
+#   2. apply_patch    — apply the diff to a temp branch in the cloned repo
+#   3. run_tests      — run pytest (or other) against the patched tree
+#   4. open_pull_request — push the branch + open a PR via the GitHub API
+#
+# Safety posture for the hackathon:
+#   - propose / apply / test all happen in a temp clone, never the user's
+#     working tree.
+#   - open_pull_request is gated by an explicit `enable_pr_open=True` flag
+#     AND a token with `repo` scope. Without both, returns dry_run=True.
+#   - All operations have hard timeouts and capped output sizes.
+# ===========================================================================
+
+
+@dataclass
+class Patch:
+    """A proposed code change in unified-diff form."""
+    file_path: str
+    line_no: int
+    diff: str               # unified diff text
+    rationale: str          # why this change addresses the scenario
+    confidence: float = 0.5  # 0..1, heuristic confidence that this is the right fix
+
+
+@dataclass
+class TestResult:
+    """Outcome of running the test suite after applying a patch."""
+    framework: str          # "pytest" | "unittest" | "npm" | ...
+    passed: bool
+    n_tests: int = 0
+    n_failed: int = 0
+    duration_s: float = 0.0
+    stdout_tail: str = ""
+    stderr_tail: str = ""
+    error: Optional[str] = None
+
+
+@dataclass
+class PullRequestResult:
+    """Outcome of pushing a branch + opening a PR."""
+    opened: bool
+    dry_run: bool
+    branch: str
+    pr_url: Optional[str] = None
+    error: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# Patch synthesis — a small set of scenario-aware templates
+# ---------------------------------------------------------------------------
+
+_PATCH_TEMPLATES: Dict[str, Dict[str, str]] = {
+    # Each entry: { trigger_substring: replacement_or_directive }
+    "oom_crash": {
+        "_cache = {}":
+            "# Bound the cache so it doesn't grow without limit (was: unbounded dict).\n"
+            "from functools import lru_cache\n"
+            "_CACHE_MAX = 1024\n"
+            "_cache: dict = {}\n"
+            "def _evict_if_needed():\n"
+            "    if len(_cache) > _CACHE_MAX:\n"
+            "        # FIFO eviction; replace with proper LRU in production.\n"
+            "        for k in list(_cache)[: len(_cache) - _CACHE_MAX]:\n"
+            "            _cache.pop(k, None)\n",
+        "@functools.lru_cache":
+            "@functools.lru_cache(maxsize=1024)  # Bounded — was unbounded.",
+    },
+    "db_pool_exhaustion": {
+        "engine.connect()":
+            "# Use a context manager so the connection is always returned to the pool.\n"
+            "with engine.connect() as conn:",
+        "create_engine(": (
+            "# Raise pool ceiling and add a sane overflow.\n"
+            "create_engine(  # NOTE: pool_size raised + max_overflow for spike traffic\n"
+        ),
+    },
+    "slow_query": {
+        "FOR UPDATE":
+            "# Avoid holding row-locks across long txns; use SELECT ... FOR UPDATE SKIP LOCKED.\n"
+            "FOR UPDATE SKIP LOCKED",
+    },
+    "disk_full": {
+        "log.write(": (
+            "# Rotate logs after every N writes so we don't fill the volume.\n"
+            "log.write(  # TODO: wire up RotatingFileHandler with maxBytes\n"
+        ),
+    },
+    "cert_expiry": {
+        "validity until": (
+            "# Cert expiry: ensure auto-renewal cron is wired up.\n"
+            "# TODO: confirm certbot or cert-manager will renew this cert automatically.\n"
+            "# validity until"
+        ),
+    },
+    "bad_deployment_cascade": {
+        "IMAGE_TAG = ": (
+            "# Roll back to the last-known-good tag; revert in a follow-up commit\n"
+            "# once the bad version is fully diagnosed.\n"
+            "IMAGE_TAG = "
+        ),
+    },
+}
+
+
+def propose_patch(report: CodeEscalationReport) -> Optional[Patch]:
+    """Synthesize a unified-diff patch from the highest-scored finding.
+
+    Returns None if no template matches the scenario or no finding is suitable.
+    """
+    if not report.findings:
+        return None
+    templates = _PATCH_TEMPLATES.get(report.scenario, {})
+    if not templates:
+        return None
+    for finding in report.findings:
+        snippet = finding.snippet
+        for trigger, replacement in templates.items():
+            if trigger.lower() in snippet.lower():
+                # Build a unified diff. Single-line, single-hunk — the smallest
+                # actionable change to demonstrate the workflow.
+                old_line = snippet
+                new_block = replacement
+                diff_lines = [
+                    f"--- a/{finding.file_path}",
+                    f"+++ b/{finding.file_path}",
+                    f"@@ -{finding.line_no},1 +{finding.line_no},{len(new_block.splitlines()) or 1} @@",
+                    f"-{old_line}",
+                ]
+                for nl in (new_block.splitlines() or [new_block]):
+                    diff_lines.append(f"+{nl}")
+                rationale = (
+                    f"Heuristic match against scenario '{report.scenario}'. "
+                    f"The line {finding.file_path}:{finding.line_no} matches "
+                    f"the pattern {trigger!r}; replacing with the corresponding "
+                    f"bounded / safer form."
+                )
+                return Patch(
+                    file_path=finding.file_path,
+                    line_no=finding.line_no,
+                    diff="\n".join(diff_lines),
+                    rationale=rationale,
+                    confidence=min(1.0, finding.score / 5.0),
+                )
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Apply patch — write the new content into a branch, never the working tree
+# ---------------------------------------------------------------------------
+
+def apply_patch(repo_root: Path, patch: Patch, branch: str = "praetor/auto-fix") -> bool:
+    """Apply `patch` to `repo_root` on a fresh branch. Returns True on success."""
+    repo_root = Path(repo_root)
+    if not (repo_root / ".git").exists():
+        # Initialize a temporary repo so we can cleanly stash changes on a branch.
+        subprocess.run(["git", "init", "-q"], cwd=repo_root, check=False, timeout=10)
+        subprocess.run(["git", "add", "-A"], cwd=repo_root, check=False, timeout=10)
+        subprocess.run(
+            ["git", "-c", "user.email=praetor@local", "-c", "user.name=Praetor",
+             "commit", "-q", "-m", "baseline"],
+            cwd=repo_root, check=False, timeout=10,
+        )
+    # Create branch
+    subprocess.run(["git", "checkout", "-q", "-b", branch], cwd=repo_root,
+                   check=False, timeout=10)
+    # Read current file, line-edit (we already have the diff but applying it via
+    # `git apply` is brittle for our heuristic format — easier to do a direct
+    # line replacement using the patch's structure).
+    target = repo_root / patch.file_path
+    if not target.exists():
+        return False
+    try:
+        original = target.read_text(encoding="utf-8", errors="replace").splitlines(keepends=True)
+        # Replace the target line with the new block from the diff
+        new_lines: List[str] = []
+        for line in patch.diff.splitlines():
+            if line.startswith("+") and not line.startswith("+++"):
+                new_lines.append(line[1:] + "\n")
+        if not new_lines or patch.line_no < 1 or patch.line_no > len(original):
+            return False
+        original[patch.line_no - 1: patch.line_no] = new_lines
+        target.write_text("".join(original), encoding="utf-8")
+    except OSError:
+        return False
+    # Stage + commit on the branch
+    subprocess.run(["git", "add", str(target)], cwd=repo_root, check=False, timeout=10)
+    proc = subprocess.run(
+        ["git", "-c", "user.email=praetor@local", "-c", "user.name=Praetor",
+         "commit", "-q", "-m",
+         f"Praetor auto-fix: {patch.file_path}:{patch.line_no}\n\n{patch.rationale}"],
+        cwd=repo_root, check=False, capture_output=True, text=True, timeout=10,
+    )
+    return proc.returncode == 0
+
+
+# ---------------------------------------------------------------------------
+# Run tests — pytest by default; falls back to unittest discovery; npm if Node
+# ---------------------------------------------------------------------------
+
+def run_tests(
+    repo_root: Path,
+    framework: str = "auto",
+    timeout: int = 120,
+    test_target: Optional[str] = None,
+) -> TestResult:
+    """Run the project's test suite inside `repo_root`.
+
+    `framework='auto'` picks pytest if there's a tests/ dir, npm if there's a
+    package.json + test script, otherwise falls back to `python -m unittest discover`.
+    """
+    import time as _time
+    repo_root = Path(repo_root)
+    chosen = framework
+    cmd: Optional[List[str]] = None
+    if chosen == "auto":
+        if (repo_root / "package.json").exists():
+            chosen, cmd = "npm", ["npm", "test", "--silent"]
+        elif (repo_root / "tests").exists() or (repo_root / "test").exists():
+            chosen, cmd = "pytest", ["python", "-m", "pytest", "-q", "--no-header"]
+        else:
+            chosen, cmd = "unittest", ["python", "-m", "unittest", "discover", "-q"]
+    elif chosen == "pytest":
+        cmd = ["python", "-m", "pytest", "-q", "--no-header"]
+    elif chosen == "npm":
+        cmd = ["npm", "test", "--silent"]
+    elif chosen == "unittest":
+        cmd = ["python", "-m", "unittest", "discover", "-q"]
+    else:
+        return TestResult(framework=chosen, passed=False, error=f"unknown framework: {chosen}")
+    if test_target:
+        cmd.append(test_target)
+    start = _time.monotonic()
+    try:
+        proc = subprocess.run(
+            cmd, cwd=repo_root, check=False, capture_output=True, text=True, timeout=timeout,
+        )
+    except FileNotFoundError as exc:
+        return TestResult(framework=chosen, passed=False, error=f"command not found: {exc}")
+    except subprocess.TimeoutExpired:
+        return TestResult(framework=chosen, passed=False, error=f"tests timed out after {timeout}s")
+    duration = _time.monotonic() - start
+    out = (proc.stdout or "")[-3000:]
+    err = (proc.stderr or "")[-3000:]
+    n_failed = 0
+    n_tests = 0
+    # Parse pytest-style "1 failed, 5 passed in 0.2s"
+    import re as _re
+    m = _re.search(r"(\d+)\s+failed[\s,].*?(\d+)\s+passed", out)
+    if m:
+        n_failed = int(m.group(1)); n_tests = int(m.group(1)) + int(m.group(2))
+    else:
+        m = _re.search(r"(\d+)\s+passed", out)
+        if m: n_tests = int(m.group(1))
+    return TestResult(
+        framework=chosen, passed=(proc.returncode == 0),
+        n_tests=n_tests, n_failed=n_failed, duration_s=round(duration, 2),
+        stdout_tail=out, stderr_tail=err,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Open pull request — pushes branch + creates a GitHub PR
+# ---------------------------------------------------------------------------
+
+def open_pull_request(
+    repo_root: Path,
+    repo_url: str,
+    branch: str,
+    title: str,
+    body: str,
+    token: Optional[str] = None,
+    enable_pr_open: bool = False,
+    base_branch: str = "main",
+) -> PullRequestResult:
+    """Push the branch and open a PR on GitHub.
+
+    Hard-gated: even with a token, this only runs when `enable_pr_open=True`.
+    Default (off) returns dry_run=True so the user can preview the proposed
+    PR before authorizing the actual push.
+    """
+    if not enable_pr_open:
+        return PullRequestResult(
+            opened=False, dry_run=True, branch=branch,
+            error="enable_pr_open=False — preview only. Re-run with the flag to push the branch.",
+        )
+    if not token:
+        return PullRequestResult(
+            opened=False, dry_run=False, branch=branch,
+            error="no token — cannot push branch or open PR",
+        )
+    if "github.com" not in repo_url.lower():
+        return PullRequestResult(
+            opened=False, dry_run=False, branch=branch,
+            error="only github.com is supported for PR opening in Phase 2 scope",
+        )
+    repo_root = Path(repo_root)
+    # Build the auth URL
+    auth_url = repo_url
+    if auth_url.startswith("https://"):
+        auth_url = auth_url.replace(
+            "https://", f"https://x-access-token:{token}@", 1,
+        )
+    # Push the branch
+    push = subprocess.run(
+        ["git", "push", "-q", auth_url, branch], cwd=repo_root,
+        check=False, capture_output=True, text=True, timeout=30,
+    )
+    if push.returncode != 0:
+        return PullRequestResult(
+            opened=False, dry_run=False, branch=branch,
+            error=f"git push failed: {(push.stderr or push.stdout)[-300:]}",
+        )
+    # Open the PR via the GitHub REST API
+    import urllib.error as _ue
+    import urllib.request as _ur
+    # owner/repo from URL
+    canonical = repo_url.rstrip("/").rstrip(".git")
+    parts = canonical.split("github.com/", 1)[-1].split("/")
+    if len(parts) < 2:
+        return PullRequestResult(
+            opened=False, dry_run=False, branch=branch,
+            error=f"could not parse owner/repo from {repo_url}",
+        )
+    owner, repo = parts[0], parts[1]
+    api_url = f"https://api.github.com/repos/{owner}/{repo}/pulls"
+    payload = json.dumps({
+        "title": title, "body": body, "head": branch, "base": base_branch,
+    }).encode("utf-8")
+    req = _ur.Request(api_url, data=payload, method="POST", headers={
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github+json",
+        "Content-Type": "application/json",
+        "User-Agent": "praetor-tier2",
+    })
+    try:
+        with _ur.urlopen(req, timeout=15) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            return PullRequestResult(
+                opened=True, dry_run=False, branch=branch,
+                pr_url=data.get("html_url"),
+            )
+    except _ue.HTTPError as exc:
+        return PullRequestResult(
+            opened=False, dry_run=False, branch=branch,
+            error=f"GitHub API HTTP {exc.code}: {exc.read().decode('utf-8', errors='replace')[:300]}",
+        )
+    except (_ue.URLError, OSError) as exc:
+        return PullRequestResult(
+            opened=False, dry_run=False, branch=branch,
+            error=f"network error opening PR: {exc}",
+        )

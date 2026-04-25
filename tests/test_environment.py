@@ -94,13 +94,15 @@ class TestAllTasksInitialise:
         env.reset(task_id=task_id)
         assert env.state.max_steps > 0
 
-    def test_six_tasks_registered(self):
-        assert len(SCENARIO_REGISTRY) == 6
+    def test_built_in_scenarios_registered(self):
+        # We have 6 built-in Python scenarios + any number of YAML scenarios
+        # auto-loaded from scenarios/yaml/. The built-ins are non-negotiable.
+        assert len(SCENARIO_REGISTRY) >= 6
         for fam in (
             "oom_crash", "db_pool_exhaustion", "bad_deployment_cascade",
             "disk_full", "slow_query", "cert_expiry",
         ):
-            assert fam in SCENARIO_REGISTRY, f"missing scenario: {fam}"
+            assert fam in SCENARIO_REGISTRY, f"missing built-in scenario: {fam}"
 
 
 class TestDefaultTaskCycling:

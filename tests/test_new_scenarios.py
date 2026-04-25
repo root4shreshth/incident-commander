@@ -217,8 +217,12 @@ class TestAutoClassifyHeuristics:
 # ---------------------------------------------------------------------------
 
 class TestRegistry:
-    def test_six_families(self):
-        assert len(SCENARIO_REGISTRY) == 6
+    def test_six_built_in_families(self):
+        # 6 built-in Python scenarios; YAML scenarios may add more.
+        assert len(SCENARIO_REGISTRY) >= 6
+        for fam in ("oom_crash", "db_pool_exhaustion", "bad_deployment_cascade",
+                    "disk_full", "slow_query", "cert_expiry"):
+            assert fam in SCENARIO_REGISTRY
 
     def test_each_scenario_has_root_cause_keywords(self):
         # Required for the resolution-reward component
