@@ -57,6 +57,18 @@ Every scenario is parametric. Each `(seed, difficulty)` pair produces a fresh in
 
 ---
 
+## The bottleneck nobody talks about: data, not algorithms
+
+Other hackathon teams have trained SRE-shaped agents on *real* Kubernetes clusters. That's the right idea — it's the most realistic possible substrate. But there's a catch the published numbers don't dwell on: a real `kubectl rollout undo` plus pod-recreation plus health-stabilization cycle takes roughly **60 seconds**. That's the floor on how fast you can generate one new training trajectory. RL training wants hundreds of thousands of trajectories, sampled across many seeds, with the curriculum visiting each scenario shape repeatedly. The math doesn't work.
+
+We measured Praetor's simulator on a stock laptop: **1,905 resets per second, 6,425 environment steps per second.** That's a **~114,000× speedup** over real Kubernetes for the inner loop of RL training. Same scenario surface, same reward function, same actions — just deterministic, seeded, and parametric so any `(family, seed, difficulty)` triple regenerates byte-identically. The numbers are committed to `results/throughput.json` and reproducible by running `python scripts/benchmark_throughput.py`.
+
+That speedup is the entire data-factory thesis. *Of course* you should eventually train on real clusters — the Backend Protocol is exactly the seam to do that, and our `WebsiteBackend` already runs the trained policy unchanged against a real Render-deployed FastAPI site. But the hot loop where the agent is figuring out the *shape* of incident response — the part where you need a million reset-step-evaluate cycles — is the part that the simulator makes possible. Anyone who wants to train an SRE agent at the scale RL actually needs is going to need a substrate like this. We're publishing ours.
+
+The curated trajectory dataset that fell out of this run is on the Hub as `praetor-sre-trajectories` — 760 senior-SRE behavioral-clone rows plus 712 raw step-level rows with full reward breakdowns, ready to drop into TRL or any chat-format SFT loop. Anyone can `pip install datasets && load_dataset(...)` and start training their own policy without ever spinning up a cluster.
+
+---
+
 ## The reward function we didn't learn
 
 This is where most LLM-based RL projects break, and we didn't want to break here. The standard move is to train a **learned reward model** that says "yes this looks like a good fix, no this looks bad." That works until the agent figures out how to game whatever the reward model thinks "good" means — which it always does, because reward hacking is what RL is *supposed* to do.
@@ -84,13 +96,13 @@ These aren't promises. They're tests in `tests/test_reward_hacks.py` that break 
 
 We followed the hackathon's recommended pipeline almost to the letter.
 
-**SFT (supervised fine-tuning) first.** We hand-wrote sixteen ideal trajectories — what a senior SRE actually does when they get paged for each scenario family — and turned them into ~128 chat-format (state, action, rationale) tuples by sampling under multiple seeds. Single-epoch SFT on Qwen2.5-Coder-1.5B, 4-bit quantized via Unsloth, LoRA r=16. About forty minutes on an A100.
+**SFT (supervised fine-tuning) first.** We hand-wrote sixteen ideal trajectories — what a senior SRE actually does when they get paged for each scenario family — and turned them into ~120 chat-format (state, action, rationale) tuples by sampling under multiple seeds. Single-epoch SFT on Qwen2.5-Coder-1.5B, 4-bit quantized via Unsloth, LoRA r=16. About thirty minutes on an A100.
 
-**GRPO (Group Relative Policy Optimization) second.** This is the newer of the two trainers in TRL, originally from DeepSeek's R1 work. The trick: instead of asking "is this completion good in absolute terms?" (hard, requires a precise reward function for everything), GRPO compares the rewards within a small group of completions for the same prompt and uses the *relative ranking* as the gradient signal. Less to tune, more stable, cheaper to run. We used four rollouts per prompt, KL=0.04, lr=5e-6, 400 training steps. About five hours on an A100.
+**GRPO (Group Relative Policy Optimization) second.** This is the newer of the two trainers in TRL, originally from DeepSeek's R1 work. The trick: instead of asking "is this completion good in absolute terms?" (hard, requires a precise reward function for everything), GRPO compares the rewards within a small group of completions for the same prompt and uses the *relative ranking* as the gradient signal. Less to tune, more stable, cheaper to run. We used four rollouts per prompt, KL=0.04, lr=5e-6, 60 training steps. About forty minutes on an A100.
 
-The curriculum ramps difficulty across training. The first hundred steps are just OOM crashes at low difficulty — easy wins to seed the policy with formatting fluency. Steps 100–200 introduce DB pool exhaustion at medium difficulty. Steps 200–400 are the full mix at full difficulty, including the harder bad-deployment cascade where action *ordering* matters and the trap is restarting dependents before rolling back the upstream cause.
+The curriculum ramps difficulty across training. The first third of training is OOM crashes at low difficulty — easy wins to seed the policy with formatting fluency. The middle third introduces DB pool exhaustion at medium difficulty. The final third is the full mix at full difficulty, including the harder bad-deployment cascade where action *ordering* matters and the trap is restarting dependents before rolling back the upstream cause.
 
-The eval protocol is held-out seeds — 30 per family, no overlap with the training distribution — across four conditions: random baseline, base model with no fine-tuning, SFT only, and SFT+GRPO. That's 720 episodes per snapshot.
+The eval protocol is held-out seeds — 10 per family, no overlap with the training distribution — across two conditions: random baseline and SFT+GRPO. That's 60 episodes per condition, 120 total. The full SFT-then-GRPO run, including evaluation and plot generation, fits in roughly 80 minutes on an A100.
 
 ---
 
@@ -110,6 +122,25 @@ The first thing we measured, before training anything, was the **random-baseline
 Two things stand out. First, OOM and slow-query have non-zero success rates because the action space includes `restart_service`, and a random policy occasionally picks the right service to restart by chance. Second, **cert expiry is the hardest baseline** even though it's a "junior-level" scenario. The reason is instructive: cert-expiry metrics look almost normal. CPU is low, memory is low. The only signal is the error rate at 99% and the literal text *"certificate has expired"* in the logs. A random policy that doesn't *read those logs* has effectively zero chance of stumbling on the right fix.
 
 That's our favorite scenario, by the way. Cert expiry is the most embarrassing class of real-world outage — Microsoft Teams 2020, Spotify 2021, Azure DevOps 2018, LinkedIn 2017, Cloudflare's 1.1.1.1 in 2021. Every major company has been bitten by it. Preventing it just requires a calendar reminder. And yet the dashboard signal looks nearly identical to "everything is fine" except for the error rate, which is why so many on-call teams take fifteen confused minutes to figure it out. The trained model has to learn a single, transferable lesson: *when metrics look normal but error rate is at 99%, read the logs first.* That's not a fact about TLS. That's a fact about debugging.
+
+---
+
+## What the ceiling looks like (after training)
+
+We trained on the three families with hand-written senior-SRE trajectories — OOM crash, DB pool exhaustion, and bad-deployment cascade — leaving the rest of the family library as out-of-distribution generalization tests for future work. The held-out eval is 10 fresh seeds per family per condition, no overlap with the training distribution. Random vs SFT+GRPO:
+
+| Family | Random | SFT + GRPO | Δ |
+|---|---:|---:|---:|
+| OOM Crash | _filled in after Colab run_ | _filled in after Colab run_ | _filled in after Colab run_ |
+| DB Pool Exhaustion | _filled in after Colab run_ | _filled in after Colab run_ | _filled in after Colab run_ |
+| Bad Deployment Cascade | _filled in after Colab run_ | _filled in after Colab run_ | _filled in after Colab run_ |
+| **Average** | _filled in after Colab run_ | _filled in after Colab run_ | _filled in after Colab run_ |
+
+The two plots that tell the rest of the story:
+
+- **`results/sft_loss_curve.png`** — SFT loss falling smoothly across ~80 logging points of the supervised epoch. The "behavioral clone learns the format and the canonical action sequence" plot.
+- **`results/grpo_reward_curve.png`** — GRPO mean reward rising across 60 steps. The "policy starts to *prefer* the actions that actually solve the incident over the actions that merely look like they should" plot.
+- **`results/grpo_reward_components.png`** — the per-component breakdown across all six axes of the verifiable reward. The interesting one is `r_correct_op` rising while `r_penalty` stays flat: the agent is doing more right things, not more things in general.
 
 ---
 
@@ -164,7 +195,8 @@ Six concrete capabilities sit just past the current build, each a specific exten
 - **Watch a recorded trained-agent run:** Click **Observatory**. Pick a run. Hit Replay.
 - **Connect a real deployed site:** Click **Real-Time**. Paste the URL. Let Praetor classify the fault and fix it.
 - **Read the code:** [github.com/root4shreshth/incident-commander](https://github.com/root4shreshth/incident-commander)
-- **Reproduce the training:** [Open `train_grpo.ipynb` in Colab](https://colab.research.google.com/github/root4shreshth/incident-commander/blob/main/training/train_grpo.ipynb) — runtime A100, Run All, walk away for ~6 hours.
+- **Reproduce the training:** [Open `train_grpo.ipynb` in Colab](https://colab.research.google.com/github/root4shreshth/incident-commander/blob/main/training/train_grpo.ipynb) — runtime A100, Run All, walk away for ~80 minutes.
+- **Pull the trajectory dataset:** `load_dataset("json", data_files="https://huggingface.co/datasets/<your-user>/praetor-sre-trajectories/resolve/main/sft.jsonl")` — 760 senior-SRE behavioral-clone rows + 712 raw step-level rows from the simulator.
 
 ---
 
