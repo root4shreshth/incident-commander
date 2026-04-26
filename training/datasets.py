@@ -118,6 +118,11 @@ def replay_trajectory(
             "system": SYSTEM_PROMPT,
             "user": user_msg,
             "assistant": assistant_msg,
+            # Metadata fields the SFT trainer can ignore but the notebook
+            # uses for the "scenarios covered" diagnostic + future filtering.
+            "scenario": task_id,
+            "seed": seed,
+            "step_idx": step_idx,
         })
 
         # Step the env forward using the trajectory's prescribed action so the
