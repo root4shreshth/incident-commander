@@ -257,6 +257,21 @@
         .obs-hero .stats-row{display:flex;justify-content:center;gap:36px;flex-wrap:wrap}
         .obs-grid{display:grid;grid-template-columns:1fr 360px;gap:18px;padding:24px 32px;max-width:1280px;margin:0 auto;position:relative;z-index:1}
         @media(max-width:1100px){.obs-grid{grid-template-columns:1fr}}
+        .obs-legend{
+            background:var(--bg-card);border:1px solid var(--border);border-radius:14px;
+            padding:14px 18px;margin:0 32px 14px;max-width:1216px;
+            margin-left:auto;margin-right:auto;
+            display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px 22px;
+        }
+        .obs-legend-item{
+            font-size:12.5px;line-height:1.55;color:var(--text-secondary);
+            padding-left:14px;border-left:2px solid var(--accent-blue);
+        }
+        .obs-legend-item:nth-child(2){border-left-color:var(--accent-orange)}
+        .obs-legend-item:nth-child(3){border-left-color:var(--accent-green)}
+        .obs-legend-item strong{color:var(--text-primary);font-weight:600}
+        .obs-legend-item code{background:var(--bg-elevated);padding:1px 5px;border-radius:4px;font-size:11.5px;color:var(--text-primary)}
+
         .obs-toolbar{background:var(--bg-card);border:1px solid var(--border);border-radius:14px;padding:14px 18px;margin:0 32px 18px;max-width:1216px;margin-left:auto;margin-right:auto;display:flex;flex-wrap:wrap;gap:14px;align-items:center}
         .obs-toolbar .label{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--text-muted);font-weight:600}
         .obs-toolbar select{background:var(--bg-elevated);border:1px solid var(--border);color:var(--text-primary);font-size:13px;font-family:inherit;padding:7px 10px;border-radius:8px;min-width:160px}
@@ -1123,12 +1138,32 @@
     <div class="obs-hero">
         <div class="hero-label"><span class="dot"></span> Phase 1 · Watch Praetor work</div>
         <h1>Every page becomes a <em>recorded run.</em></h1>
-        <p class="subtitle">Each row is Praetor - the autonomous incident commander - attempting one of three scenario families. Pick a run to see the action timeline, the 6-component reward decomposition, and the per-step service map evolve from red to green.</p>
+        <p class="subtitle">Each row is Praetor - the autonomous incident commander - attempting one of the eight scenario families. Pick a run to see the action timeline, the 6-component reward decomposition, and the per-step service map evolve from red to green.</p>
         <div class="stats-row">
             <div class="stat"><div class="stat-value blue" id="obs-stat-runs">-</div><div class="stat-label">Recorded Runs</div></div>
             <div class="stat"><div class="stat-value green" id="obs-stat-resolved">-</div><div class="stat-label">Resolved</div></div>
             <div class="stat"><div class="stat-value orange" id="obs-stat-avg-score">-</div><div class="stat-label">Avg Score</div></div>
             <div class="stat"><div class="stat-value" id="obs-stat-conditions">-</div><div class="stat-label">Conditions</div></div>
+        </div>
+    </div>
+
+    <!-- Quick legend explaining what the conditions and score mean -->
+    <div class="obs-legend">
+        <div class="obs-legend-item">
+            <strong>Score</strong> is in <code>[0, 1]</code>.
+            A fully resolved incident scores ~<code>0.8</code>-<code>1.0</code>;
+            <code>~0.50</code> is the partial credit you get when the step
+            budget runs out without a fix; <code>~0.01</code> means the
+            policy earned almost nothing (mostly off-target diagnostics).
+        </div>
+        <div class="obs-legend-item">
+            <strong>Random baseline</strong> = uniform-random action policy. The
+            floor every trained model has to beat.
+        </div>
+        <div class="obs-legend-item">
+            <strong>Scripted playbook</strong> = the deterministic best-trajectory
+            from the demo playbook. Upper bound for a hand-coded policy with no
+            learning.
         </div>
     </div>
 
@@ -1146,6 +1181,8 @@
             <span class="obs-chip" data-filter="disk_full">Disk Full</span>
             <span class="obs-chip" data-filter="slow_query">Slow Query</span>
             <span class="obs-chip" data-filter="cert_expiry">Cert Expiry</span>
+            <span class="obs-chip" data-filter="dns_failure">DNS</span>
+            <span class="obs-chip" data-filter="rate_limit_exhaustion">Rate Limit</span>
             <span class="obs-chip" data-filter="resolved">✓ Resolved</span>
         </div>
     </div>
@@ -2192,7 +2229,7 @@ window.Home = {
 <script src="/static/coach.js?v=4"></script>
 <script src="/static/map.js?v=4"></script>
 <script src="/static/demo.js?v=6"></script>
-<script src="/static/observatory.js?v=3"></script>
+<script src="/static/observatory.js?v=4"></script>
 <script src="/static/realtime.js?v=7"></script>
 <script src="/static/integrations.js?v=1"></script>
 </body>

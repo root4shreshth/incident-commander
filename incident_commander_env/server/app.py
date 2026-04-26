@@ -468,13 +468,14 @@ def _seed_demo_runs(force: bool = False) -> Dict[str, Any]:
         return {"seeded": False, "error": f"training extras not installed: {exc}"}
     try:
         report = evaluate(
-            "demo-baseline",
+            "random-baseline",
             random_policy(rng_seed=42),
             families=[
                 "oom_crash", "db_pool_exhaustion", "bad_deployment_cascade",
                 "disk_full", "slow_query", "cert_expiry",
+                "dns_failure", "rate_limit_exhaustion",
             ],
-            seeds=list(range(1, 6)),  # 5 seeds × 6 families = 30 episodes
+            seeds=list(range(1, 6)),  # 5 seeds x 8 families = 40 episodes
             system_prompt=SYSTEM_PROMPT,
             runs_root=str(RUNS_ROOT),
         )
@@ -1439,7 +1440,7 @@ def _webhook_sim_worker(run_id: str, scenario: str) -> None:
         log.__enter__()
         log.start({
             "task_id": scenario, "seed": env_local.state.episode_id,
-            "model": "webhook-baseline", "trigger": "webhook",
+            "model": "scripted-playbook", "trigger": "webhook",
             "alert": env_local.state.task_id,
             "max_steps": env_local.state.max_steps,
         })

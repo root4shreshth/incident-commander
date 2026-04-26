@@ -20,6 +20,40 @@
   };
   const COMPONENT_ORDER = ['diagnostic', 'correct_op', 'resolution', 'format', 'efficiency', 'penalty'];
 
+  // Friendly display labels for the run "model" field. The recorded value is
+  // a short identifier; the UI shows a human-readable label alongside it.
+  const MODEL_LABEL = {
+    'random-baseline':   'Random baseline',
+    'scripted-playbook': 'Scripted playbook',
+    // Legacy labels still present in older run records:
+    'demo-baseline':     'Random baseline (legacy label)',
+    'webhook-baseline':  'Scripted playbook (legacy label)',
+  };
+  const MODEL_TOOLTIP = {
+    'random-baseline':   'Uniform-random action policy. The floor every trained model has to beat.',
+    'scripted-playbook': 'Deterministic best-trajectory from the demo playbook (no learned policy).',
+    'demo-baseline':     'Same as "Random baseline" - kept for backward compatibility with existing runs.',
+    'webhook-baseline':  'Same as "Scripted playbook" - kept for backward compatibility with existing runs.',
+  };
+  function modelLabel(m) {
+    return MODEL_LABEL[m] || m || 'unknown';
+  }
+
+  // Friendly scenario family names
+  const FAMILY_LABEL = {
+    oom_crash:              'OOM crash',
+    db_pool_exhaustion:     'DB pool exhaustion',
+    bad_deployment_cascade: 'Bad deployment cascade',
+    disk_full:              'Disk full',
+    slow_query:             'Slow query',
+    cert_expiry:            'Cert expiry',
+    dns_failure:            'DNS failure',
+    rate_limit_exhaustion:  'Rate-limit exhaustion',
+  };
+  function familyLabel(f) {
+    return FAMILY_LABEL[f] || f || 'unknown';
+  }
+
   const $ = (id) => document.getElementById(id);
 
   const state = {
@@ -51,13 +85,13 @@
 
   function renderRunsPicker() {
     const sel = $('obs-run-picker');
-    sel.innerHTML = '<option value="">- select a recorded run -</option>';
+    sel.innerHTML = '<option value="">- select a recorded run to inspect -</option>';
     state.filteredRuns.forEach((r) => {
       const o = document.createElement('option');
       o.value = r.run_id;
       const tag = r.resolved ? '✓' : '✗';
       const score = r.score != null ? r.score.toFixed(2) : '-';
-      o.textContent = `${tag} ${r.run_id.slice(0, 22)}… [${r.task_id || '?'}] score=${score} model=${r.model || '?'}`;
+      o.textContent = `${tag} ${familyLabel(r.task_id)} · score=${score} · ${modelLabel(r.model)} · ${r.run_id.slice(0, 14)}…`;
       sel.appendChild(o);
     });
   }
@@ -136,9 +170,43 @@
   function renderSparklines(events) {
     const grid = $('obs-sparklines');
     grid.innerHTML = '';
+    // No run loaded yet -> show explicit "pick a run" hint instead of
+    // a wall of flat zero lines.
+    if (!events || events.length === 0) {
+      grid.innerHTML = `
+        <div class="empty-state" style="grid-column:1/-1;text-align:left;padding:18px 22px">
+          <div style="font-size:13.5px;color:var(--text-secondary);margin-bottom:6px">
+            <strong style="color:var(--text-primary)">Pick a run</strong> from the dropdown above to see its
+            per-step reward decomposition.
+          </div>
+          <div style="font-size:12px;color:var(--text-muted);line-height:1.55">
+            Each line plots one of the six reward components across the steps the agent took.
+            Positive area = reward earned; negative area = penalty incurred.
+            For random-baseline runs, expect mostly flat lines (random actions rarely earn correct_op or resolution credit).
+          </div>
+        </div>`;
+      return;
+    }
     const stepEvents = events.filter(e => e.type === 'step');
     if (stepEvents.length === 0) {
-      grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1">No step events to plot.</div>';
+      grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1">No step events to plot in this run.</div>';
+      return;
+    }
+    // Detect whether ANY component has any non-zero value across the run.
+    const hasAnyData = stepEvents.some(e => {
+      const bd = e.reward_breakdown || {};
+      return COMPONENT_ORDER.some(k => Number(bd[k] || 0) !== 0);
+    });
+    if (!hasAnyData) {
+      grid.innerHTML = `
+        <div class="empty-state" style="grid-column:1/-1;text-align:left;padding:14px 18px">
+          <div style="font-size:13px;color:var(--text-secondary);line-height:1.55">
+            This run has no per-step reward breakdown recorded
+            (probably a webhook/playbook run executed without the grader).
+            Per-component charts only populate for runs produced by
+            <code>training/eval_runner.py</code> against the simulated env.
+          </div>
+        </div>`;
       return;
     }
     COMPONENT_ORDER.forEach(k => {
@@ -255,7 +323,10 @@
       root.innerHTML = '<div class="empty-state" style="grid-column:1/-1">No runs recorded yet. Run <code>training/eval_runner.py</code> with <code>runs_root=\'runs\'</code>.</div>';
       return;
     }
-    const families = ['oom_crash', 'db_pool_exhaustion', 'bad_deployment_cascade'];
+    // Dynamic: include every scenario family that has at least one recorded
+    // run, sorted alphabetically. We have 8 families in the env; only the
+    // ones we've actually run will appear here.
+    const families = [...new Set(state.runs.map(r => r.task_id).filter(Boolean))].sort();
     const conditions = [...new Set(state.runs.map(r => r.model).filter(Boolean))].sort();
     if (conditions.length === 0) conditions.push('unknown');
 
@@ -265,17 +336,20 @@
       if (familyRuns.length === 0) return;
       const card = document.createElement('div');
       card.style.cssText = 'background:var(--bg-elevated);border:1px solid var(--border);border-radius:10px;padding:14px';
-      card.innerHTML = `<div style="font-size:13px;font-weight:600;margin-bottom:10px">${escapeHtml(family)}</div>`;
+      card.innerHTML = `<div style="font-size:13px;font-weight:600;margin-bottom:10px;color:var(--text-primary)">${escapeHtml(familyLabel(family))} <span style="color:var(--text-muted);font-weight:500;font-size:11px;font-family:'JetBrains Mono',monospace">${escapeHtml(family)}</span></div>`;
 
       conditions.forEach(c => {
         const condRuns = familyRuns.filter(r => (r.model || 'unknown') === c);
         if (condRuns.length === 0) return;
         const successes = condRuns.filter(r => r.resolved).length;
         const successRate = successes / condRuns.length;
+        const avgScore = condRuns.reduce((s, r) => s + (r.score || 0), 0) / condRuns.length;
         const row = document.createElement('div');
         row.className = 'agg-bar-row';
+        row.title = (MODEL_TOOLTIP[c] || '') +
+          `\n${condRuns.length} run(s) · avg score ${avgScore.toFixed(2)}`;
         row.innerHTML = `
-          <div class="nm">${escapeHtml(c)}</div>
+          <div class="nm">${escapeHtml(modelLabel(c))} <span style="font-size:10px;color:var(--text-muted)">(n=${condRuns.length})</span></div>
           <div class="agg-bar"><div class="fill" style="width:${(successRate * 100).toFixed(0)}%"></div></div>
           <div class="pct">${(successRate * 100).toFixed(0)}%</div>
         `;
@@ -356,6 +430,9 @@
     applyFilter();
     renderTopStats();
     renderAggregate();
+    // Show explicit "Pick a run" hint instead of leaving a wall of flat
+    // zero-line sparklines (the previous default state).
+    renderSparklines([]);
 
     // Wire toolbar
     $('obs-run-picker').addEventListener('change', e => selectRun(e.target.value));
