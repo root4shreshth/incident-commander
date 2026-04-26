@@ -32,7 +32,8 @@ tags:
 | What | Where |
 |---|---|
 | **GitHub repository** | https://github.com/root4shreshth/incident-commander |
-| **Live HuggingFace Space** | https://hype4raj-incident-commander-env.hf.space |
+| **Live HuggingFace Space (Praetor)** | https://hype4raj-incident-commander-env.hf.space |
+| **Live target site for the Real-Time demo (SwiftPay)** | https://shreshthn8n-swiftpay-target.hf.space |
 | **Training notebook (Colab)** | [Open in Colab ↗](https://colab.research.google.com/github/root4shreshth/incident-commander/blob/main/training/train_grpo.ipynb) · source: [`training/train_grpo.ipynb`](training/train_grpo.ipynb) |
 | **Trained LoRA adapter** | populated after training run completes |
 | **90-second video walkthrough** | populated after recording |
@@ -185,7 +186,15 @@ Runtime → A100 → Run all. The notebook is self-contained: pip install, clone
 
 ### Run the sim-to-real demo
 
-Vibecode a small site that exposes the operator API contract documented in [§"Real-stack contract"](#real-stack-contract) below, deploy it anywhere with a public URL (Render free tier, Vercel, Fly, HF Space), then in the Praetor dashboard go to **Real-Time** → paste the URL → click Connect → Praetor classifies the fault automatically → click Run Praetor.
+Open the live Praetor Space, click **Real-Time**, paste the SwiftPay target URL, click **Connect** → Praetor auto-classifies the fault → click **Run Praetor** → watch the live timeline → read the Final Report → click **📄 Export as PDF**.
+
+```
+https://shreshthn8n-swiftpay-target.hf.space
+```
+
+SwiftPay is a real deployed payments site we built ourselves. It implements the operator contract from [§"Real-stack contract"](#real-stack-contract) below, exposes three deliberate fault routes Praetor can detect and resolve, and runs as a separate HuggingFace Space - so there's no localhost or compose stack to set up. The full step-by-step walkthrough is in [§"End-to-end workflow"](#end-to-end-workflow---the-path-a-judge-actually-walks).
+
+If you want to point Praetor at your *own* deployed site instead, vibecode anything that exposes the operator API contract (Render free tier, Vercel, Fly, HF Space), paste your URL into the Real-Time tab, and the same flow runs against it.
 
 ### Trigger the autonomous loop via webhook
 
@@ -334,6 +343,117 @@ A single dashboard with six tabs (Home, Observatory, Apprentice, Real-Time, What
 - Three codebase source options for tier-2 escalation: **GitHub**, **Azure Repos**, **ZIP upload**
 - Live unified timeline streams ops actions, then code investigation if needed
 - Optional secondary path: inject a deliberate test fault from three chaos buttons (collapsible)
+
+---
+
+## End-to-end workflow - the path a judge actually walks
+
+This is the canonical "open the live Space and follow these steps" walkthrough. The whole project ties together through a single dashboard and a single deployed target site. Two HuggingFace Spaces cooperate:
+
+| Role | URL | What it does |
+|---|---|---|
+| **Praetor (the agent)** | https://hype4raj-incident-commander-env.hf.space | The OpenEnv-compatible env + dashboard + autonomous loop |
+| **SwiftPay (the target)** | https://shreshthn8n-swiftpay-target.hf.space | A real deployed payments site we built ourselves. Implements the operator contract (`/ops/health`, `/ops/metrics`, `/ops/logs`, `/ops/restart`, `/ops/rollback`, `/ops/configure`) and exposes three deliberate fault routes Praetor can detect and resolve. |
+
+Both Spaces are HuggingFace-hosted Docker containers. Praetor never touches your real infrastructure - it only talks to the SwiftPay endpoints over HTTPS, the same way it would talk to any production system that adopts the operator contract.
+
+### Stage 1 - Watch the trained agent (Tab 1: Observatory)
+
+Open https://hype4raj-incident-commander-env.hf.space and click **Observatory**.
+
+1. **Read the legend at the top.** Three sentences explain (a) the score is in `[0, 1]` and ~`0.8` is a clean resolution, (b) Random baseline = uniform-random action policy, (c) Scripted playbook = deterministic best-trajectory.
+2. **Pick a recorded run from the dropdown.** Each row shows the scenario family, the score, the model, and the run ID. Filter by family or by `✓ Resolved` using the chips.
+3. **Hit ▶ Replay.** The run plays back: action timeline streams in on the right, the 6-component reward decomposition stack-bar populates on the left, the per-component sparklines plot reward earned per step, and the service map evolves from red to green as the agent acts.
+4. **Scroll to the aggregate panel.** Eight scenario family cards (one per family) compare success rate across all conditions present in the recorded data - currently `Random baseline (n=5)` vs `Scripted playbook (n=N)`. The OOM crash card shows `Random 20% vs Scripted 100%`, which is the headline reward improvement.
+
+What you've just seen: a fully recorded, fully verifiable training-eval pipeline producing real numbers a human can audit. No hand-waving.
+
+### Stage 2 - Try a scenario yourself (Tab 2: Apprentice)
+
+Click **Apprentice**. The picker shows scenario cards, gated by a curriculum tree. Locked cards unlock as you clear their prereqs. Pick a scenario - say "Your first page" (OOM Crash).
+
+1. **Read the alert.** "It's 3:42 AM. Your phone buzzes - PagerDuty. The payment-service is throwing health check failures and customers can't check out. You're the on-call SRE. Let's go."
+2. **Use the action toolbox.** Three groups: Investigate (list_services, read_logs, check_metrics, describe_service, run_diagnostic), Remediate (restart_service, rollback_deployment, scale_service, update_config), Declare (resolve_incident).
+3. **Mode switcher (top-right of the picker / incident screen).** Junior mode keeps the AI coach on - it nudges you with hints and a "Why?" button on every action result that explains in plain English what just happened. Pro mode turns the coach off.
+4. **Resolve the incident, declare a root cause.** A structured post-mortem renders comparing your run to a senior-SRE reference trajectory. Score and step count are committed to your local progress.
+
+What you've just seen: the same env that trains the agent is also a hands-on training simulator for human SREs. Same observation shape, same action vocabulary, same reward function.
+
+### Stage 3 - Watch Praetor act on a real site (Tab 3: Real-Time)
+
+This is where the simulator-to-real loop closes. Click **Real-Time**.
+
+#### Step 0 (optional) - Connect your platform
+Three sub-tabs: GitHub OAuth (for tier-2 code escalation), Cloud account (Azure DevOps / generic), Generate adapter (drops a `praetor_adapter.py` you embed into your own deployment to expose the operator contract). Skip this for the demo - we just want to point Praetor at SwiftPay.
+
+#### Step 1 - Connect to a deployed site
+Paste this URL into the input box and click **Connect**:
+
+```
+https://shreshthn8n-swiftpay-target.hf.space
+```
+
+Praetor immediately:
+- `GET /ops/health` to confirm the operator contract is implemented
+- discovers the services SwiftPay exposes (`frontend`, `api`, `postgres`)
+- `GET /ops/metrics` for each service to gather the current operational state
+- runs the auto-classifier over the metrics + recent log patterns
+
+A green `Connected · /ops/health = ok · services: frontend, api, postgres` line appears.
+
+#### Step 2 - Praetor's classification
+A card appears: **"DB POOL EXHAUSTION · confidence 70%"** (or `OOM CRASH`, or `BAD DEPLOYMENT CASCADE`, depending on what fault SwiftPay is currently exhibiting). Below it, three to five "evidence chips" cite the signals that drove the classification - e.g. *"postgres at 101 active connections (pool likely exhausted)"*, *"api error_rate spiked to 12%"*. **You did not pick the scenario.** Praetor figured it out.
+
+If no fault is detected, expand the "Inject a test fault →" disclosure and click one of three chaos buttons (OOM Crash / DB Pool Exhaustion / Bad Deployment) - SwiftPay flips into that fault state and Praetor classifies it on the next tick.
+
+#### Step 3 (optional) - Link the codebase for tier-2
+Three options if Step 4 might need to escalate to code: GitHub OAuth → pick a repo, Azure DevOps PAT, or upload a ZIP of the codebase. Skip if you only want to see the runtime ops loop.
+
+#### Step 4 - Run Praetor
+Click **▶ Run agent**. The Live Unified Timeline starts streaming. Each step is a card with:
+- **`step N`** pill, the action name (`list_services`, `read_logs → api`, `restart_service → api {"memory_limit":"1024Mi"}`), and a `TIER1` / `TIER2` pill on the right
+- The action result body (logs / metrics / status)
+- A **▸ Why this step?** expander - click it to read the agent's reasoning trace for why that particular action was the right next move
+- Animated entrance + a pulsing accent border on the latest step
+
+Tier 1 typically settles in 4-6 steps. If runtime ops fully heal the site, you see a **`✓ Tier 1 brought the site back to healthy`** banner. If they don't, Praetor escalates - `⚙ Tier 2 - code investigation` fires, the linked repo gets cloned, candidate code locations surface in the timeline, and (if `enable_pr_open=true` plus a write-scope token is set) a real GitHub pull request opens.
+
+#### Step 5 - Final report + analysis
+When the run completes, the **Final Report** card renders below the timeline with:
+- **Status pill** - `RESOLVED in tier 1` (green) / `ESCALATED` (amber) / `UNRESOLVED` (red), with the scenario name as a side tag
+- **Praetor's summary** - a narrative paragraph: *"Praetor diagnosed an oom crash incident in 5 steps over 14.5 seconds, walked the dependency graph from symptom to root cause, and resolved the incident using only tier-1 runtime operations. Praetor's decisive move was restart_service. The site is now responding 200 on /ops/health and the fix is durable."*
+- **Stats grid** - 4 cells: Steps taken, Wall-clock, Outcome (FIXED in green / ESCALATED in amber / UNRESOLVED in red), Services touched
+- **The problem we saw** - the original alert in an amber callout
+- **Root cause & fix tags** - colored chips: red for cause (`oom`, `memory-pressure`), green for fix (`memory-bump`, `restart-curable`), purple for affected services (`api`)
+- **Resolution path** - bulleted list of the meaningful ops the policy took
+- **Action breakdown** - per-action-type counts (`read_logs ×2`, `restart_service ×1`, etc.)
+- **Tier-2 escalation report** - rendered inline if the run escalated, with summary, suggested fix, and N candidate code locations
+
+#### Step 6 - Export the report
+At the bottom of the Final Report, two buttons:
+- **📄 Export as PDF** - server-side rendered via `reportlab`, returns `application/pdf` with `Content-Disposition: attachment`. Triggers a real `.pdf` file download (no print dialog round-trip). The PDF mirrors the on-screen report: cover page with status pill and metadata grid, Praetor's summary, stats row, root-cause chips, resolution path bullets, action breakdown table, the original alert, every step with its Why rationale, optional tier-2 section, result paragraph, and a footer with run ID + page number on every page.
+- **↗ Preview report** - opens the same content as a print-ready HTML page in a new tab. Use this to read the report on screen before downloading.
+
+If the run record was already evicted server-side (long idle), the buttons surface a clear inline error: *"Report not available (HTTP 404). Start a new run and try again."* No silent failures.
+
+### Stage 4 - Go autonomous (no UI required)
+Once Praetor has been pointed at SwiftPay once via Step 1, the same flow runs without a human via webhook:
+
+```bash
+curl -X POST https://hype4raj-incident-commander-env.hf.space/incidents/webhook/generic \
+  -H "X-Praetor-Token: $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"alert":"payment-service OOM","scenario":"oom_crash"}'
+```
+
+Praetor classifies the alert text, kicks off a background worker against the connected SwiftPay site, runs the same Tier 1 → Tier 2 loop, writes a JSONL trace to `runs/{run_id}/episode.jsonl`, and emits the same Final Report (queryable via `GET /realtime/run/{run_id}/report` for HTML or `/report.pdf` for the file). The Observatory tab picks the new run up automatically. PagerDuty and Prometheus webhooks also work - same dispatcher, different alert shape.
+
+### What this demo proves
+- The trained policy generalizes from the simulator to a **real deployed Docker container** (SwiftPay) without modification
+- The same observation shape and action vocabulary work on a real HTTP target
+- The Why expander surfaces the policy's reasoning - this is an **explainable** agent, not a black box
+- The Final Report + PDF export turn each incident into an auditable artifact a human SRE or compliance team can read
+- The autonomous webhook path means there's no human in the loop between alert and verdict
 
 ---
 
@@ -678,15 +798,18 @@ Built for the **Meta OpenEnv Hackathon · April 2026** by **Team MetaMorphs**.
 
 | Want to … | Click |
 |---|---|
-| See the live env | https://hype4raj-incident-commander-env.hf.space |
+| See the live env (Praetor) | https://hype4raj-incident-commander-env.hf.space |
+| See the live target site (SwiftPay) | https://shreshthn8n-swiftpay-target.hf.space |
 | Read the code | https://github.com/root4shreshth/incident-commander |
 | Read the blog post | source: [`BLOG.md`](BLOG.md) · live URL added on HF: `https://huggingface.co/blog/<USERNAME>/praetor-incident-commander` |
 | Run the training | [Open `train_grpo.ipynb` in Colab](https://colab.research.google.com/github/root4shreshth/incident-commander/blob/main/training/train_grpo.ipynb) |
+| **Follow the end-to-end demo** | [§ End-to-end workflow](#end-to-end-workflow---the-path-a-judge-actually-walks) |
 | Watch a recorded trained-agent run | Live env → tab **1 Observatory** |
 | Try solving an incident yourself | Live env → tab **2 Apprentice** |
-| Watch the autonomous loop on a real site | Live env → tab **3 Real-Time** |
+| Watch the autonomous loop on a real site | Live env → tab **3 Real-Time** → paste `https://shreshthn8n-swiftpay-target.hf.space` |
 | Read what we ship | Live env → tab **What we offer** |
 | Verify the operator API | Live env → tab **API** |
 | Trigger an autonomous run via webhook | `POST /incidents/webhook/generic` |
 | See the auto-generated post-mortem | `GET /runs/{run_id}/postmortem` |
 | See the running incident ledger | `GET /runbook` |
+| Export an incident report as PDF | Live env → tab **3 Real-Time** → run finishes → click **📄 Export as PDF** |
