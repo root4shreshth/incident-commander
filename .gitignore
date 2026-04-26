@@ -28,3 +28,9 @@ uploaded_codebase/
 .pytest_cache/
 .ruff_cache/
 
+# Generated / non-canonical docs (the canonical write-up is README.md)
+*.docx
+docs/
+PRODUCT_DOCUMENT.md
+coreideation.md
+

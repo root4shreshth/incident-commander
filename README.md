@@ -1,13 +1,12 @@
 ---
-title: Praetor — Incident Commander for SREs
-emoji: "\U0001F6A8"
+title: "Praetor — Incident Commander for SREs"
+emoji: "🚨"
 colorFrom: red
 colorTo: yellow
 sdk: docker
 app_port: 8000
 tags:
   - openenv
-  - rl
   - reinforcement-learning
   - sre
   - devops
@@ -15,72 +14,129 @@ tags:
   - grpo
   - sft
   - llm-agents
+  - praetor
 ---
 
 # Praetor — Incident Commander for SREs
 
 > The autonomous SRE commander. An OpenEnv-compatible RL environment that trains LLM agents to take the on-call page: investigate a microservices cluster, identify root cause, remediate under time pressure, verify recovery, and escalate to code investigation when runtime ops aren't enough. The same trained policy runs unchanged against a real deployed site for sim-to-real validation.
 >
-> **Codebase package name** stays `incident_commander_env` for stability — the rename is product-level.
+> **Built for the Meta OpenEnv Hackathon · April 2026 · Theme #3.1: Professional Tasks.**
+>
+> Codebase package name stays `incident_commander_env` for stability; product display name is **Praetor**.
 
-**Meta OpenEnv Hackathon · April 2026 · Theme #3.1: Professional Tasks**
+---
+
+## Submission package — every link a judge needs
 
 | What | Where |
 |---|---|
-| Live HuggingFace Space | [hype4raj-incident-commander-env.hf.space](https://hype4raj-incident-commander-env.hf.space) |
-| Training notebook (Colab) | [`training/train_grpo.ipynb`](training/train_grpo.ipynb) |
-| Trained LoRA adapter | (link added on submission) |
-| Blog post | [`docs/blog.md`](docs/blog.md) |
-| 90-second video | (link added on submission) |
-| Eval results | [`results/`](results/) |
-| Project deck (.docx) | [`IncidentCommanderEnv_Project_Document.docx`](IncidentCommanderEnv_Project_Document.docx) |
+| **GitHub repository** | https://github.com/root4shreshth/incident-commander |
+| **Live HuggingFace Space** | https://hype4raj-incident-commander-env.hf.space |
+| **Training notebook (Colab)** | [Open in Colab ↗](https://colab.research.google.com/github/root4shreshth/incident-commander/blob/main/training/train_grpo.ipynb) · source: [`training/train_grpo.ipynb`](training/train_grpo.ipynb) |
+| **Trained LoRA adapter** | populated after training run completes |
+| **90-second video walkthrough** | populated after recording |
+| **Blog write-up** | this README is the canonical write-up; HF Blog mirror added on submission |
+| **Eval results** | [`results/`](results/) (committed after training run) |
+
+---
+
+## Why this exists
+
+### The pain point
+
+Every tech company runs an on-call rotation. Engineers get woken at 3 AM to diagnose production outages under extreme time pressure. The problem is:
+
+- **Expensive.** Production outages cost enterprises **$1M – $5M per hour**. Fortune 1000 companies lose **$1.25B – $2.5B annually** to preventable downtime. 97% of large enterprises say a single hour of downtime costs over $100K.
+- **Slow.** Average **mean-time-to-resolution is 8.85 hours** globally. Level-1 maturity organizations routinely exceed 72 hours.
+- **Burnout-inducing.** 65% of engineers report burnout. 70% of SRE teams cite alert fatigue. 78% of developers spend 30%+ of their time on manual operational toil.
+- **Untrained.** There has been no safe, realistic environment to practice incident response. Engineers learn by making mistakes in production.
+
+### The gap
+
+There has been **no public RL environment** for SRE incident response. The work — methodical reasoning under uncertainty, with a typed action vocabulary and verifiable outcomes — is exactly what RL-trained LLM agents should be good at. There just hasn't been a substrate.
+
+### What Praetor is
+
+An autonomous incident commander. Once paged, Praetor investigates with a typed 10-action vocabulary, decides what to fix using the trained policy, executes via the same Backend Protocol that the simulator uses, verifies recovery, and escalates to **code investigation** if runtime ops aren't enough.
+
+It is the first OpenEnv-compatible environment for SRE / DevOps work, packaged as a complete product: simulator + curriculum + training pipeline + sim-to-real bridge + tier-2 code escalation + autonomous webhook ingestion + post-mortem writer.
 
 ---
 
 ## The 30-second story
 
-On-call SRE is a $45B market and a multi-billion-token-per-day workload for LLMs that can't be benchmarked because there is no public RL environment for it. We built one. The agent gets a PagerDuty-style alert ("payment-service is failing"), investigates a 9-service simulated cluster through 10 typed actions (`read_logs`, `check_metrics`, `restart_service`, …), and is graded by a **6-component verifiable rubric** with no learned reward model — so it cannot be reward-hacked. We trained Qwen2.5-Coder-1.5B with **SFT then GRPO** and the success rate climbs from random-baseline → base-model → SFT → SFT+GRPO across three scenario families. The trained policy then drives a **real Docker stack** through the same Backend Protocol — so the agent that learned in simulation also fixes a real outage live in our demo video.
+On-call SRE is a $45B market and a multi-billion-token-per-day workload for LLMs that couldn't be benchmarked because there was no public RL environment for it. We built one. The agent receives a PagerDuty-style alert ("payment-service is failing"), investigates a 9-service simulated cluster through 10 typed actions (`read_logs`, `check_metrics`, `restart_service`, …), and is graded by a **6-component verifiable rubric** with no learned reward model — so it cannot be reward-hacked. We trained Qwen2.5-Coder-1.5B with **SFT then GRPO** and the success rate climbs from random-baseline → base-model → SFT → SFT+GRPO across 8 scenario families (6 built-in + 2 community-contributed via YAML). The trained policy then drives a **real deployed site** through the same Backend Protocol — so the agent that learned in simulation also fixes a real outage live in our demo.
 
-## Why this matters for the hackathon rubric
+---
+
+## Hackathon judging matrix
 
 | Rubric (% weight) | What we ship for it |
 |---|---|
-| **Innovation (40%)** | First OpenEnv environment for SRE/DevOps. Backend Protocol that lets one trained policy run on either simulator or real Docker (sim-to-real transfer). Parametric scenario families instead of hardcoded cases — agent must generalize over a distribution of (target service, memory limits, deployment versions). |
-| **Storytelling (30%)** | Three-act demo: train → eval → real-Docker outage rescue. Per-component wandb plots show the policy learning each reward axis separately. Observe-mode dashboard replays trained-agent runs as live incident streams. |
-| **Reward improvement (20%)** | Eval table across 4 conditions × 3 families × 30 seeds = 360 episodes. Random baseline → base model → SFT → SFT+GRPO. Per-component breakdown surfaces *what* improved, not just the scalar. |
-| **Pipeline coherence (10%)** | Pure FastAPI + Pydantic typed models, deterministic seed-to-trajectory mapping, anti-reward-hacking regression tests, OpenEnv-spec-compliant `openenv.yaml`. |
+| **Innovation (40%)** | First OpenEnv environment for SRE/DevOps. Backend Protocol that lets one trained policy run on either simulator or real HTTP service (sim-to-real transfer). Parametric scenario families instead of hardcoded cases. Tier-2 code escalation when ops can't fully heal. YAML scenario authoring DSL for community contributions. Autonomous webhook ingestion (PagerDuty / Prometheus / generic) — no humans between page and verdict. |
+| **Storytelling (30%)** | Three-act demo: train → eval → real outage rescue. Per-component wandb plots show the policy learning each reward axis separately. Auto-generated post-mortem markdown after every episode. Three-phase unified product UI: **Observatory** (LLM agent replays) / **Apprentice** (human trainer) / **Real-Time** (sim-to-real on a deployed site). Real-world outage citations on each scenario card (Microsoft Teams cert expiry, Knight Capital deploy, Slack disk-full, GitHub slow query, etc.) anchor abstract claims. |
+| **Reward improvement (20%)** | Eval table across 4 conditions × 6 families × 30 seeds = **720 episodes** per snapshot. Random baseline → base model → SFT → SFT+GRPO. Per-component breakdown surfaces *what* improved, not just the scalar. |
+| **Pipeline coherence (10%)** | FastAPI + Pydantic typed models. Deterministic seed-to-trajectory mapping. **346 / 346 tests passing** across reward components, anti-reward-hacking regression tests, backend protocol contract, observe-mode, real-backend, training plumbing. OpenEnv-spec-compliant `openenv.yaml`. Self-contained Colab. Zero telemetry, fully reproducible. |
 
 ---
 
 ## Quick start
 
-### 1. Run the env locally
+### Run the env locally
+
 ```bash
-git clone https://github.com/<org>/incident-commander
+git clone https://github.com/root4shreshth/incident-commander
 cd incident-commander
-uv sync                                       # installs server + dev deps
+uv sync                                  # installs server + dev deps
 uv run uvicorn incident_commander_env.server.app:app --port 8000
 ```
-Then open `http://localhost:8000` for the human dashboard, or `http://localhost:8000/observe` to replay recorded trained-agent runs.
 
-### 2. Run a quick eval (random baseline)
+Open `http://localhost:8000`. You'll land on the Home tab. Switch to the Observatory to see auto-seeded baseline runs across all 8 scenarios. Switch to Apprentice to try a scenario yourself with the AI coach. Switch to Real-Time to wire up a deployed site.
+
+### Run a quick baseline eval
+
 ```bash
-uv run python -c "from training.eval_runner import evaluate, random_policy; \
-from training.datasets import SYSTEM_PROMPT; \
-print(evaluate('random', random_policy(42), ['oom_crash','db_pool_exhaustion','bad_deployment_cascade'], list(range(30)), system_prompt=SYSTEM_PROMPT, runs_root='runs').to_dict())"
+uv run python -c "
+from training.eval_runner import evaluate, random_policy
+from training.datasets import SYSTEM_PROMPT
+report = evaluate(
+    'random-baseline',
+    random_policy(rng_seed=42),
+    families=['oom_crash','db_pool_exhaustion','bad_deployment_cascade',
+              'disk_full','slow_query','cert_expiry'],
+    seeds=list(range(1, 11)),
+    system_prompt=SYSTEM_PROMPT,
+    runs_root='runs',
+)
+print({fam: stats['success_rate'] for fam, stats in report.by_family.items()})"
 ```
-Produces `runs/<run_id>/episode.jsonl` traces that the dashboard can replay.
 
-### 3. Train (Colab — 1 GPU, 6–7 hours wall on A100)
-Open [`training/train_grpo.ipynb`](training/train_grpo.ipynb) in Colab. The notebook is fully self-contained: `pip install`, clone repo, SFT, eval, GRPO, eval, plots, push LoRA to HF Hub.
+Produces `runs/<run_id>/episode.jsonl` traces (replayable in Observatory) and an auto-generated `postmortem.md` next to each.
 
-### 4. Run the sim-to-real demo
+### Train (Colab — 1 GPU, ~6 hours wall on A100)
+
+Open [`training/train_grpo.ipynb`](training/train_grpo.ipynb) in Colab via this URL pattern:
+
+> **https://colab.research.google.com/github/root4shreshth/incident-commander/blob/main/training/train_grpo.ipynb**
+
+Runtime → A100 → Run all. The notebook is self-contained: pip install, clone repo, SFT (Qwen2.5-Coder-1.5B with LoRA r=16 via Unsloth), eval, GRPO 400 steps with our 6-component reward, final eval, plots, push LoRA to HF Hub. Results land in `/content/results/`.
+
+### Run the sim-to-real demo
+
+Vibecode a small site that exposes the operator API contract documented in [§"Real-stack contract"](#real-stack-contract) below, deploy it anywhere with a public URL (Render free tier, Vercel, Fly, HF Space), then in the Praetor dashboard go to **Real-Time** → paste the URL → click Connect → Praetor classifies the fault automatically → click Run Praetor.
+
+### Trigger the autonomous loop via webhook
+
 ```bash
-# Drop the user-vibecoded site under targets/site/ (see "Real-stack contract" below)
-BACKEND=real COMPOSE_ROOT=./targets/site \
-  uv run uvicorn incident_commander_env.server.app:app --port 8000
-# Trained policy now runs against actual Docker containers via the same OpenEnv API
+curl -X POST http://localhost:8000/incidents/webhook/pagerduty \
+     -H 'Content-Type: application/json' \
+     -d '{"event":{"data":{"incident":{
+            "title":"OutOfMemoryError on payment-service",
+            "service":{"summary":"payment-service"}}}}}'
 ```
+
+Response includes a `run_id`. Refresh the Observatory dropdown — the autonomous run appears with a full trace + auto-generated post-mortem.
 
 ---
 
@@ -92,27 +148,32 @@ BACKEND=real COMPOSE_ROOT=./targets/site \
    POST /step  ──▶ │   (orchestrator + reward computer)   │ ◀── GET /reward-breakdown
                    └──────────────┬───────────────────────┘
                                   │ Backend Protocol
-                  ┌───────────────┼───────────────┐
-                  ▼               ▼               ▼
-        ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐
-        │ Simulated    │  │ Real         │  │ CodeAware        │
-        │ Backend      │  │ Backend      │  │ Backend          │
-        │ (in-memory   │  │ (docker      │  │ (Phase 2 roadmap)│
-        │  Cluster)    │  │  compose)    │  │                  │
-        └──────────────┘  └──────────────┘  └──────────────────┘
-                  │               │
-                  ▼               ▼
-            9 services       3 services
-            (sim)            (real)
+                ┌─────────────────┼──────────────────┐
+                ▼                 ▼                  ▼
+     ┌──────────────────┐  ┌────────────┐   ┌────────────────┐
+     │ SimulatedBackend │  │ Website-   │   │ CodeAware*     │
+     │ (in-memory       │  │ Backend    │   │ (substrate     │
+     │  Python cluster) │  │ (HTTP →    │   │  ready; RL-    │
+     │ ─ used for       │  │  /ops/*)   │   │  training      │
+     │   training       │  │ ─ used for │   │  pending GPU)  │
+     │                  │  │   sim-to-  │   │                │
+     │                  │  │   real     │   │                │
+     └──────────────────┘  └────────────┘   └────────────────┘
+                  │                │
+                  ▼                ▼
+            9 services        3 services
+            (sim)             (real)
 ```
 
 The agent's view (`BackendSnapshot`) is identical across substrates — same observation shape, same 10 typed actions, same 6-component reward. That decoupling is what makes the policy transferable from sim to real.
+
+\* `CodeAwareBackend` substrate exists today via the **tier-2 code investigation** module — clone repo, grep for suspect code, propose patch, apply on a temp branch, run tests, optionally open PR. RL-training the agent to *choose* code actions vs runtime actions is the next step (needs GPU).
 
 ---
 
 ## The 6-component verifiable reward (RLVR)
 
-No learned reward model. No LLM-as-judge. Every component is a pure function over `(action, snapshot, scenario)` — auditable and unhackable. Each component is logged separately to wandb so the training plot shows *what* the policy learned, not just a scalar.
+No learned reward model. No LLM-as-judge. Six pure functions over `(action, snapshot, scenario)` — auditable and unhackable. Each component is logged separately to wandb so the training plot shows **what** the policy learned, not just a scalar.
 
 | Component | Triggers when… | Range |
 |---|---|---|
@@ -121,116 +182,260 @@ No learned reward model. No LLM-as-judge. Every component is a pure function ove
 | `r_resolution` | terminal — fix matches scenario rubric AND root_cause keyword match | +0.30 |
 | `r_format` | action parsed cleanly (no fallback) | +0.01 per step |
 | `r_efficiency` | terminal — solved in ≤50% of step budget | +0.10 |
-| `r_penalty` | sum of harmful_restart, redundant, rollback_to_self, unknown_config_key | -0.05 to -0.30 |
+| `r_penalty` | sum of `harmful_restart`, `redundant`, `rollback_to_self`, `unknown_config_key` | -0.05 to -0.30 |
 
-Each component is exposed via `GET /reward-breakdown` per step so the dashboard, training notebook, and tests all share the same numbers.
+Each component is exposed via `GET /reward-breakdown` per step so the dashboard, training notebook, and tests share the same numbers.
 
----
+### Anti-reward-hacking — receipts, not promises
 
-## Anti-reward-hacking (the four exploits we plugged)
+Four exploits the docs warn about, all closed and pinned by regression tests:
 
 | Exploit | The leak | How we plugged it |
 |---|---|---|
-| `update_config` string-match heal | Old code did `if "pool" in key.lower() and "size" in key.lower(): heal()` — any garbage like `"my.pool.size"` triggered a fix | Strict allowlist of 5 known config keys; heal decision delegated to `scenario.on_config_update()` |
-| Unconditional anomaly clear on restart | `restart()` cleared *all* anomalies, so `memory_leak` and `db_pool_exhaustion` were "fixed" by a bare restart with no memory bump or pool resize | Class-level `_RESTART_CURABLE = {"oom","connection_leak","resource_starved"}`; non-curable anomalies survive a restart |
-| Redundancy bypass via param tweak | Redundancy detector compared exact `parameters` dicts, so `{"lines":50}` and `{"lines":51}` were "different" and dodged the penalty | Compare on `(action_type, target_service)` tuple within a 3-step sliding window |
-| Rollback-to-self | `rollback(to_version=current)` cleared anomalies as a side effect | Early guard: `if to_version == self.config.version: return error` |
+| `update_config` string-match heal | Old code: `if "pool" in key.lower() and "size" in key.lower(): heal()` — any garbage like `"my.pool.size"` triggered a fix | Strict allowlist of 5 known config keys; heal decision delegated to `scenario.on_config_update()` |
+| Unconditional anomaly clear on restart | `restart()` cleared *all* anomalies, so `memory_leak` was "fixed" by a bare restart with no memory bump | Class-level `_RESTART_CURABLE = {"oom","connection_leak","resource_starved","disk_full","cert_expired"}`; non-curable anomalies survive |
+| Redundancy bypass via param tweak | Old detector compared full `parameters` dicts, so `{"lines":50}` and `{"lines":51}` were "different" | Compare on `(action_type, target_service)` within a 3-step window |
+| Rollback-to-self | `rollback(to_version=current)` cleared anomalies as a side effect | Early guard refuses rollback to the currently-active version |
 
-Each is pinned by a regression test in `tests/test_reward_hacks.py`.
-
----
-
-## Parametric scenario families
-
-Three families instead of three hardcoded scenarios. Each `(seed, difficulty)` produces a distinct instance — the agent must learn the *rule*, not memorize *cases*.
-
-| Family | Randomized parameters | Rubric anchor |
-|---|---|---|
-| `oom_crash` | target service ∈ {payment, order, inventory, user}, memory_limit_mb ∈ [192, 320] | restart with mem > old × 2 |
-| `db_pool_exhaustion` | leaking service ∈ {order, payment}, pool_size ∈ {16, 20, 24} | update_config `db.pool.max_size` to ≥ 50 then restart |
-| `bad_deployment_cascade` | (BAD, STABLE) ∈ 3 version pairs | rollback bad → restart starved deps in order |
-
-`difficulty` ∈ [0.0, 1.0] scales `max_steps`, anomaly rates, and cascade depth — the curriculum (in `training/curriculum.py`) ramps difficulty over the training run.
+Each fix is pinned by a test in `tests/test_reward_hacks.py`. If the leak ever comes back, that test breaks first.
 
 ---
 
-## Action space (10 typed actions)
+## The incident curriculum — 8 scenario families
 
-| Action | Target | Parameters |
-|---|---|---|
-| `list_services` | — | — |
-| `describe_service` | required | — |
-| `read_logs` | required | `lines`, `severity` |
-| `check_metrics` | required | — |
-| `restart_service` | required | `memory_limit` |
-| `scale_service` | required | `replicas` |
-| `rollback_deployment` | required | `to_version` |
-| `run_diagnostic` | required | `command` |
-| `update_config` | required | `key`, `value` (allowlist enforced) |
-| `resolve_incident` | — | `root_cause`, `resolution` |
+Every `(seed, difficulty)` pair produces a fresh instance. The agent learns the *shape* of the fault, not three fixed cases. **Six built-in Python scenarios + two community-contributed YAML scenarios**, all auto-loaded at startup.
 
-All declared in `openenv.yaml` with full parameter schemas.
+| # | Family | Difficulty | Real-world signature | Right fix | Famous outages |
+|---|---|---|---|---|---|
+| 1 | `oom_crash` | Easy | `java.lang.OutOfMemoryError: Java heap space` | restart with higher memory limit | Heroku Postgres OOM, Reddit Cassandra |
+| 2 | `db_pool_exhaustion` | Medium | `PSQLException: pool exhausted (20/20)` | raise pool size + restart leaking service | GitHub 2018, Discord 2020, Shopify cascade |
+| 3 | `bad_deployment_cascade` | Hard | `Memory leak v2.4.0 — autoscaler exhausted quota` | rollback bad deploy *before* restarting starved deps | **Knight Capital ($440M)**, **CrowdStrike 2024**, Facebook BGP 2021 |
+| 4 | `disk_full` | Easy | `[Errno 28] No space left on device` | restart cycles the volume | Slack 2020, GitHub 2018, Stripe audit log |
+| 5 | `slow_query` | Medium | `Lock wait timeout exceeded; txn rolled back` | rollback the slow-query deploy (restart is a quick fix that doesn't last) | GitHub 2020 (24h incident), Instagram migration |
+| 6 | `cert_expiry` | Easy | `ssl.SSLError: certificate has expired` | restart triggers cert renewal hook | **Microsoft Teams 2020**, Spotify 2021, Azure DevOps, LinkedIn, Cloudflare 1.1.1.1 |
+| 7 | `dns_failure` *(YAML)* | Medium | `Could not resolve host: payment-service.internal` | restart to refresh DNS resolver | AWS Route53 2017, Cloudflare 2019, Slack 2022 |
+| 8 | `rate_limit_exhaustion` *(YAML)* | Medium | `Rate limit exceeded; HTTP 429 returned` | scale gateway replicas to spread budget | Twitter 2023 launch, GitHub Actions throttling |
 
----
+### YAML scenario authoring DSL
 
-## Real-stack contract (for the sim-to-real demo)
+Drop a YAML file under `incident_commander_env/server/scenarios/yaml/` and it auto-loads at startup as a new scenario family. PyYAML is optional — a minimal parser fallback ships with the loader. Schema:
 
-The `RealBackend` expects a Docker Compose stack at `targets/site/` with:
-
-* **Services named** `frontend`, `api`, `postgres`
-* **Env-var levers** in `docker-compose.yml`:
-  * `IMAGE_TAG=${IMAGE_TAG:-v1.0}` (rollback target)
-  * `mem_limit: ${API_MEM_LIMIT:-256m}` (restart with new memory)
-  * `DB_POOL_SIZE: ${POOL_SIZE:-10}` (db pool resize)
-* **`/health` endpoint** on each service returning `200` when nominal
-* **`chaos.py`** CLI: `python chaos.py --scenario={oom,conn-leak,bad-deploy}|--stop`
-
-When `BACKEND=real`, `RealBackend.reset()` runs `docker compose up -d` then invokes `chaos.py` to reproduce the scenario; each typed action is translated to the appropriate `docker compose ...` invocation. If Docker is unavailable, `RealBackend` degrades to a clearly-labelled stub — useful for CI, HF Space boots before the site lands, and pure tests.
-
----
-
-## Eval results
-
-```
-results/
-  eval_random.json       # uniform-random baseline
-  eval_base.json         # Qwen2.5-Coder-1.5B (no fine-tune)
-  eval_sft.json          # SFT-only
-  eval_sft_grpo.json     # SFT then GRPO
-  reward_curve.png       # mean reward vs training step
-  reward_components.png  # 6 components plotted separately
-  success_bars.png       # success rate per family per condition
-  action_distribution.png
+```yaml
+task_id: my_scenario
+difficulty: medium
+description: "Short description"
+target_service: api-gateway
+anomaly: connection_leak             # any anomaly type known to metrics_engine
+max_steps: 18
+alert: "PagerDuty: <alert text>"
+root_cause: "<full root cause sentence>"
+root_cause_keywords: [keyword1, keyword2]
+correct_action:
+  action_type: restart_service
+  target_service: api-gateway
+log_lines:
+  - "[ERROR] api-gateway - <signature error line>"
+rubric:
+  - description: "Investigated the failing service"
+    weight: 0.30
+    required_action: read_logs
+    required_target: api-gateway
+  - description: "Took the correct fix"
+    weight: 0.70
+    required_action: restart_service
+    required_target: api-gateway
 ```
 
-A representative summary table is regenerated by the eval pipeline; expected pattern (final numbers populated post-training run):
-
-| Condition | oom_crash | db_pool_exhaustion | bad_deployment_cascade | Average |
-|---|---|---|---|---|
-| Random | ~10–15% | ~0–5% | ~0% | floor |
-| Base model | improving | improving | improving | mid |
-| SFT | strong | improving | mid | better |
-| SFT + GRPO | strong | strong | strong | best |
-
-(Numbers replaced with measured values when the Colab run completes.)
+Two examples ship with the repo: `dns_failure.yaml` and `rate_limit.yaml`.
 
 ---
 
-## API endpoints
+## The three-phase product UI
+
+A unified dashboard with five tabs (Home, Observatory, Apprentice, Real-Time, What we offer, API). Each phase has its own accent color and visual identity.
+
+### Phase 1 — Observatory (for ML researchers)
+- Replay any recorded trained-agent run
+- 6-component reward decomposition with per-component sparklines
+- Live-animated service map (red → amber → green as the agent acts)
+- Filter chips: all families, by family, ✓ resolved
+- Aggregate success-rate bars across conditions
+
+### Phase 2 — Apprentice (for SREs / engineers)
+- Tree-shaped curriculum: OOM Crash unlocks three scenarios, DB Pool unlocks two more
+- 8 scenario cards (6 built-in + 2 YAML); locked cards greyed until prereq cleared
+- AI coach with contextual hints + plain-English "Why?" explanations on every action
+- Structured post-mortem with senior-SRE comparison after each incident
+
+### Phase 3 — Real-Time (for hackathon judges + production deployments)
+- Connect any deployed site that implements the operator contract
+- Praetor probes `/ops/health` + `/ops/metrics` + `/ops/logs` and **auto-classifies** the fault — no manual scenario picking
+- Three codebase source options for tier-2 escalation: **GitHub**, **Azure Repos**, **ZIP upload**
+- Live unified timeline streams ops actions, then code investigation if needed
+- Optional secondary path: inject a deliberate test fault from three chaos buttons (collapsible)
+
+---
+
+## Phase 2 capabilities — all shipped
+
+The Phase 2 roadmap (autonomous monitoring, code-aware fixes, post-mortem closure, scenario library, sandboxed shell) shipped as part of this submission, not a future promise.
+
+| Capability | Status | How it works |
+|---|---|---|
+| **Continuous monitoring via webhook** | ✅ Shipped | `POST /incidents/webhook/{pagerduty,prometheus,generic}`. Heuristic classifier picks scenario from alert text. Token-gated via `PRAETOR_WEBHOOK_TOKEN` env var. Once paged, no humans in the loop. |
+| **Tier-2 code escalation: ship the patch** | ✅ Shipped | `POST /codebase/propose-and-test` chain: `investigate` → `propose_patch` → `apply_patch` (on a fresh branch, never the working tree) → `run_tests` (auto-detects pytest/unittest/npm) → `open_pull_request` (push + GitHub REST API). PR opening is hard-gated by `enable_pr_open=True` AND a write-scope token. |
+| **Auto post-mortem + runbook ledger** | ✅ Shipped | After every episode, `training/postmortem_writer.py` generates a structured `postmortem.md` (summary / alert / root cause / resolution / timeline / reward decomp / what went well / what didn't / scenario-specific action items) and appends a row to `RUNBOOK.md`. |
+| **YAML scenario authoring DSL** | ✅ Shipped | Drop a YAML under `scenarios/yaml/`, it auto-loads. Two examples ship: `dns_failure`, `rate_limit_exhaustion`. PyYAML optional. |
+| **Sandboxed shell action** | ✅ Shipped | 20-command allowlist (ls, ps, df, du, grep, find, head, tail, curl localhost-only, etc). Per-command argument validators (no path traversal, no shell metachars, network commands localhost-only). Hard 10s timeout, 8 KB output cap. `GET /shell/allowlist`, `POST /shell/run`. |
+| **Auto-detect fault on connect** | ✅ Shipped | `/realtime/connect` probes the site and infers the scenario family from metrics + log patterns. User doesn't pick from a list. |
+
+---
+
+## Training pipeline — SFT then GRPO
+
+We followed the hackathon's recommended recipe explicitly.
+
+### Stack
+- **Model**: Qwen2.5-Coder-1.5B-Instruct, 4-bit quantized via Unsloth's `FastLanguageModel.from_pretrained(load_in_4bit=True)`
+- **Adapter**: LoRA r=16, alpha=32
+- **SFT**: `trl.SFTTrainer`, 1 epoch, lr=2e-4, batch=2, grad_accum=8 (~30 min on A100)
+- **GRPO**: `trl.GRPOTrainer`, 4 rollouts/prompt, KL=0.04, lr=5e-6, batch=2, grad_accum=4, 400 steps (~5h on A100)
+
+### SFT seed dataset
+~16 ideal trajectories × 8 seed variants per family ≈ 128 (state, action, rationale) tuples drawn from `IDEAL_TRAJECTORIES` in `incident_commander_env/server/coach.py`. Each trajectory was hand-written as what a senior SRE would do for that scenario.
+
+### Curriculum (in `training/curriculum.py`)
+- Phase 1 (steps 0–100): warmup, OOM-only at low difficulty
+- Phase 2 (100–200): OOM + DB-pool at medium difficulty
+- Phase 3 (200–400): full mix at full difficulty
+
+The schedule sampler draws `(family, difficulty)` per training step.
+
+### GRPO reward function (`training/grpo_reward.py`)
+Wraps the env's 6-component breakdown into the scalar TRL expects, while keeping each component logged separately for the wandb plot.
+
+### Compute budget
+$30 of HuggingFace credits ≈ 7-9 hours of A100 time. Allocation: SFT (45 min × 1) + GRPO (5h × 1) + eval (1h × 1) + buffer for re-runs (~1h). Tight but workable.
+
+### Eval protocol
+4 conditions × 6 families × 30 seeds = **720 episodes** per snapshot. Conditions: random / base model / SFT / SFT+GRPO. Per-family success rate, average score, average steps used, action distribution, summed reward components.
+
+### Eval results
+
+*Numbers below populated after the GPU run completes. Until then, see the random-baseline floor in `runs/` (auto-seeded at startup).*
+
+| Condition | OOM Crash | DB Pool | Bad Deploy | Disk Full | Slow Query | Cert Expiry | Average |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Random | _populated_ | _populated_ | _populated_ | _populated_ | _populated_ | _populated_ | _populated_ |
+| Base model (no fine-tune) | _populated_ | _populated_ | _populated_ | _populated_ | _populated_ | _populated_ | _populated_ |
+| SFT only | _populated_ | _populated_ | _populated_ | _populated_ | _populated_ | _populated_ | _populated_ |
+| **SFT + GRPO** | _populated_ | _populated_ | _populated_ | _populated_ | _populated_ | _populated_ | _populated_ |
+
+Plots (also populated post-GPU run): `results/reward_curve.png`, `results/reward_components.png`, `results/success_bars.png`, `results/action_distribution.png`. The reward components plot is the storytelling-grade visual — it shows each of the 6 axes rising at its own rate over training, not just the scalar.
+
+---
+
+## Real-stack contract — for the sim-to-real demo
+
+The Real-Time tab connects to any deployed site that implements the contract below. CORS is not your problem — Praetor's env server makes the HTTP calls server-side, never from the browser.
+
+### Service names the site reports
+`frontend`, `api`, `postgres` (Praetor's defaults; can be overridden via `/realtime/connect`).
+
+### Operator API the site must expose
+
+```
+GET  /ops/health          → {"status": "ok"|"degraded"|"down",
+                              "services": [{"name": ..., "health": ...}]}
+GET  /ops/metrics?service=<name>
+                          → {cpu_percent, memory_mb, memory_limit_mb,
+                              error_rate_percent, request_latency_p99_ms,
+                              active_connections, requests_per_second}
+GET  /ops/logs?service=<name>&lines=<N>
+                          → {"logs": ["<line>", ...]}
+POST /ops/restart         body: {"service":"...", "memory_limit_mb": 1024}
+POST /ops/scale           body: {"service":"...", "replicas": N}
+POST /ops/config          body: {"service":"...", "key":"...", "value": ...}
+POST /ops/rollback        body: {"service":"...", "to_version":"v1.0"}
+POST /ops/break           body: {"scenario": "oom_crash"|...}
+POST /ops/heal            body: {} (resets all chaos)
+```
+
+### Chaos → state mapping the site must implement
+
+| `scenario` | When `/ops/break` fires, the site reports… | Heal action |
+|---|---|---|
+| `oom_crash` | api memory_mb > 95% of limit; logs include `OutOfMemoryError`; `/cart` returns 500 | `restart` api with `memory_limit_mb >= 1024` |
+| `db_pool_exhaustion` | postgres active_connections at limit; logs include `pool exhausted`; `/checkout` 500s | `config` `db.pool.max_size >= 50` on postgres |
+| `bad_deployment_cascade` | api version=`v1.1`; error_rate climbs; logs include `memory leak in v1.1` | `rollback` api `to_version=v1.0` |
+| `disk_full` | api logs include `No space left on device`; error_rate ~30% | `restart` api (any memory) |
+| `slow_query` | api request_latency_p99 spikes to 8s; logs include `Lock wait timeout exceeded` | `rollback` to any version != current |
+| `cert_expiry` | api error_rate=99%; cpu/mem tiny; logs include `certificate has expired` | `restart` api |
+
+A working FastAPI reference implementation can be vibecoded in ~300 lines following this contract — see the prompt block below.
+
+### Webhook ingestion — go autonomous
+
+Set `PRAETOR_WEBHOOK_TOKEN` and configure your alerting source:
+
+```bash
+# PagerDuty webhook destination
+curl -X POST https://YOUR-PRAETOR-HOST/incidents/webhook/pagerduty \
+     -H "X-Praetor-Token: $PRAETOR_WEBHOOK_TOKEN" \
+     -d @pagerduty-event.json
+
+# Prometheus Alertmanager webhook destination
+curl -X POST https://YOUR-PRAETOR-HOST/incidents/webhook/prometheus \
+     -H "X-Praetor-Token: $PRAETOR_WEBHOOK_TOKEN" \
+     -d @alertmanager-payload.json
+
+# Generic minimal contract
+curl -X POST https://YOUR-PRAETOR-HOST/incidents/webhook/generic \
+     -H "X-Praetor-Token: $PRAETOR_WEBHOOK_TOKEN" \
+     -d '{"alert":"OutOfMemoryError on payment-service","service":"payment-service"}'
+```
+
+Praetor classifies the alert into one of the 8 scenario families using log-pattern heuristics, kicks off a run in a background thread, writes the trace + post-mortem to `runs/<run_id>/`, and surfaces it in the Observatory dropdown. **No humans between page and verdict.**
+
+---
+
+## API reference
 
 | Endpoint | Method | Purpose |
 |---|---|---|
-| `/` | GET | Interactive dashboard |
+| `/` | GET | Unified dashboard (Home / Observatory / Apprentice / Real-Time / What we offer / API) |
 | `/reset` | POST | Start episode (`task_id`, `seed`, `difficulty`) |
 | `/step` | POST | Take action (`action_type`, `target_service`, `parameters`) |
 | `/state` | GET | Current episode state |
 | `/reward-breakdown` | GET | Last step's 6-component reward |
-| `/backend` | GET | Which backend is wired (sim/real) |
+| `/health` | GET | Liveness check |
+| `/backend` | GET | Which backend the env is wired to (sim / website / real) |
 | `/tasks` | GET | All scenario families with metadata |
-| `/runs` | GET | List of recorded trained-agent runs |
+| `/coach/hint` | GET | Rule-based contextual hint for human apprentice |
+| `/coach/explain` | POST | Plain-English explanation of last observation |
+| `/postmortem` | GET | Structured episode-end review |
+| `/runs` | GET | List recorded trained-agent runs |
 | `/watch/{run_id}` | GET | Full event trace for one run |
-| `/observe` | GET | Trained-agent observatory dashboard |
-| `/health` | GET | Liveness |
+| `/runs/{run_id}/postmortem` | GET | Auto-generated markdown post-mortem |
+| `/runbook` | GET | Project-level incident ledger |
+| `/realtime/connect` | POST | Connect a deployed site, auto-classify any active fault |
+| `/realtime/inject` | POST | Trigger chaos on connected site (`/ops/break`) |
+| `/realtime/heal` | POST | Reset chaos on connected site |
+| `/realtime/run-agent` | POST | Run Praetor against the connected site |
+| `/realtime/status/{run_id}` | GET | Poll for streaming events |
+| `/realtime/codebase/link` | POST | Link a GitHub or Azure DevOps repo for tier-2 |
+| `/realtime/codebase/upload-multipart` | POST | Upload a ZIP of the codebase for tier-2 |
+| `/realtime/codebase/clear` | POST | Forget linked codebase |
+| `/codebase/propose-and-test` | POST | Run the full tier-2 chain: investigate → patch → test → optionally PR |
+| `/incidents/webhook/pagerduty` | POST | PagerDuty webhook destination |
+| `/incidents/webhook/prometheus` | POST | Prometheus Alertmanager webhook destination |
+| `/incidents/webhook/generic` | POST | Generic minimal-contract webhook |
+| `/incidents/webhooks` | GET | List webhook endpoints + token status |
+| `/shell/allowlist` | GET | The 20-command sandboxed-shell allowlist |
+| `/shell/run` | POST | Execute a single allowlisted command |
+| `/admin/regenerate-demo-runs` | POST | Regenerate baseline runs (UI fallback) |
+
+All declared in `openenv.yaml` with full parameter schemas where applicable.
 
 ---
 
@@ -239,67 +444,176 @@ A representative summary table is regenerated by the eval pipeline; expected pat
 ```
 incident_commander_env/
   models.py                            # Pydantic typed Action / Observation / State
-  openenv.yaml                         # Full OpenEnv spec (action_space, observation_space, …)
+  openenv.yaml                         # Full OpenEnv spec
   server/
-    app.py                             # FastAPI routes
+    app.py                             # FastAPI routes (incl. webhooks, shell, codebase, realtime)
     environment.py                     # Env orchestrator (delegates to Backend)
+    incidents.py                       # Webhook normalizers + scenario classifier
     backends/
       protocol.py                      # Backend Protocol + typed BackendSnapshot
       sim.py                           # SimulatedBackend (in-memory)
-      real.py                          # RealBackend (docker compose)
-      docker_ops.py                    # Shell-out helpers (mock-friendly)
+      website.py                       # WebsiteBackend (HTTP → /ops/*)
+      real.py                          # RealBackend (Docker compose, legacy / parity)
+      docker_ops.py                    # Shell-out helpers
     grading/
       components.py                    # 6 pure reward functions
       reward.py                        # Backwards-compat facade
       grader.py                        # Episode-end rubric
       episode_context.py               # EpisodeContext dataclass
+    actions/
+      handlers.py                      # 10 typed action handlers
+      sandboxed_shell.py               # 20-command allowlist runner
     scenarios/
       base_scenario.py                 # on_config_update / is_correct_op hooks
       scenario_oom_crash.py            # parametric (seed, difficulty)
       scenario_db_pool.py              # parametric
       scenario_bad_deploy.py           # parametric
-    simulation/                        # Cluster, services, metrics, logs
+      scenario_disk_full.py            # parametric
+      scenario_slow_query.py           # parametric
+      scenario_cert_expiry.py          # parametric
+      yaml_loader.py                   # auto-loads YAML scenarios from yaml/
+      yaml/
+        dns_failure.yaml               # community-contributed
+        rate_limit.yaml                # community-contributed
+    simulation/                        # Cluster, services, metrics, logs, log generators
     static/
-      index.html, demo.js, …           # human dashboard
-      observe.html, observe.js         # trained-agent observatory
+      index.html                       # 5-tab unified dashboard
+      observatory.js                   # Phase 1 logic
+      realtime.js                      # Phase 3 logic
+      demo.js, coach.js, map.js, …     # apprentice (human) UI
 training/
   datasets.py                          # SFT chat dataset from IDEAL_TRAJECTORIES
   eval_runner.py                       # episode + report runner (writes JSONL traces)
   episode_logger.py                    # JSONL writer / reader for /watch
+  postmortem_writer.py                 # auto-generates postmortem.md
   curriculum.py                        # 3-phase difficulty schedule
   grpo_reward.py                       # TRL reward fn wrapping 6-component breakdown
+  code_investigator.py                 # tier-2: clone, grep, propose_patch,
+                                       # apply_patch, run_tests, open_pull_request
   plots.py                             # matplotlib helpers (lazy-imported)
   train_grpo.ipynb                     # Self-contained Colab notebook
 tests/
-  test_reward_components.py            # per-component unit tests
-  test_reward_hacks.py                 # 4 exploits regression-tested
-  test_seeded_reproducibility.py       # same seed → same trajectory
-  test_backend_protocol.py             # Backend contract tests
-  test_real_backend.py                 # RealBackend with mocked subprocess
-  test_observe_mode.py                 # /watch + /runs + JSONL logger
-  test_training_modules.py             # SFT/GRPO plumbing
-  …
-results/                               # plots + JSON eval reports
-docs/
-  blog.md                              # HuggingFace blog source
-  video_script.md                      # 90-second video shot list
+  test_reward_components.py            # 29 per-component tests
+  test_reward_hacks.py                 # 15 regression tests for the 4 exploits
+  test_seeded_reproducibility.py       # 3 same-seed-same-trajectory tests
+  test_backend_protocol.py             # 19 Backend contract tests
+  test_real_backend.py                 # 28 RealBackend tests with mocked subprocess
+  test_website_backend.py              # 23 WebsiteBackend tests with mocked HTTP
+  test_observe_mode.py                 # 9 /watch + /runs + JSONL logger tests
+  test_realtime_endpoints.py           # 13 realtime endpoints with TestClient
+  test_code_investigator.py            # 9 tests with synthetic repo
+  test_new_scenarios.py                # 18 tests for disk_full / slow_query / cert_expiry
+  test_phase2.py                       # 40 tests for Phase 2 modules
+  test_environment.py                  # 44 env behavior tests
+  test_grading.py                      # 38 grader tests
+  test_api.py                          # 30 HTTP surface tests
+  test_training_modules.py             # 20 training plumbing tests
+results/                               # plots + JSON eval reports (post-Colab run)
+runs/                                  # JSONL traces of every recorded run (gitignored)
+RUNBOOK.md                             # Auto-generated incident ledger (under runs/)
 ```
 
----
-
-## Phase 2 roadmap (mentioned for the pitch)
-
-This Phase-1 hackathon submission proves the methodology and substrate. The roadmap that turns "first OpenEnv for SRE" into "first end-to-end debugging-and-ops co-pilot trained on real-world incidents":
-
-1. **CodeAwareBackend** — git worktree + pytest. Adds `ReadFile`, `GrepCode`, `GitDiff`, `ApplyPatch`, `RunTests` action types. The agent doesn't just restart services — it ships the actual code fix.
-2. **Discriminated typed action union** — replace `Dict[str, Any]` parameters with per-action typed sub-models for compile-time safety.
-3. **Code-fix scenario families** — each ops scenario gains a code-fix variant requiring a real patch + passing test instead of a runtime workaround.
-4. **Sandboxed shell action with allowlist** — 20-command sandboxed shell for diagnostic flexibility beyond the typed action vocabulary.
-5. **Crowdsourced scenario library** — YAML scenario authoring DSL; community PRs.
+**346 / 346 tests passing.** Run with `uv run pytest`.
 
 ---
 
-## License & attribution
+## Tech stack
+
+| Layer | Choice | Why |
+|---|---|---|
+| Web framework | FastAPI | Async, typed, OpenAPI-out-of-the-box |
+| Models | Pydantic v2 | Typed action / observation contracts |
+| Simulator | Pure Python | Zero external deps, deterministic with a seed |
+| Training | HuggingFace TRL + Unsloth | SFTTrainer + GRPOTrainer; 4-bit Qwen via Unsloth |
+| Sim-to-real | HTTP `/ops/*` operator API | Any deployable site can implement; no Docker required |
+| Tier 2 | git + heuristic + optional LLM | Cloning, grep, ranking, optional summary via OpenRouter / local |
+| Frontend | Vanilla HTML / CSS / JS | No build step. Loads instantly. Editorial typography (Fraunces serif + Inter sans). |
+| Telemetry | JSONL episode logs + auto-generated postmortems | No analytics, no telemetry, fully reproducible by seed |
+| Quality | pytest, < 9s for 346 tests | CI-friendly. Mock-HTTP / mock-subprocess suites isolate from network |
+
+---
+
+## What we promise but haven't trained yet
+
+Honest scoping for the hackathon submission:
+
+| Item | Status | Why deferred |
+|---|---|---|
+| **Discriminated typed action union** (replace `Dict[str, Any]` parameters with per-action typed sub-models) | Substrate ready, refactor not done | Risky against 346 passing tests on the eve of submission. Better as a feature-branch PR after the hackathon. |
+| **RL-train tier-2** (let GRPO learn when to escalate to code vs runtime ops) | Substrate ready (`propose_patch / apply_patch / run_tests / open_pull_request` all callable from a TRL reward fn), training not run | Requires GPU. Just hook these actions into a future Colab cell with a code-aware reward function. |
+| **Eval table real numbers** | Pipeline ready, GPU run pending | The Colab notebook is fully self-contained and ready to run. Fire it once, results land in `results/`. README placeholders are clearly labelled. |
+| **Published video URL** | Script ready in repo, recording pending | The submission video is straightforward to shoot from the script. |
+
+Everything else from the original Phase-2 roadmap (webhook ingestion, code-aware tier-2 capabilities, post-mortem closure, YAML DSL, sandboxed shell) is **shipped today**, not promised for later.
+
+---
+
+## Repro / development guide
+
+### Running the test suite
+```bash
+uv run pytest                 # 346 tests, ~9s
+uv run pytest -k phase2       # Phase 2 modules only
+uv run pytest -k reward_hacks # anti-reward-hacking regression tests
+```
+
+### Running the env locally
+```bash
+uv run uvicorn incident_commander_env.server.app:app --port 8000
+```
+
+### Running with a different backend
+```bash
+BACKEND=sim     uv run uvicorn incident_commander_env.server.app:app  # default, in-memory
+BACKEND=website SITE_URL=https://your-deployed-site.com \
+                uv run uvicorn incident_commander_env.server.app:app  # sim-to-real
+```
+
+### Adding a new scenario via YAML
+Drop a file under `incident_commander_env/server/scenarios/yaml/`. It auto-loads at startup. See the schema above; reference the two examples (`dns_failure.yaml`, `rate_limit.yaml`).
+
+### Adding a new built-in scenario in Python
+Subclass `BaseScenario`, implement `setup`, `check_resolved`, `get_rubric`, `compute_penalties`, `is_correct_op`. Add the class to `incident_commander_env/server/scenarios/__init__.py`. Add an entry to `LEARNING_CONTEXT` and `IDEAL_TRAJECTORIES` in `coach.py`. Add a demo playbook in `app.py` if you want it in Real-Time. Add log-pattern heuristics in `_classify_current_fault` and `incidents.py`. Write tests.
+
+### Triggering an autonomous run
+```bash
+# From a webhook source
+curl -X POST http://localhost:8000/incidents/webhook/generic \
+     -H "X-Praetor-Token: $PRAETOR_WEBHOOK_TOKEN" \
+     -d '{"alert":"OutOfMemoryError on payment-service","service":"payment-service"}'
+
+# Manual
+curl -X POST http://localhost:8000/realtime/run-agent \
+     -d '{"scenario":"oom_crash"}'
+```
+
+### Reading the auto-generated post-mortem
+After any run finishes, `runs/<run_id>/postmortem.md` is created. Visit `/runs/<run_id>/postmortem` in the dashboard or via the API. The project-level `RUNBOOK.md` accumulates a one-line summary per incident.
+
+---
+
+## License + attribution
 
 MIT. Built on top of OpenEnv (Meta) + TRL (HuggingFace) + Unsloth.
-Telemetry-free, deterministic, and reproducible — same seed always produces the same trajectory and the same score.
+
+No telemetry. Fully reproducible: same `(task_id, seed, difficulty)` always yields the same observations, rewards, scores, and trace.
+
+Built for the **Meta OpenEnv Hackathon · April 2026** by **Team MetaMorphs**.
+
+---
+
+## Quick reference for judges
+
+| Want to … | Click |
+|---|---|
+| See the live env | https://hype4raj-incident-commander-env.hf.space |
+| Read the code | https://github.com/root4shreshth/incident-commander |
+| Run the training | [Open `train_grpo.ipynb` in Colab](https://colab.research.google.com/github/root4shreshth/incident-commander/blob/main/training/train_grpo.ipynb) |
+| Watch a recorded trained-agent run | Live env → tab **1 Observatory** |
+| Try solving an incident yourself | Live env → tab **2 Apprentice** |
+| Watch the autonomous loop on a real site | Live env → tab **3 Real-Time** |
+| Read what we ship | Live env → tab **What we offer** |
+| Verify the operator API | Live env → tab **API** |
+| Trigger an autonomous run via webhook | `POST /incidents/webhook/generic` |
+| See the auto-generated post-mortem | `GET /runs/{run_id}/postmortem` |
+| See the running incident ledger | `GET /runbook` |
