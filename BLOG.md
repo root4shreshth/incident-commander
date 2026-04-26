@@ -142,15 +142,13 @@ That's the autonomy story we wanted to tell in a single sentence: **Praetor goes
 
 ## What we'd build next
 
-This was a 48-hour build. Everything in the submission is what fit in 48 hours; the rest is honest future work. There are three concrete things we'd ship if we kept going:
+Three concrete capabilities sit just past the current build, each one a specific extension rather than a rewrite.
 
-**RL-trained code-aware action policy.** Today the agent can clone a repo, grep for the suspect lines, propose a patch on a fresh branch, run the test suite, and open a pull request — all of it shipped, all of it callable from the dashboard. What it can't do yet is *learn* when to escalate to a code fix versus when runtime ops are enough. The four primitives are sitting there waiting to be hooked into a TRL reward function. It's a Colab cell away. We just didn't have the GPU time.
+**RL-trained code-aware action policy.** The agent can already clone a repo, grep for the suspect lines, propose a patch on a fresh branch, run the test suite, and open a pull request — those four primitives are callable from the dashboard today. What it can't do yet is *learn* when to escalate to a code fix versus when runtime ops are enough. Wiring those primitives into a TRL reward function with a tier-2 action vocabulary turns Praetor from "incident commander" into "incident commander that ships the patch." The substrate is in place; the training run is the missing piece.
 
-**A discriminated typed-action union.** Right now an action's `parameters` is `Dict[str, Any]` — workable, but compile-time-unsafe. Replacing it with per-action Pydantic sub-models is a meaningful refactor we deliberately kept off the eve-of-submission diff because we had three hundred and forty-six passing tests and didn't want to risk breaking them at hour forty-seven.
+**A discriminated typed-action union.** Today an action's `parameters` field is `Dict[str, Any]`. It's flexible but compile-time-unsafe — a typo in a key name surfaces only at runtime, and the spec in `openenv.yaml` has to carry the schema redundantly. Replacing it with per-action Pydantic sub-models would give every action a strict signature, surface bad parameter names at validation time, and let the OpenEnv YAML be auto-generated from the type annotations. It's a meaningful refactor that touches the action handlers, the scenarios' `is_correct_op` checks, and a slice of the test suite — but it's the right shape for a project this size to grow into.
 
-**A larger scenario library, contributed by people who have actually been on call.** The YAML DSL is the seed. Anyone can convert a real post-mortem into a reproducible RL scenario without writing Python — two examples shipped already (DNS failure: the AWS Route53 / Cloudflare 2019 / Slack 2022 pattern; rate-limit exhaustion: the Twitter 2023 launch pattern). The third batch should come from the community. We think the right finished form of this project is hundreds of scenarios contributed by SREs who lived through the original outages.
-
-We're not going to pretend any of that is in the box. What's in the box is what fit in two days. We'd rather be precise than promotional, and the README and this blog both reflect that.
+**A larger scenario library, contributed by people who have actually been on call.** The YAML DSL is the seed. Anyone can convert a real post-mortem into a reproducible RL scenario without writing Python — two examples already ship (DNS failure: the AWS Route53 / Cloudflare 2019 / Slack 2022 pattern; rate-limit exhaustion: the Twitter 2023 launch pattern). The right finished form of this project is hundreds of scenarios contributed by SREs who lived through the original outages, each one a precise reproduction of a category of failure that's bitten enough teams to be worth training against.
 
 ---
 
