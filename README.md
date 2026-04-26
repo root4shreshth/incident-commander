@@ -36,7 +36,7 @@ tags:
 | **Training notebook (Colab)** | [Open in Colab ↗](https://colab.research.google.com/github/root4shreshth/incident-commander/blob/main/training/train_grpo.ipynb) · source: [`training/train_grpo.ipynb`](training/train_grpo.ipynb) |
 | **Trained LoRA adapter** | populated after training run completes |
 | **90-second video walkthrough** | populated after recording |
-| **Blog post** | _link added once the post goes live on HF_ → `https://huggingface.co/blog/<USERNAME>/praetor-incident-commander` |
+| **Blog post** | source: [`BLOG.md`](BLOG.md) · live URL added on HF: `https://huggingface.co/blog/<USERNAME>/praetor-incident-commander` |
 | **Eval results** | [`results/`](results/) (committed after training run) |
 
 ---
@@ -383,16 +383,30 @@ $30 of HuggingFace credits ≈ 7-9 hours of A100 time. Allocation: SFT (45 min �
 
 ### Eval results
 
-*Numbers below populated after the GPU run completes. Until then, see the random-baseline floor in `runs/` (auto-seeded at startup).*
+The **random-baseline floor** is committed today; the trained-condition rows (Base / SFT / SFT+GRPO) get appended to the same files when [`train_grpo.ipynb`](training/train_grpo.ipynb) runs on a GPU.
 
 | Condition | OOM Crash | DB Pool | Bad Deploy | Disk Full | Slow Query | Cert Expiry | Average |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| Random | _populated_ | _populated_ | _populated_ | _populated_ | _populated_ | _populated_ | _populated_ |
-| Base model (no fine-tune) | _populated_ | _populated_ | _populated_ | _populated_ | _populated_ | _populated_ | _populated_ |
-| SFT only | _populated_ | _populated_ | _populated_ | _populated_ | _populated_ | _populated_ | _populated_ |
-| **SFT + GRPO** | _populated_ | _populated_ | _populated_ | _populated_ | _populated_ | _populated_ | _populated_ |
+| **Random (n=180, real measurement)** | **17%** | **0%** | **0%** | **0%** | **23%** | **0%** | **6.7%** |
+| Base model (no fine-tune) | populated post-Colab | _populated_ | _populated_ | _populated_ | _populated_ | _populated_ | _populated_ |
+| SFT only | populated post-Colab | _populated_ | _populated_ | _populated_ | _populated_ | _populated_ | _populated_ |
+| **SFT + GRPO** | populated post-Colab | _populated_ | _populated_ | _populated_ | _populated_ | _populated_ | _populated_ |
 
-Plots (also populated post-GPU run): `results/reward_curve.png`, `results/reward_components.png`, `results/success_bars.png`, `results/action_distribution.png`. The reward components plot is the storytelling-grade visual — it shows each of the 6 axes rising at its own rate over training, not just the scalar.
+Random-baseline plot suite (committed in [`results/`](results/)):
+
+| Plot | What it shows |
+|---|---|
+| [`baseline_reward_per_episode.png`](results/baseline_reward_per_episode.png) | Reward signal across all 180 baseline episodes with a 20-episode moving average |
+| [`baseline_reward_components.png`](results/baseline_reward_components.png) | The 6 reward axes plotted separately — what the floor's component mix looks like |
+| [`baseline_success_rates.png`](results/baseline_success_rates.png) | Per-family success bars for the random condition (trained conditions added post-Colab) |
+| [`baseline_action_distribution.png`](results/baseline_action_distribution.png) | Action mix of the random policy |
+| [`baseline_summary.json`](results/baseline_summary.json) | Machine-readable per-family stats |
+
+Two things stand out in the floor numbers. **Cert expiry is the hardest baseline at 0%** — even though it's labelled "easy" by step budget — because metrics look almost normal and the only signal is a literal log line. A random policy that doesn't read those logs has zero chance of stumbling on the right fix. **OOM and slow_query each get one or two random wins** (17% and 23%) because the action space includes `restart_service`, and the random policy occasionally picks the right service by chance. Every other family is 0%.
+
+That's the floor. The trained conditions go above it.
+
+To regenerate the baseline plots locally: `uv run python scripts/generate_baseline_plots.py`. To produce the GPU-trained curves, run the Colab notebook.
 
 ---
 
@@ -666,7 +680,7 @@ Built for the **Meta OpenEnv Hackathon · April 2026** by **Team MetaMorphs**.
 |---|---|
 | See the live env | https://hype4raj-incident-commander-env.hf.space |
 | Read the code | https://github.com/root4shreshth/incident-commander |
-| Read the blog post | _placeholder — add once published_ → `https://huggingface.co/blog/<USERNAME>/praetor-incident-commander` |
+| Read the blog post | source: [`BLOG.md`](BLOG.md) · live URL added on HF: `https://huggingface.co/blog/<USERNAME>/praetor-incident-commander` |
 | Run the training | [Open `train_grpo.ipynb` in Colab](https://colab.research.google.com/github/root4shreshth/incident-commander/blob/main/training/train_grpo.ipynb) |
 | Watch a recorded trained-agent run | Live env → tab **1 Observatory** |
 | Try solving an incident yourself | Live env → tab **2 Apprentice** |

@@ -1,0 +1,39 @@
+{
+  "condition": "random-baseline",
+  "n_families": 6,
+  "n_seeds": 30,
+  "n_episodes": 180,
+  "by_family": {
+    "oom_crash": {
+      "success_rate": 0.16666666666666666,
+      "avg_score": 0.25766666666666665,
+      "avg_steps_used": 13.566666666666666
+    },
+    "db_pool_exhaustion": {
+      "success_rate": 0.0,
+      "avg_score": 0.4,
+      "avg_steps_used": 28.0
+    },
+    "bad_deployment_cascade": {
+      "success_rate": 0.0,
+      "avg_score": 0.31833333333333336,
+      "avg_steps_used": 37.0
+    },
+    "disk_full": {
+      "success_rate": 0.0,
+      "avg_score": 0.092,
+      "avg_steps_used": 18.0
+    },
+    "slow_query": {
+      "success_rate": 0.23333333333333334,
+      "avg_score": 0.24400000000000002,
+      "avg_steps_used": 18.1
+    },
+    "cert_expiry": {
+      "success_rate": 0.0,
+      "avg_score": 0.01,
+      "avg_steps_used": 16.0
+    }
+  },
+  "note": "Random-policy floor across all 6 scenario families. The trained conditions (SFT, SFT+GRPO) are produced by running training/train_grpo.ipynb on Colab \u2014 those numbers replace this file's contents post-run."
+}
