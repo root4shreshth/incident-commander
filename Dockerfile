@@ -12,7 +12,9 @@ RUN pip install --no-cache-dir \
     "uvicorn[standard]>=0.24.0" \
     pydantic>=2.0.0 \
     openai>=1.0.0 \
-    requests>=2.31.0
+    requests>=2.31.0 \
+    python-multipart>=0.0.9 \
+    PyYAML>=6.0
 
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app
