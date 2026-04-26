@@ -495,21 +495,34 @@ The **random-baseline floor** is committed today; the trained-condition rows (Ba
 | Base model (no fine-tune) | populated post-Colab | _populated_ | _populated_ | _populated_ | _populated_ | _populated_ | _populated_ |
 | SFT | populated post-Colab | _populated_ | _populated_ | _populated_ | _populated_ | _populated_ | _populated_ |
 
+**Headline comparison plot** - random baseline vs the scripted senior-SRE playbook (the upper bound any non-learned policy could hit). Real measurements from 81 recorded episodes under [`runs/`](runs/):
+
+![Random vs scripted playbook success rates](results/comparison_success_rates.png)
+
+The two clean wins - **OOM crash 20% -> 100%** and **cert expiry 0% -> 100%** - are the kind of gap a trained SFT policy is expected to close. DB pool exhaustion stays at 0% even on the playbook, which is honest signal that the playbook entry for that family needs more work (it's a known short-trajectory case). The trained-model bars get appended to this same chart when the Colab SFT run completes.
+
 Random-baseline plot suite (committed in [`results/`](results/)):
 
 | Plot | What it shows |
 |---|---|
+| [`comparison_success_rates.png`](results/comparison_success_rates.png) | Random vs scripted playbook side-by-side, all 8 families, real recorded numbers |
 | [`baseline_reward_per_episode.png`](results/baseline_reward_per_episode.png) | Reward signal across all 180 baseline episodes with a 20-episode moving average |
 | [`baseline_reward_components.png`](results/baseline_reward_components.png) | The 6 reward axes plotted separately - what the floor's component mix looks like |
 | [`baseline_success_rates.png`](results/baseline_success_rates.png) | Per-family success bars for the random condition (trained conditions added post-Colab) |
 | [`baseline_action_distribution.png`](results/baseline_action_distribution.png) | Action mix of the random policy |
-| [`baseline_summary.json`](results/baseline_summary.json) | Machine-readable per-family stats |
+| [`comparison_summary.json`](results/comparison_summary.json) / [`baseline_summary.json`](results/baseline_summary.json) | Machine-readable per-family stats |
 
 Two things stand out in the floor numbers. **Cert expiry is the hardest baseline at 0%** - even though it's labelled "easy" by step budget - because metrics look almost normal and the only signal is a literal log line. A random policy that doesn't read those logs has zero chance of stumbling on the right fix. **OOM and slow_query each get one or two random wins** (17% and 23%) because the action space includes `restart_service`, and the random policy occasionally picks the right service by chance. Every other family is 0%.
 
-That's the floor. The trained conditions go above it.
+That's the floor. The scripted-playbook upper bound shows what the curriculum is reaching for; the trained conditions go in between.
 
-To regenerate the baseline plots locally: `uv run python scripts/generate_baseline_plots.py`. To produce the GPU-trained curves, run the Colab notebook.
+To regenerate the plots locally:
+```bash
+uv run python scripts/generate_baseline_plots.py    # the 4 random-baseline plots
+uv run python scripts/generate_comparison_plot.py   # the random-vs-playbook comparison
+```
+
+To produce the GPU-trained curves, run the Colab notebook.
 
 ---
 

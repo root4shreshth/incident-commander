@@ -1,0 +1,65 @@
+{
+  "n_runs_total": 81,
+  "by_condition": {
+    "random-baseline": {
+      "bad_deployment_cascade": {
+        "n": 5,
+        "success_rate": 0.0,
+        "avg_score": 0.292
+      },
+      "cert_expiry": {
+        "n": 5,
+        "success_rate": 0.0,
+        "avg_score": 0.01
+      },
+      "db_pool_exhaustion": {
+        "n": 5,
+        "success_rate": 0.0,
+        "avg_score": 0.4
+      },
+      "disk_full": {
+        "n": 5,
+        "success_rate": 0.0,
+        "avg_score": 0.01
+      },
+      "oom_crash": {
+        "n": 5,
+        "success_rate": 0.2,
+        "avg_score": 0.34199999999999997
+      },
+      "slow_query": {
+        "n": 5,
+        "success_rate": 0.2,
+        "avg_score": 0.23399999999999999
+      },
+      "dns_failure": {
+        "n": 5,
+        "success_rate": 0.0,
+        "avg_score": 0.01
+      },
+      "rate_limit_exhaustion": {
+        "n": 5,
+        "success_rate": 0.0,
+        "avg_score": 0.01
+      }
+    },
+    "scripted-playbook": {
+      "oom_crash": {
+        "n": 21,
+        "success_rate": 1.0,
+        "avg_score": 0.99
+      },
+      "cert_expiry": {
+        "n": 10,
+        "success_rate": 1.0,
+        "avg_score": 0.99
+      },
+      "db_pool_exhaustion": {
+        "n": 10,
+        "success_rate": 0.0,
+        "avg_score": 0.01
+      }
+    }
+  },
+  "note": "Real measured success rates from runs/ directory. Random-baseline = uniform-random policy; scripted-playbook = deterministic best-trajectory from coach.py. SFT condition appended after Colab training writes new episodes to runs/."
+}
