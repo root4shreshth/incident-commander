@@ -325,6 +325,78 @@
         .rt-tier-banner.escalate{background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.3);color:#fcd34d}
         .rt-tier-banner.resolved{background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.3);color:#86efac}
 
+        /* ═══ Animated timeline step (Real-Time tab) ═══ */
+        @keyframes stepFadeSlideIn {
+            from {opacity: 0; transform: translateY(8px); border-left-width: 1px;}
+            to   {opacity: 1; transform: translateY(0);   border-left-width: 3px;}
+        }
+        @keyframes stepLatestPulse {
+            0%, 100% {box-shadow: 0 0 0 0 rgba(105,224,214,0);}
+            50%      {box-shadow: 0 0 12px 2px rgba(105,224,214,0.25);}
+        }
+        #rt-timeline .step.is-fresh {animation: stepFadeSlideIn .35s ease-out;}
+        #rt-timeline .step.is-latest {position: relative;}
+        #rt-timeline .step.is-latest::before {
+            content: ''; position: absolute; left: -3px; top: -1px; bottom: -1px; width: 3px;
+            background: var(--accent-cyan, #06b6d4);
+            animation: stepLatestPulse 2s ease-in-out infinite;
+            border-radius: 3px;
+        }
+        #rt-timeline .step .step-head-left {display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0;}
+        #rt-timeline .step .step-num-pill {
+            font-family: 'JetBrains Mono', monospace; font-size: 10.5px; font-weight: 600;
+            padding: 2px 7px; border-radius: 10px;
+            background: rgba(99,115,148,.13); color: var(--text-secondary);
+            letter-spacing: .3px;
+        }
+        #rt-timeline .step.is-latest .step-num-pill {
+            background: rgba(6,182,212,.18); color: var(--accent-cyan, #06b6d4);
+        }
+        #rt-timeline .step .step-action-name {
+            font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 500;
+            color: var(--text-primary);
+        }
+        #rt-timeline .step .step-target {
+            font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: var(--text-muted);
+        }
+        #rt-timeline .step .step-target::before {content: '→ '; color: var(--text-muted);}
+        #rt-timeline .step .step-params {
+            font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--text-muted);
+            background: rgba(99,115,148,.08); padding: 1px 6px; border-radius: 4px;
+        }
+        #rt-timeline .step .step-tier-pill {
+            font-family: 'JetBrains Mono', monospace; font-size: 9.5px; font-weight: 600;
+            padding: 2px 6px; border-radius: 8px;
+            background: rgba(168,85,247,.13); color: var(--accent-purple);
+            text-transform: uppercase; letter-spacing: .8px;
+        }
+        /* Why expander */
+        .step-why-row {margin-top: 8px; padding-top: 8px; border-top: 1px dashed rgba(99,115,148,.15);}
+        .step-why-toggle {
+            background: transparent; border: none; cursor: pointer;
+            color: var(--accent-cyan, #06b6d4); font-size: 11px; font-weight: 500; font-family: inherit;
+            padding: 0; display: inline-flex; align-items: center; gap: 5px;
+            text-transform: uppercase; letter-spacing: .8px;
+        }
+        .step-why-toggle:hover {color: var(--text-primary);}
+        .step-why-toggle .why-icon {font-size: 10px; transition: transform .15s ease;}
+        .step-why-body {
+            margin-top: 8px; padding: 10px 12px;
+            background: rgba(6,182,212,.05); border-left: 2px solid var(--accent-cyan, #06b6d4);
+            border-radius: 4px; font-size: 12.5px; line-height: 1.55;
+            color: var(--text-secondary);
+            animation: stepFadeSlideIn .25s ease-out;
+        }
+
+        /* Export-as-PDF row on final report */
+        .rt-export-row {
+            margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border);
+            display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+        }
+        .rt-export-row .rt-export-hint {
+            font-size: 11px; color: var(--text-muted); flex: 1; min-width: 200px;
+        }
+
         /* Codebase source tabs */
         .cb-tabs{display:flex;gap:4px;background:var(--bg-elevated);padding:4px;border-radius:9px;margin-bottom:14px;border:1px solid var(--border)}
         .cb-tab{flex:1;background:transparent;border:none;color:var(--text-muted);padding:8px 14px;font-size:12.5px;font-family:inherit;font-weight:500;cursor:pointer;border-radius:6px;transition:all .2s;letter-spacing:-0.005em}
@@ -1933,7 +2005,7 @@ window.Home = {
 <script src="/static/map.js?v=4"></script>
 <script src="/static/demo.js?v=5"></script>
 <script src="/static/observatory.js?v=3"></script>
-<script src="/static/realtime.js?v=3"></script>
+<script src="/static/realtime.js?v=4"></script>
 <script src="/static/integrations.js?v=1"></script>
 </body>
 </html>

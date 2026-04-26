@@ -370,20 +370,55 @@
       if (tl.firstChild && tl.firstChild.classList && tl.firstChild.classList.contains('empty-state')) {
         tl.innerHTML = '';
       }
+      // Drop the "latest" marker from the previous step (so only the newest animates).
+      tl.querySelectorAll('.step.is-latest').forEach(el => el.classList.remove('is-latest'));
+
       const a = ev.action || {};
       const target = a.target_service ? ' → ' + a.target_service : '';
       const params = a.parameters && Object.keys(a.parameters).length
         ? ' ' + JSON.stringify(a.parameters) : '';
+      const why = ev.why || '';
+      const tier = ev.tier || 'tier1';
       const node = document.createElement('div');
-      node.className = 'step ' + (ev.error ? 'bad' : 'good');
+      node.className = 'step is-latest is-fresh ' + (ev.error ? 'bad' : 'good');
       node.innerHTML = `
         <div class="top">
-          <span><strong>step ${ev.step}</strong> · ${escapeHtml(a.action_type || '?')}${escapeHtml(target)}${escapeHtml(params)}</span>
-          <span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text-muted)">tier1</span>
+          <span class="step-head-left">
+            <span class="step-num-pill">step ${ev.step}</span>
+            <span class="step-action-name">${escapeHtml(a.action_type || '?')}</span>
+            ${target ? `<span class="step-target">${escapeHtml(target)}</span>` : ''}
+            ${params ? `<span class="step-params">${escapeHtml(params)}</span>` : ''}
+          </span>
+          <span class="step-tier-pill">${escapeHtml(tier)}</span>
         </div>
         <div class="body">${escapeHtml((ev.message || '').slice(0, 600))}</div>
+        ${why ? `
+        <div class="step-why-row">
+          <button class="step-why-toggle" data-expanded="false" aria-expanded="false">
+            <span class="why-icon">▸</span> Why this step?
+          </button>
+          <div class="step-why-body" hidden>${escapeHtml(why)}</div>
+        </div>` : ''}
       `;
       tl.appendChild(node);
+
+      // Wire the Why button (if present)
+      const toggle = node.querySelector('.step-why-toggle');
+      if (toggle) {
+        toggle.addEventListener('click', () => {
+          const body = node.querySelector('.step-why-body');
+          const expanded = toggle.dataset.expanded === 'true';
+          toggle.dataset.expanded = String(!expanded);
+          toggle.setAttribute('aria-expanded', String(!expanded));
+          toggle.querySelector('.why-icon').textContent = expanded ? '▸' : '▾';
+          body.hidden = expanded;
+        });
+      }
+
+      // Remove the "fresh" class after the entrance animation completes
+      // so re-rendering doesn't keep re-triggering it.
+      setTimeout(() => node.classList.remove('is-fresh'), 600);
+
       tl.scrollTop = tl.scrollHeight;
       return;
     }
@@ -449,6 +484,24 @@
     } else {
       html += `<div class="obs-pill bad" style="margin-bottom:10px">UNRESOLVED</div>`;
       html += `<p style="font-size:13px;color:var(--text-secondary)">Tier 1 ops actions did not fully heal the site, and tier 2 was not enabled (no codebase linked).</p>`;
+    }
+    // Export-as-PDF button (opens a print-ready report in a new tab)
+    if (state.runId) {
+      html += `
+        <div class="rt-export-row">
+          <a class="btn btn-primary btn-sm" target="_blank" rel="noopener"
+             href="/realtime/run/${encodeURIComponent(state.runId)}/report"
+             title="Opens a print-ready report in a new tab. Use the browser's print dialog (or the button on the report) to save as PDF.">
+            📄 Export as PDF
+          </a>
+          <a class="btn btn-outline btn-sm" target="_blank" rel="noopener"
+             href="/realtime/run/${encodeURIComponent(state.runId)}/report?noprint=1"
+             title="Open the report without auto-launching the print dialog.">
+            ↗ Preview report
+          </a>
+          <span class="rt-export-hint">PDF includes the alert, every step with reasoning, and the final result.</span>
+        </div>
+      `;
     }
     body.innerHTML = html;
   }

@@ -543,64 +543,96 @@ _MAX_ZIP_BYTES = 25 * 1024 * 1024  # 25 MB — big enough for most codebases, sm
 # deterministic so the live demo doesn't fail on stage.
 _DEMO_PLAYBOOK: Dict[str, List[Dict[str, Any]]] = {
     "oom_crash": [
-        {"action_type": "list_services"},
-        {"action_type": "read_logs",     "target_service": "api"},
-        {"action_type": "check_metrics", "target_service": "api"},
+        {"action_type": "list_services",
+         "why": "Always start with cluster overview so I can spot which service is unhealthy before drilling in."},
+        {"action_type": "read_logs",     "target_service": "api",
+         "why": "The api service is failing — read its logs to confirm the failure mode. Looking specifically for OOMKilled / java.lang.OutOfMemoryError patterns."},
+        {"action_type": "check_metrics", "target_service": "api",
+         "why": "Logs suggest OOM; verifying with metrics (memory_mb vs memory_limit_mb) gives me a confident diagnosis before I touch a knob."},
         {"action_type": "restart_service", "target_service": "api",
-         "parameters": {"memory_limit": "1024Mi"}},
+         "parameters": {"memory_limit": "1024Mi"},
+         "why": "Restart with a higher memory ceiling — 1024Mi gives 4× headroom over the original 256Mi, absorbing the workload spike. OOM is restart-curable in this scenario; smaller bumps tend to be revisited."},
         {"action_type": "resolve_incident",
          "parameters": {"root_cause": "OOM on api — memory limit too low",
-                        "resolution": "restart api with 1024Mi"}},
+                        "resolution": "restart api with 1024Mi"},
+         "why": "Service is healthy and the fix is durable. Declaring resolved so the postmortem captures the root cause + remediation in the runbook."},
     ],
     "db_pool_exhaustion": [
-        {"action_type": "list_services"},
-        {"action_type": "read_logs",     "target_service": "api"},
-        {"action_type": "read_logs",     "target_service": "postgres"},
+        {"action_type": "list_services",
+         "why": "Cluster-wide view first — multiple services are likely degraded if a shared dependency is the cause."},
+        {"action_type": "read_logs",     "target_service": "api",
+         "why": "User-facing service is failing — start where the symptom is."},
+        {"action_type": "read_logs",     "target_service": "postgres",
+         "why": "API logs point downstream — postgres is the shared dependency, look for pool-exhaustion signatures there."},
         {"action_type": "update_config", "target_service": "postgres",
-         "parameters": {"key": "db.pool.max_size", "value": 100}},
-        {"action_type": "restart_service", "target_service": "api"},
+         "parameters": {"key": "db.pool.max_size", "value": 100},
+         "why": "Raise the connection pool ceiling so legitimate traffic stops queuing. 100 is a safe value above the observed peak; the underlying connection-leak fix is a separate code change."},
+        {"action_type": "restart_service", "target_service": "api",
+         "why": "Restart api to release any zombie connections it's holding open. Without this, the new pool capacity stays partly consumed by the old leaked sessions."},
         {"action_type": "resolve_incident",
          "parameters": {"root_cause": "connection pool exhausted on postgres",
-                        "resolution": "raised pool to 100, restarted api"}},
+                        "resolution": "raised pool to 100, restarted api"},
+         "why": "Health probes are green and connection count is back to baseline."},
     ],
     "bad_deployment_cascade": [
-        {"action_type": "list_services"},
-        {"action_type": "read_logs",     "target_service": "api"},
+        {"action_type": "list_services",
+         "why": "Multiple services are reported failing — get the blast-radius picture first."},
+        {"action_type": "read_logs",     "target_service": "api",
+         "why": "Spot the recent deployment marker — look for v1.1 references and memory-leak symptoms."},
         {"action_type": "rollback_deployment", "target_service": "api",
-         "parameters": {"to_version": "v1.0"}},
-        {"action_type": "restart_service", "target_service": "api"},
+         "parameters": {"to_version": "v1.0"},
+         "why": "Rollback FIRST — restart alone won't help, the leak is in the v1.1 binary. Reverting to v1.0 stops the bleeding before we restore dependent services."},
+        {"action_type": "restart_service", "target_service": "api",
+         "why": "After rollback, restart cycles cleanly onto v1.0 and frees the resource quota the autoscaler was burning."},
         {"action_type": "resolve_incident",
          "parameters": {"root_cause": "v1.1 bundled a memory leak",
-                        "resolution": "rolled back api to v1.0 and restarted"}},
+                        "resolution": "rolled back api to v1.0 and restarted"},
+         "why": "Resolution names the offending version — important for the postmortem so the team can prevent the same v1.1 from being re-deployed without a code fix."},
     ],
     "disk_full": [
-        {"action_type": "list_services"},
-        {"action_type": "read_logs",     "target_service": "api"},
-        {"action_type": "check_metrics", "target_service": "api"},
-        {"action_type": "restart_service", "target_service": "api"},
+        {"action_type": "list_services",
+         "why": "Confirm which service is degraded — disk-full failures often look like generic 5xx until you read logs."},
+        {"action_type": "read_logs",     "target_service": "api",
+         "why": "Look for ENOSPC / 'No space left on device' — the smoking gun for disk-full incidents."},
+        {"action_type": "check_metrics", "target_service": "api",
+         "why": "Confirm CPU and memory are normal — that confirms it's NOT an OOM and rules out memory-bump as a fix."},
+        {"action_type": "restart_service", "target_service": "api",
+         "why": "Restart cycles the volume — in our deployment model the pod's tmp/log directory clears on restart. Permanent fix is log rotation, but restart is the right immediate action."},
         {"action_type": "resolve_incident",
          "parameters": {"root_cause": "log volume on api filled — writes returning ENOSPC",
-                        "resolution": "restarted api to cycle the volume"}},
+                        "resolution": "restarted api to cycle the volume"},
+         "why": "Volume is clean and writes succeed. Following up with a log-rotation policy fix is queued separately."},
     ],
     "slow_query": [
-        {"action_type": "list_services"},
-        {"action_type": "check_metrics", "target_service": "api"},
-        {"action_type": "read_logs",     "target_service": "api"},
-        {"action_type": "describe_service", "target_service": "api"},
+        {"action_type": "list_services",
+         "why": "Cluster overview — slow-query incidents typically show one service degraded and dependencies fine."},
+        {"action_type": "check_metrics", "target_service": "api",
+         "why": "Latency p99 spike + low throughput is the lock-contention signature. Confirming before diving into logs."},
+        {"action_type": "read_logs",     "target_service": "api",
+         "why": "Logs will show 'Lock wait timeout exceeded' or 'deadlock detected' — the SQL-level smoking gun."},
+        {"action_type": "describe_service", "target_service": "api",
+         "why": "Pull deployment history — if a recent version introduced the slow query, rollback (not restart) is the right fix."},
         {"action_type": "rollback_deployment", "target_service": "api",
-         "parameters": {"to_version": "v1.0"}},
+         "parameters": {"to_version": "v1.0"},
+         "why": "Restart alone clears the active txns but the slow query is still in the binary — it'll lock up again. Rollback reverts both."},
         {"action_type": "resolve_incident",
          "parameters": {"root_cause": "v1.1 introduced a slow query holding row-locks",
-                        "resolution": "rolled back api to v1.0"}},
+                        "resolution": "rolled back api to v1.0"},
+         "why": "Latency back to baseline and throughput recovered. The slow query goes back behind a feature flag in the next deploy."},
     ],
     "cert_expiry": [
-        {"action_type": "list_services"},
-        {"action_type": "check_metrics", "target_service": "api"},
-        {"action_type": "read_logs",     "target_service": "api"},
-        {"action_type": "restart_service", "target_service": "api"},
+        {"action_type": "list_services",
+         "why": "One service unhealthy, others fine, but the difference matters — cert-expiry has a confusing signature."},
+        {"action_type": "check_metrics", "target_service": "api",
+         "why": "Verify metrics look almost normal except error_rate at 99% and request rate near zero — that's the cert-expiry pattern, not a crash."},
+        {"action_type": "read_logs",     "target_service": "api",
+         "why": "Confirm with logs — looking for 'ssl.SSLError: certificate has expired'. Metrics alone won't tell you cert-expiry; the logs are the source of truth."},
+        {"action_type": "restart_service", "target_service": "api",
+         "why": "Restart triggers the cert renewal hook — listener reloads with the new cert and HTTPS handshakes start succeeding."},
         {"action_type": "resolve_incident",
          "parameters": {"root_cause": "TLS cert on api expired",
-                        "resolution": "restarted api to renew cert and reload listener"}},
+                        "resolution": "restarted api to renew cert and reload listener"},
+         "why": "Service is reachable. Following up with a 30-day cert-expiry alert so this can never surprise us again."},
     ],
 }
 
@@ -1087,6 +1119,195 @@ def realtime_status(run_id: str) -> Dict[str, Any]:
         return dict(rec)  # shallow copy, fine for read-only API
 
 
+@app.get("/realtime/run/{run_id}/report")
+def realtime_run_report(run_id: str):
+    """Render a print-ready HTML page for the given real-time run.
+
+    The browser opens this URL in a new tab and the user prints it as PDF
+    via Ctrl+P → Save as PDF. The page includes everything needed for a
+    formal incident report: alert, classification, every step with the
+    agent's reasoning, and the final result.
+    """
+    from fastapi.responses import HTMLResponse
+    safe_id = run_id.replace("..", "").replace("/", "").replace("\\", "")
+    with _REALTIME_LOCK:
+        rec = _REALTIME_RUNS.get(safe_id)
+        if not rec:
+            return HTMLResponse(
+                "<!doctype html><html><body><h1>Run not found</h1>"
+                f"<p>No record for run_id <code>{safe_id}</code>.</p></body></html>",
+                status_code=404,
+            )
+        rec = dict(rec)  # shallow copy
+        rec["events"] = list(rec.get("events", []))
+
+    return HTMLResponse(_render_run_report_html(safe_id, rec))
+
+
+def _render_run_report_html(run_id: str, rec: Dict[str, Any]) -> str:
+    """Build the print-ready HTML for a run's incident report.
+
+    Inline CSS (no external assets), browser-print-friendly. Auto-triggers
+    print dialog on load via a tiny script — user picks 'Save as PDF' from
+    the destination dropdown.
+    """
+    import html as _html
+    from datetime import datetime, timezone
+
+    def esc(x: Any) -> str:
+        return _html.escape(str(x or ""))
+
+    events = rec.get("events", [])
+    start_ev = next((e for e in events if e.get("type") == "start"), {})
+    classify_ev = next((e for e in events if e.get("type") == "classify"
+                        or "classification" in e), None)
+    steps = [e for e in events if e.get("type") == "step"]
+    tier1_done = next((e for e in events if e.get("type") == "tier1_done"), {})
+    tier2_done = next((e for e in events if e.get("type") == "tier2_done"), None)
+
+    started_at = rec.get("started_at")
+    finished_at = rec.get("finished_at")
+    duration_s = (finished_at - started_at) if (started_at and finished_at) else None
+
+    scenario = rec.get("scenario") or start_ev.get("scenario") or "unknown"
+    site_url = rec.get("site_url") or start_ev.get("site_url") or "(in-process simulator)"
+    alert = rec.get("alert_title") or rec.get("alert_summary") or "(no alert text captured)"
+
+    resolved = bool(rec.get("tier1_resolved"))
+    status_label = "RESOLVED" if resolved else (
+        "ESCALATED" if tier2_done else "UNRESOLVED"
+    )
+    status_color = "#22c55e" if resolved else ("#f59e0b" if tier2_done else "#ef4444")
+
+    started_iso = (
+        datetime.fromtimestamp(started_at, tz=timezone.utc).isoformat()
+        if started_at else "—"
+    )
+
+    # Build the steps HTML
+    steps_html = []
+    for ev in steps:
+        a = ev.get("action") or {}
+        params = a.get("parameters") or {}
+        params_str = (
+            json.dumps(params, separators=(",", ": ")) if params else ""
+        )
+        why = ev.get("why") or "—"
+        message = (ev.get("message") or "").strip()
+        target = a.get("target_service")
+        steps_html.append(f"""
+<div class="step">
+  <div class="step-head">
+    <div>
+      <span class="step-num">step {esc(ev.get("step", "?"))}</span>
+      <span class="step-action">{esc(a.get("action_type", "?"))}</span>
+      {f'<span class="step-target">→ {esc(target)}</span>' if target else ''}
+      {f'<span class="step-params">{esc(params_str)}</span>' if params else ''}
+    </div>
+    <div class="step-tier">{esc(ev.get("tier", "tier1"))}</div>
+  </div>
+  <div class="step-body">{esc(message)[:1500]}</div>
+  <div class="step-why"><span class="why-label">Why:</span> {esc(why)}</div>
+</div>
+        """)
+    steps_html_str = "\n".join(steps_html) or "<p>No steps recorded.</p>"
+
+    tier2_html = ""
+    if tier2_done:
+        tier2_html = f"""
+<h2>Tier 2 — code investigation</h2>
+<p><strong>Summary:</strong> {esc(tier2_done.get("summary", "—"))}</p>
+<p><strong>Suggested fix:</strong> {esc(tier2_done.get("suggested_fix", "—"))}</p>
+<p><strong>Findings:</strong> {esc(tier2_done.get("n_findings", 0))} candidate code locations identified.</p>
+        """
+
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Praetor Incident Report — {esc(run_id)}</title>
+<style>
+@page {{ margin: 18mm 16mm; size: A4; }}
+* {{ box-sizing: border-box; }}
+html, body {{ margin: 0; padding: 0; font-family: 'Inter', -apple-system, sans-serif; color: #1a1a1a; line-height: 1.55; }}
+body {{ padding: 32px 40px; max-width: 820px; margin: 0 auto; background: white; }}
+h1 {{ font-family: 'Fraunces', Georgia, serif; font-weight: 400; font-size: 32px; margin: 0 0 6px; letter-spacing: -0.02em; }}
+h2 {{ font-family: 'Inter', sans-serif; font-weight: 600; font-size: 13px; text-transform: uppercase; letter-spacing: 1.5px; color: #6b7280; margin: 32px 0 12px; padding-bottom: 4px; border-bottom: 1px solid #e5e7eb; }}
+.subtitle {{ font-family: 'Fraunces', Georgia, serif; font-style: italic; font-size: 16px; color: #6b7280; margin: 0 0 24px; }}
+.meta {{ display: grid; grid-template-columns: 130px 1fr; gap: 6px 14px; font-size: 13px; margin-bottom: 24px; padding: 14px 16px; background: #f9fafb; border-radius: 8px; }}
+.meta dt {{ color: #6b7280; }}
+.meta dd {{ margin: 0; color: #1a1a1a; font-family: 'JetBrains Mono', Menlo, monospace; font-size: 12px; }}
+.status {{ display: inline-flex; align-items: center; padding: 4px 12px; border-radius: 12px; font-size: 11px; font-weight: 600; letter-spacing: 0.6px; color: white; background: {status_color}; margin-left: 10px; }}
+p {{ margin: 0 0 12px; font-size: 13.5px; }}
+.alert-box {{ background: #fef3c7; border-left: 3px solid #f59e0b; padding: 12px 16px; border-radius: 4px; font-size: 13.5px; margin-bottom: 20px; }}
+.step {{ background: #f9fafb; border-left: 3px solid #3b82f6; padding: 12px 14px; border-radius: 4px; margin-bottom: 10px; page-break-inside: avoid; }}
+.step-head {{ display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; flex-wrap: wrap; gap: 6px; }}
+.step-num {{ font-weight: 600; color: #1a1a1a; font-size: 12px; margin-right: 8px; }}
+.step-action {{ font-family: 'JetBrains Mono', Menlo, monospace; font-size: 12px; color: #3b82f6; font-weight: 500; }}
+.step-target {{ font-family: 'JetBrains Mono', Menlo, monospace; font-size: 12px; color: #6b7280; margin-left: 4px; }}
+.step-params {{ font-family: 'JetBrains Mono', Menlo, monospace; font-size: 11px; color: #9ca3af; margin-left: 6px; }}
+.step-tier {{ font-family: 'JetBrains Mono', Menlo, monospace; font-size: 10px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.6px; }}
+.step-body {{ font-family: 'JetBrains Mono', Menlo, monospace; font-size: 11.5px; color: #4b5563; margin-bottom: 8px; white-space: pre-wrap; word-break: break-word; }}
+.step-why {{ font-size: 12.5px; color: #1a1a1a; padding-top: 8px; border-top: 1px dashed #d1d5db; }}
+.why-label {{ font-weight: 600; color: #3b82f6; text-transform: uppercase; font-size: 10px; letter-spacing: 1px; }}
+.footer {{ margin-top: 40px; padding-top: 16px; border-top: 1px solid #e5e7eb; font-size: 11px; color: #9ca3af; text-align: center; }}
+.no-print {{ position: fixed; top: 16px; right: 16px; padding: 10px 18px; background: #3b82f6; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 500; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }}
+@media print {{ .no-print {{ display: none; }} body {{ padding: 0; }} }}
+</style>
+</head>
+<body>
+<button class="no-print" onclick="window.print()">📄 Print / Save as PDF</button>
+
+<h1>Praetor Incident Report</h1>
+<p class="subtitle">Autonomous incident response · run <code>{esc(run_id)}</code> <span class="status">{status_label}</span></p>
+
+<dl class="meta">
+  <dt>Run ID</dt>          <dd>{esc(run_id)}</dd>
+  <dt>Scenario</dt>        <dd>{esc(scenario)}</dd>
+  <dt>Target</dt>          <dd>{esc(site_url)}</dd>
+  <dt>Started</dt>         <dd>{esc(started_iso)}</dd>
+  <dt>Steps used</dt>      <dd>{esc(len(steps))}</dd>
+  <dt>Wall-clock</dt>      <dd>{f"{duration_s:.2f} s" if duration_s else "—"}</dd>
+  <dt>Auto-classified</dt> <dd>{"yes" if rec.get("auto_classified") else "no"}</dd>
+</dl>
+
+<h2>The problem we saw</h2>
+<div class="alert-box">{esc(alert)}</div>
+{f'<p><strong>Praetor classified the fault as:</strong> {esc(scenario)}.</p>' if scenario else ''}
+
+<h2>Steps Praetor took</h2>
+{steps_html_str}
+
+{tier2_html}
+
+<h2>Result</h2>
+<p>
+  Status: <strong>{status_label}</strong>.
+  {'Tier-1 runtime ops resolved the incident — no code escalation needed.' if resolved else (
+    'Tier-1 ops were not enough; tier-2 surfaced candidate code locations to investigate.'
+    if tier2_done else 'Tier-1 ops did not fully heal the site, and tier-2 was not enabled.'
+  )}
+  Total wall-clock: {f"{duration_s:.2f} seconds." if duration_s else "(in progress)."}
+</p>
+
+<div class="footer">
+  Generated by Praetor — autonomous SRE incident commander · {esc(started_iso)}
+</div>
+
+<script>
+// Auto-open the print dialog so the user can save as PDF immediately.
+// Disabled if the URL has ?noprint=1 (useful for previewing the layout).
+if (!new URLSearchParams(location.search).has('noprint')) {{
+  window.addEventListener('load', function() {{
+    setTimeout(function() {{ window.print(); }}, 400);
+  }});
+}}
+</script>
+</body>
+</html>
+"""
+
+
 @app.get("/realtime/config")
 def realtime_config() -> Dict[str, Any]:
     """Inspect the current real-time configuration (site URL, codebase source, etc.)."""
@@ -1201,6 +1422,7 @@ def _webhook_sim_worker(run_id: str, scenario: str) -> None:
                     "parameters": action.parameters,
                 },
                 "message": obs.message, "error": obs.error, "done": obs.done,
+                "why": step_def.get("why"),
             })
             log.step(steps_used, action, obs)
             if obs.done:
@@ -1584,6 +1806,7 @@ def _realtime_run_worker(run_id: str, scenario: str, enable_tier2: bool) -> None
             "message": obs.message,
             "error": obs.error,
             "done": obs.done,
+            "why": step_def.get("why"),
         })
         if obs.done:
             last_resolved = bool(obs.message and "PASS" in obs.message)
