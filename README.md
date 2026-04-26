@@ -36,7 +36,7 @@ tags:
 | **Training notebook (Colab)** | [Open in Colab ↗](https://colab.research.google.com/github/root4shreshth/incident-commander/blob/main/training/train_grpo.ipynb) · source: [`training/train_grpo.ipynb`](training/train_grpo.ipynb) |
 | **Trained LoRA adapter** | populated after training run completes |
 | **90-second video walkthrough** | populated after recording |
-| **Blog write-up** | this README is the canonical write-up; HF Blog mirror added on submission |
+| **Blog post** | _link added once the post goes live on HF_ → `https://huggingface.co/blog/<USERNAME>/praetor-incident-commander` |
 | **Eval results** | [`results/`](results/) (committed after training run) |
 
 ---
@@ -649,6 +649,7 @@ Built for the **Meta OpenEnv Hackathon · April 2026** by **Team MetaMorphs**.
 |---|---|
 | See the live env | https://hype4raj-incident-commander-env.hf.space |
 | Read the code | https://github.com/root4shreshth/incident-commander |
+| Read the blog post | _placeholder — add once published_ → `https://huggingface.co/blog/<USERNAME>/praetor-incident-commander` |
 | Run the training | [Open `train_grpo.ipynb` in Colab](https://colab.research.google.com/github/root4shreshth/incident-commander/blob/main/training/train_grpo.ipynb) |
 | Watch a recorded trained-agent run | Live env → tab **1 Observatory** |
 | Try solving an incident yourself | Live env → tab **2 Apprentice** |
