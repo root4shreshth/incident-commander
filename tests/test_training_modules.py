@@ -1,6 +1,6 @@
 """Smoke tests for the training/ pipeline modules.
 
-These verify the *plumbing* — schemas, dispatch, action parsing — without
+These verify the *plumbing* - schemas, dispatch, action parsing - without
 loading any real model. Real training behavior is tested by running the
 Colab notebook on actual compute (Phase 5).
 """
@@ -157,7 +157,7 @@ class TestCurriculum:
 
     def test_draw_within_phase_constraints(self):
         cur = Curriculum(rng_seed=42)
-        # Phase 1 — only oom_crash
+        # Phase 1 - only oom_crash
         for _ in range(20):
             family, _ = cur.draw(50)
             assert family == "oom_crash"

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Praetor — Incident Commander for SREs</title>
+    <title>Praetor - Incident Commander for SREs</title>
     <!-- Google OAuth Client ID. Create one at https://console.cloud.google.com/apis/credentials
          (OAuth 2.0 Client IDs -> Web application). Add this Space's URL as an authorized JavaScript origin.
          Without a real Client ID, the Google button falls back to the demo flow. -->
@@ -11,7 +11,36 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500;9..144,600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <style>
-        :root{--bg-primary:#0a0e17;--bg-secondary:#111827;--bg-card:#1a2035;--bg-elevated:#1e2943;--border:rgba(99,115,148,0.2);--border-active:rgba(99,179,255,0.4);--text-primary:#f1f5f9;--text-secondary:#94a3b8;--text-muted:#64748b;--accent-blue:#3b82f6;--accent-green:#22c55e;--accent-red:#ef4444;--accent-orange:#f59e0b;--accent-purple:#a855f7;--accent-cyan:#06b6d4;--glow-blue:rgba(59,130,246,0.15);--glow-red:rgba(239,68,68,0.15);--glow-green:rgba(34,197,94,0.15)}
+        :root{
+            --bg-primary:#0a0e17;--bg-secondary:#111827;--bg-card:#1a2035;--bg-elevated:#1e2943;
+            --border:rgba(99,115,148,0.2);--border-active:rgba(99,179,255,0.4);
+            --text-primary:#f1f5f9;--text-secondary:#94a3b8;--text-muted:#64748b;
+            --accent-blue:#3b82f6;--accent-green:#22c55e;--accent-red:#ef4444;
+            --accent-orange:#f59e0b;--accent-purple:#a855f7;--accent-cyan:#06b6d4;
+            --glow-blue:rgba(59,130,246,0.15);--glow-red:rgba(239,68,68,0.15);--glow-green:rgba(34,197,94,0.15);
+            --nav-bg:rgba(17,24,39,0.85);
+            --hover-overlay:rgba(255,255,255,.03);
+            --hover-overlay-strong:rgba(255,255,255,.06);
+            --hover-border:rgba(255,255,255,.15);
+            --shadow-card:0 1px 3px rgba(0,0,0,.4);
+            color-scheme: dark;
+        }
+        /* === Light mode palette ===
+         * Toggled by setting data-theme="light" on <html>. Accent colors stay
+         * the same; everything else inverts. */
+        :root[data-theme="light"]{
+            --bg-primary:#ffffff;--bg-secondary:#f8fafc;--bg-card:#ffffff;--bg-elevated:#f1f5f9;
+            --border:rgba(15,23,42,0.12);--border-active:rgba(59,130,246,0.45);
+            --text-primary:#0f172a;--text-secondary:#475569;--text-muted:#64748b;
+            --glow-blue:rgba(59,130,246,0.10);--glow-red:rgba(239,68,68,0.10);--glow-green:rgba(34,197,94,0.10);
+            --nav-bg:rgba(255,255,255,0.88);
+            --hover-overlay:rgba(15,23,42,.04);
+            --hover-overlay-strong:rgba(15,23,42,.07);
+            --hover-border:rgba(15,23,42,.18);
+            --shadow-card:0 1px 3px rgba(15,23,42,.08);
+            color-scheme: light;
+        }
+        :root[data-theme="light"] body{background:var(--bg-primary)}
         *{margin:0;padding:0;box-sizing:border-box}body{font-family:'Inter',system-ui,sans-serif;background:var(--bg-primary);color:var(--text-primary);min-height:100vh;overflow-x:hidden}a{color:var(--accent-blue);text-decoration:none}code,.mono{font-family:'JetBrains Mono',monospace}
 
         /* Animations */
@@ -34,7 +63,7 @@
         .spinner-sm{width:10px;height:10px;border-width:1.5px}
 
         /* Nav */
-        .nav{background:rgba(17,24,39,0.85);backdrop-filter:blur(20px);border-bottom:1px solid var(--border);padding:0 32px;display:flex;align-items:center;height:56px;position:sticky;top:0;z-index:100}
+        .nav{background:var(--nav-bg);backdrop-filter:blur(20px);border-bottom:1px solid var(--border);padding:0 32px;display:flex;align-items:center;height:56px;position:sticky;top:0;z-index:100}
         .nav-brand{display:flex;align-items:center;gap:11px}
         .brand-mark{width:22px;height:22px;border-radius:6px;background:linear-gradient(135deg,#fbbf24,#f97316);position:relative;flex-shrink:0;box-shadow:0 0 12px rgba(251,191,36,.35)}
         .brand-mark::before{content:'';position:absolute;inset:5px;border:1.5px solid rgba(10,14,23,0.85);border-radius:50%;border-bottom-color:transparent;border-left-color:transparent;transform:rotate(-45deg)}
@@ -43,12 +72,25 @@
         @media(max-width:760px){.brand-sub{display:none}}
         .nav-tabs{display:flex;margin-left:48px;gap:4px;height:100%}
         .nav-tab{padding:0 18px;height:100%;display:flex;align-items:center;font-size:13px;font-weight:500;color:var(--text-muted);cursor:pointer;border-bottom:2px solid transparent;transition:all .2s}
-        .nav-tab:hover{color:var(--text-secondary);background:rgba(255,255,255,.03)}.nav-tab.active{color:var(--text-primary);border-bottom-color:var(--accent-blue)}
+        .nav-tab:hover{color:var(--text-secondary);background:var(--hover-overlay)}.nav-tab.active{color:var(--text-primary);border-bottom-color:var(--accent-blue)}
         .nav-right{margin-left:auto;display:flex;align-items:center;gap:16px}
         .live-badge{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--accent-green);font-weight:500}
         .live-dot{width:7px;height:7px;border-radius:50%;background:var(--accent-green);box-shadow:0 0 8px var(--accent-green);animation:pulse 2s infinite}
         .mode-toggle{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-secondary);font-weight:500;cursor:pointer;background:var(--bg-card);border:1px solid var(--border);padding:6px 12px;border-radius:20px;transition:all .2s}
         .mode-toggle:hover{border-color:var(--border-active)}
+        /* Theme toggle (dark/light) */
+        .theme-toggle{
+            display:flex;align-items:center;justify-content:center;
+            width:34px;height:34px;border-radius:50%;cursor:pointer;
+            background:var(--bg-card);border:1px solid var(--border);
+            color:var(--text-secondary);transition:all .2s;
+            font-size:15px;line-height:1;
+        }
+        .theme-toggle:hover{border-color:var(--border-active);color:var(--text-primary);background:var(--bg-elevated)}
+        .theme-toggle .theme-icon-sun{display:none}
+        .theme-toggle .theme-icon-moon{display:inline}
+        :root[data-theme="light"] .theme-toggle .theme-icon-sun{display:inline}
+        :root[data-theme="light"] .theme-toggle .theme-icon-moon{display:none}
         .mode-dot{width:8px;height:8px;border-radius:50%;background:var(--accent-cyan);transition:all .25s}
         body[data-mode="pro"] .mode-dot{background:var(--accent-purple)}
         .tab-content{display:none;animation:fadeIn .3s ease}.tab-content.active{display:block}
@@ -62,7 +104,7 @@
         .serif{font-family:'Fraunces',Georgia,serif;font-weight:400;letter-spacing:-0.01em;font-style:normal}
         .serif-italic{font-family:'Fraunces',Georgia,serif;font-style:italic;font-weight:400}
 
-        /* Per-phase accent — sets a single CSS variable used by section headers,
+        /* Per-phase accent - sets a single CSS variable used by section headers,
            button glows, and underlines so each tab has its own identity without
            the page feeling chaotic. */
         body[data-tab="home"]{--phase-accent:#fbbf24}        /* warm amber */
@@ -103,7 +145,7 @@
         @media(max-width:1024px){.home-phase-grid{grid-template-columns:1fr}}
         .home-phase{background:var(--bg-card);border:1px solid var(--border);border-radius:18px;padding:34px 28px 28px;cursor:pointer;transition:all .3s;position:relative;overflow:hidden}
         .home-phase::before{content:'';position:absolute;top:0;left:0;width:100%;height:3px;background:var(--p-color,var(--phase-accent));opacity:.5;transition:opacity .3s}
-        .home-phase:hover{transform:translateY(-3px);border-color:rgba(255,255,255,.15)}
+        .home-phase:hover{transform:translateY(-3px);border-color:var(--hover-border)}
         .home-phase:hover::before{opacity:1}
         .home-phase[data-color="violet"]{--p-color:#a855f7}
         .home-phase[data-color="blue"]{--p-color:#3b82f6}
@@ -167,7 +209,7 @@
         @media(max-width:680px){.curriculum-grid{grid-template-columns:1fr}}
         .curr-card{background:var(--bg-card);border:1px solid var(--border);border-radius:16px;padding:24px 22px 22px;position:relative;overflow:hidden;transition:border-color .25s,transform .25s}
         .curr-card::before{content:'';position:absolute;top:0;left:0;width:3px;height:100%;background:var(--card-accent,var(--phase-accent));opacity:.6;transition:opacity .25s}
-        .curr-card:hover{transform:translateY(-2px);border-color:rgba(255,255,255,.12)}
+        .curr-card:hover{transform:translateY(-2px);border-color:var(--hover-border)}
         .curr-card:hover::before{opacity:1}
         .curr-card[data-diff="easy"]{--card-accent:#22c55e}
         .curr-card[data-diff="medium"]{--card-accent:#f59e0b}
@@ -200,7 +242,7 @@
         .obs-hero h1, .rt-hero h1, .hero h1{font-family:'Fraunces',Georgia,serif;font-weight:300;letter-spacing:-0.025em}
         .obs-hero h1 em, .rt-hero h1 em, .hero h1 em{font-style:italic;font-weight:400}
 
-        /* ═══ Phase 1 — Observatory ═══ */
+        /* ═══ Phase 1 - Observatory ═══ */
         .obs-hero{padding:56px 32px 24px;text-align:center;position:relative;overflow:hidden;border-bottom:1px solid var(--border)}
         .obs-hero::before{content:'';position:absolute;top:-200px;left:50%;transform:translateX(-50%);width:800px;height:800px;background:radial-gradient(circle,rgba(168,85,247,0.08)0%,transparent 70%);pointer-events:none}
         .obs-hero h1{font-size:42px;font-weight:900;letter-spacing:-1.2px;line-height:1.1;margin-bottom:14px;background:linear-gradient(135deg,#f1f5f9 0%,#94a3b8 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
@@ -269,7 +311,7 @@
         .agg-bar .fill{height:100%;background:linear-gradient(90deg,var(--accent-blue),var(--accent-cyan));transition:width .6s}
         .agg-bar-row .pct{font-size:11px;font-family:'JetBrains Mono',monospace;color:var(--text-primary);text-align:right}
 
-        /* ═══ Phase 3 — Real-Time ═══ */
+        /* ═══ Phase 3 - Real-Time ═══ */
         .rt-hero{padding:48px 32px 24px;text-align:center;border-bottom:1px solid var(--border)}
         .rt-hero h1{font-size:38px;font-weight:900;letter-spacing:-1px;line-height:1.1;margin-bottom:12px;background:linear-gradient(135deg,#f1f5f9 0%,#94a3b8 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
         .rt-hero h1 em{font-style:normal;background:linear-gradient(135deg,var(--accent-orange),var(--accent-red));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
@@ -572,7 +614,7 @@
 
         /* API */
         .ep-card{background:var(--bg-card);border:1px solid var(--border);border-radius:12px;margin-bottom:10px;overflow:hidden}
-        .ep-header{padding:14px 20px;display:flex;align-items:center;gap:12px;cursor:pointer;transition:background .15s}.ep-header:hover{background:rgba(255,255,255,.02)}
+        .ep-header{padding:14px 20px;display:flex;align-items:center;gap:12px;cursor:pointer;transition:background .15s}.ep-header:hover{background:var(--hover-overlay)}
         .method{padding:4px 10px;border-radius:6px;font-size:11px;font-weight:700;font-family:'JetBrains Mono',monospace}
         .m-post{background:rgba(34,197,94,.12);color:var(--accent-green)}.m-get{background:rgba(59,130,246,.12);color:var(--accent-blue)}
         .ep-path{font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:500}.ep-desc{margin-left:auto;font-size:13px;color:var(--text-muted)}
@@ -581,7 +623,7 @@
         .ep-body .k{color:var(--accent-green)}.ep-body .s{color:var(--accent-cyan)}.ep-body .n{color:var(--accent-orange)}
 
         /* ═══════════════════════════════════════════════════════════════════ */
-        /* ═══════ NEW DEMO SCREEN — Human-focused training UX          ══════ */
+        /* ═══════ NEW DEMO SCREEN - Human-focused training UX          ══════ */
         /* ═══════════════════════════════════════════════════════════════════ */
         .hidden{display:none !important}
 
@@ -613,7 +655,7 @@
         .scene-meta span{padding:3px 8px;background:var(--bg-elevated);border-radius:6px}
         .scene-start{margin-top:auto;width:100%;justify-content:center;font-size:14px;padding:12px}
 
-        /* Incident screen layout — scrolls naturally, sticky top bar + sticky coach */
+        /* Incident screen layout - scrolls naturally, sticky top bar + sticky coach */
         .inc-screen{display:grid;grid-template-columns:minmax(0,1fr) 340px;grid-template-areas:"top top" "main coach" "notebook coach" "tbox coach";min-height:calc(100vh - 56px);gap:0;align-items:start}
         @media(max-width:1100px){.inc-screen{grid-template-columns:1fr;grid-template-areas:"top" "main" "notebook" "tbox" "coach"}}
 
@@ -642,7 +684,7 @@
         .alert-headline{font-size:13px;font-weight:600;color:var(--text-primary);line-height:1.35;margin-bottom:3px}
         .alert-sub{font-size:11px;color:var(--text-secondary);line-height:1.45;font-style:italic;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
-        /* Service map — main panel */
+        /* Service map - main panel */
         .inc-main{grid-area:main;background:var(--bg-primary);padding:20px 24px;display:grid;grid-template-columns:minmax(0,1fr) 280px;gap:20px}
         @media(max-width:1100px){.inc-main{grid-template-columns:1fr}}
         .svc-map-wrap{background:var(--bg-card);border:1px solid var(--border);border-radius:16px;padding:16px;display:flex;flex-direction:column;min-height:460px}
@@ -679,7 +721,7 @@
         .health-dot.h-crash{background:var(--accent-red);box-shadow:0 0 12px rgba(239,68,68,.7);animation:dotBlink .4s infinite}
         .health-dot.h-restart{background:var(--accent-blue);animation:pulse 1s infinite}
 
-        /* Action toolbox — sticky to viewport bottom so it's always reachable */
+        /* Action toolbox - sticky to viewport bottom so it's always reachable */
         .tbox{grid-area:tbox;background:var(--bg-card);border-top:1px solid var(--border);padding:14px 24px;display:grid;grid-template-columns:1.3fr 1.5fr .8fr;gap:18px;position:sticky;bottom:0;z-index:30;box-shadow:0 -8px 24px rgba(0,0,0,.35)}
         @media(max-width:900px){.tbox{grid-template-columns:1fr}}
         .tbox-group{display:flex;flex-direction:column;gap:8px;min-width:0}
@@ -726,7 +768,7 @@
         body[data-mode="pro"] .nb-raw{margin-top:2px}
         body[data-mode="pro"] .nb-raw[open] summary{color:var(--accent-blue)}
 
-        /* Coach panel — sticky sidebar stays visible while user scrolls the notebook */
+        /* Coach panel - sticky sidebar stays visible while user scrolls the notebook */
         .coach-panel{grid-area:coach;background:var(--bg-secondary);border-left:1px solid var(--border);padding:18px;display:flex;flex-direction:column;gap:14px;position:sticky;top:140px;align-self:start;max-height:calc(100vh - 160px);overflow-y:auto}
         @media(max-width:1100px){.coach-panel{position:static;max-height:none;border-left:none;border-top:1px solid var(--border)}}
         .coach-head-top{display:flex;align-items:center;gap:8px;margin-bottom:4px}
@@ -810,12 +852,12 @@
         #tut-go{width:100%;justify-content:center;padding:12px}
 
         /* ═══════════════════════════════════════════════════════════════════ */
-        /* ═══════ AUTH SCREEN — split panel + floating paths           ══════ */
+        /* ═══════ AUTH SCREEN - split panel + floating paths           ══════ */
         /* ═══════════════════════════════════════════════════════════════════ */
         .auth-screen{display:grid;grid-template-columns:1fr 1fr;min-height:calc(100vh - 56px);background:var(--bg-primary);animation:fadeIn .3s ease}
         @media(max-width:900px){.auth-screen{grid-template-columns:1fr}}
 
-        /* Left panel — branding + testimonial over a dark photographic background */
+        /* Left panel - branding + testimonial over a dark photographic background */
         .auth-left{position:relative;background-color:var(--bg-secondary);background-image:url('https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=1400&q=80');background-size:cover;background-position:center;border-right:1px solid var(--border);padding:56px 48px;display:flex;flex-direction:column;overflow:hidden;min-height:560px}
         @media(max-width:900px){.auth-left{display:none}}
         .auth-left-gradient{position:absolute;inset:0;background:linear-gradient(180deg,rgba(10,14,23,0.55) 0%,rgba(10,14,23,0.75) 55%,rgba(10,14,23,0.92) 100%);z-index:5;pointer-events:none}
@@ -827,12 +869,12 @@
         .auth-brand-icon{width:34px;height:34px;display:flex;align-items:center;justify-content:center;border-radius:10px;background:linear-gradient(135deg,var(--accent-red),var(--accent-orange));color:#fff;box-shadow:0 6px 18px rgba(239,68,68,.35)}
         .auth-brand-icon svg{color:#fff}
 
-        /* Right panel — sign-in form */
+        /* Right panel - sign-in form */
         .auth-right{position:relative;display:flex;align-items:center;justify-content:center;padding:56px 32px 32px;min-height:calc(100vh - 56px)}
         .auth-right::before{content:'';position:absolute;top:-120px;right:-120px;width:440px;height:440px;background:radial-gradient(circle,rgba(59,130,246,.08) 0%,transparent 70%);pointer-events:none}
         .auth-right::after{content:'';position:absolute;bottom:-100px;left:-80px;width:360px;height:360px;background:radial-gradient(circle,rgba(168,85,247,.06) 0%,transparent 70%);pointer-events:none}
         .auth-back{position:absolute;top:20px;left:20px;background:transparent;color:var(--text-secondary);border:none;display:flex;align-items:center;gap:4px;padding:8px 12px;border-radius:8px;cursor:pointer;font-size:13px;font-family:inherit;transition:all .15s;z-index:5}
-        .auth-back:hover{color:var(--text-primary);background:rgba(255,255,255,.04)}
+        .auth-back:hover{color:var(--text-primary);background:var(--hover-overlay-strong)}
         .auth-form-wrap{position:relative;z-index:2;width:100%;max-width:380px;display:flex;flex-direction:column;gap:18px;animation:fadeSlideIn .4s ease-out}
         .auth-brand-mobile{display:none;align-items:center;gap:10px;font-size:17px;font-weight:700;margin-bottom:4px}
         @media(max-width:900px){.auth-brand-mobile{display:flex}}
@@ -868,7 +910,7 @@
         .user-menu-email{font-size:12px;color:var(--text-secondary);word-break:break-all}
         .user-menu-provider{font-size:10.5px;color:var(--text-muted);margin-top:2px}
         .user-menu-btn{width:100%;background:transparent;border:none;color:var(--text-secondary);text-align:left;padding:8px 12px;border-radius:8px;font-size:12.5px;cursor:pointer;font-family:inherit;display:flex;align-items:center;gap:8px;transition:all .15s}
-        .user-menu-btn:hover{background:rgba(255,255,255,.04);color:var(--text-primary)}
+        .user-menu-btn:hover{background:var(--hover-overlay-strong);color:var(--text-primary)}
         .user-menu-btn.danger:hover{background:rgba(239,68,68,.08);color:var(--accent-red)}
 
         /* Sign in button (unsigned state) */
@@ -939,7 +981,7 @@
 <div class="nav">
     <div class="nav-brand">
         <span class="brand-mark"></span>
-        <span class="brand-text">Praetor<span class="brand-sub">— Incident Commander for SREs</span></span>
+        <span class="brand-text">Praetor<span class="brand-sub">- Incident Commander for SREs</span></span>
     </div>
     <div class="nav-tabs">
         <div class="nav-tab active" onclick="switchTab('home')">Home</div>
@@ -950,6 +992,11 @@
         <div class="nav-tab" onclick="switchTab('api')">API</div>
     </div>
     <div class="nav-right">
+        <button id="theme-toggle" class="theme-toggle" type="button"
+                title="Toggle light/dark mode" aria-label="Toggle light/dark mode">
+            <span class="theme-icon-moon" aria-hidden="true">☾</span>
+            <span class="theme-icon-sun"  aria-hidden="true">☀</span>
+        </button>
         <button id="tutorial-restart" class="btn btn-outline btn-xs icon-btn" title="Restart tutorial" aria-label="Restart tutorial"></button>
         <div class="mode-toggle" id="mode-toggle" title="Toggle between Junior (coach on) and Pro (coach off)">
             <span class="mode-dot"></span>
@@ -966,7 +1013,7 @@
     <div class="home-wrap">
         <div class="home-eyebrow">Praetor · The autonomous SRE commander</div>
         <h1 class="home-h1">When production goes<br>down, <span class="em">Praetor takes</span><br><span class="em">the call.</span></h1>
-        <p class="home-lede">Production outages cost enterprises $1–5M per hour. Mean-time-to-resolution averages 8.85 hours. Praetor is an autonomous incident commander — once the alert lands, it investigates, decides, remediates, verifies, and escalates to code if the runtime fix isn't enough. No humans in the loop between page and verdict.</p>
+        <p class="home-lede">Production outages cost enterprises $1–5M per hour. Mean-time-to-resolution averages 8.85 hours. Praetor is an autonomous incident commander - once the alert lands, it investigates, decides, remediates, verifies, and escalates to code if the runtime fix isn't enough. No humans in the loop between page and verdict.</p>
         <div class="home-cta-row">
             <button class="home-cta home-cta-primary" onclick="switchTab('observatory')">Watch the trained agent →</button>
             <button class="home-cta home-cta-ghost" onclick="switchTab('apprentice')">Try a scenario yourself</button>
@@ -974,8 +1021,8 @@
         </div>
 
         <div class="home-marquee">
-            <div class="home-stat"><div class="num" id="home-stat-runs">—</div><div class="lbl">Recorded Runs</div></div>
-            <div class="home-stat"><div class="num" id="home-stat-resolved">—</div><div class="lbl">Resolved</div></div>
+            <div class="home-stat"><div class="num" id="home-stat-runs">-</div><div class="lbl">Recorded Runs</div></div>
+            <div class="home-stat"><div class="num" id="home-stat-resolved">-</div><div class="lbl">Resolved</div></div>
             <div class="home-stat"><div class="num">6</div><div class="lbl">Scenario Families</div></div>
             <div class="home-stat"><div class="num">10</div><div class="lbl">Typed Actions</div></div>
         </div>
@@ -1010,8 +1057,8 @@
         </div>
 
         <div class="home-quote">
-            <blockquote>“Six independent reward components, every one a pure verifiable function — no learned reward model, no LLM-as-judge, no exploits.”</blockquote>
-            <cite>— from our hackathon submission · RLVR design note</cite>
+            <blockquote>“Six independent reward components, every one a pure verifiable function - no learned reward model, no LLM-as-judge, no exploits.”</blockquote>
+            <cite>- from our hackathon submission · RLVR design note</cite>
         </div>
 
         <div class="home-section" style="margin-top:96px">
@@ -1021,7 +1068,7 @@
                 <div class="col">
                     <h3>The market</h3>
                     <p>Every tech company runs an on-call rotation. Outages cost $1–5M per hour at enterprise scale, and MTTR is climbing as systems get more distributed, not shrinking. The observability and incident management market is $45B and the workflow has barely changed in fifteen years.</p>
-                    <div class="pull">If the work is methodical reasoning under uncertainty — exactly what RL-trained LLM agents should be good at — why is there no benchmark?</div>
+                    <div class="pull">If the work is methodical reasoning under uncertainty - exactly what RL-trained LLM agents should be good at - why is there no benchmark?</div>
                 </div>
                 <div class="col">
                     <h3>What Praetor is</h3>
@@ -1039,7 +1086,7 @@
                         <span class="brand-mark"></span>
                         <span class="ft-brand-text">Praetor</span>
                     </div>
-                    <p>The autonomous SRE commander — an OpenEnv-compatible RL environment + trained policy + sim-to-real bridge for production incident response.</p>
+                    <p>The autonomous SRE commander - an OpenEnv-compatible RL environment + trained policy + sim-to-real bridge for production incident response.</p>
                 </div>
                 <div class="ft-col">
                     <h5>Submission</h5>
@@ -1070,23 +1117,23 @@
     </div>
 </div>
 
-<!-- ═══════ PHASE 1 — OBSERVATORY (LLM agent) ═══════ -->
+<!-- ═══════ PHASE 1 - OBSERVATORY (LLM agent) ═══════ -->
 <div id="tab-observatory" class="tab-content">
     <div class="obs-hero">
         <div class="hero-label"><span class="dot"></span> Phase 1 · Watch Praetor work</div>
         <h1>Every page becomes a <em>recorded run.</em></h1>
-        <p class="subtitle">Each row is Praetor — the autonomous incident commander — attempting one of three scenario families. Pick a run to see the action timeline, the 6-component reward decomposition, and the per-step service map evolve from red to green.</p>
+        <p class="subtitle">Each row is Praetor - the autonomous incident commander - attempting one of three scenario families. Pick a run to see the action timeline, the 6-component reward decomposition, and the per-step service map evolve from red to green.</p>
         <div class="stats-row">
-            <div class="stat"><div class="stat-value blue" id="obs-stat-runs">—</div><div class="stat-label">Recorded Runs</div></div>
-            <div class="stat"><div class="stat-value green" id="obs-stat-resolved">—</div><div class="stat-label">Resolved</div></div>
-            <div class="stat"><div class="stat-value orange" id="obs-stat-avg-score">—</div><div class="stat-label">Avg Score</div></div>
-            <div class="stat"><div class="stat-value" id="obs-stat-conditions">—</div><div class="stat-label">Conditions</div></div>
+            <div class="stat"><div class="stat-value blue" id="obs-stat-runs">-</div><div class="stat-label">Recorded Runs</div></div>
+            <div class="stat"><div class="stat-value green" id="obs-stat-resolved">-</div><div class="stat-label">Resolved</div></div>
+            <div class="stat"><div class="stat-value orange" id="obs-stat-avg-score">-</div><div class="stat-label">Avg Score</div></div>
+            <div class="stat"><div class="stat-value" id="obs-stat-conditions">-</div><div class="stat-label">Conditions</div></div>
         </div>
     </div>
 
     <div class="obs-toolbar">
         <span class="label">Run</span>
-        <select id="obs-run-picker"><option value="">— select a recorded run —</option></select>
+        <select id="obs-run-picker"><option value="">- select a recorded run -</option></select>
         <button class="btn btn-outline btn-xs" id="obs-replay">▶ Replay</button>
         <button class="btn btn-outline btn-xs" id="obs-step">↳ Step</button>
         <button class="btn btn-outline btn-xs" id="obs-pause">❚❚ Pause</button>
@@ -1105,16 +1152,16 @@
     <div class="obs-grid">
         <div class="obs-col">
             <div class="obs-card">
-                <h3>Episode <span class="h3-tag" id="obs-ep-tag">—</span></h3>
+                <h3>Episode <span class="h3-tag" id="obs-ep-tag">-</span></h3>
                 <div class="obs-meta-grid">
-                    <div class="key">Run ID</div><div class="val" id="obs-run-id">—</div>
-                    <div class="key">Task</div><div class="val" id="obs-task">—</div>
-                    <div class="key">Seed</div><div class="val" id="obs-seed">—</div>
-                    <div class="key">Model</div><div class="val" id="obs-model">—</div>
-                    <div class="key">Alert</div><div class="val" id="obs-alert" style="white-space:normal">—</div>
-                    <div class="key">Verdict</div><div class="val" id="obs-verdict">—</div>
-                    <div class="key">Score</div><div class="val" id="obs-score">—</div>
-                    <div class="key">Steps used</div><div class="val" id="obs-steps">—</div>
+                    <div class="key">Run ID</div><div class="val" id="obs-run-id">-</div>
+                    <div class="key">Task</div><div class="val" id="obs-task">-</div>
+                    <div class="key">Seed</div><div class="val" id="obs-seed">-</div>
+                    <div class="key">Model</div><div class="val" id="obs-model">-</div>
+                    <div class="key">Alert</div><div class="val" id="obs-alert" style="white-space:normal">-</div>
+                    <div class="key">Verdict</div><div class="val" id="obs-verdict">-</div>
+                    <div class="key">Score</div><div class="val" id="obs-score">-</div>
+                    <div class="key">Steps used</div><div class="val" id="obs-steps">-</div>
                 </div>
             </div>
 
@@ -1145,13 +1192,13 @@
 
     <div class="obs-aggregate">
         <div class="obs-card">
-            <h3>Aggregate — success rate by scenario family</h3>
+            <h3>Aggregate - success rate by scenario family</h3>
             <div class="agg-grid" id="obs-agg-grid"><div class="empty-state" style="grid-column:1/-1">Loading aggregate...</div></div>
         </div>
     </div>
 </div>
 
-<!-- ═══════ PHASE 3 — REAL-TIME (sim-to-real on a deployed site) ═══════ -->
+<!-- ═══════ PHASE 3 - REAL-TIME (sim-to-real on a deployed site) ═══════ -->
 <div id="tab-realtime" class="tab-content">
     <div class="rt-hero">
         <div class="hero-label"><span class="dot"></span> Phase 3 · Praetor on a live site</div>
@@ -1166,7 +1213,7 @@
             <div class="obs-card rt-step" id="integrations-card">
                 <div class="rt-step-h">
                     <div class="rt-step-num">0</div>
-                    <h4>Connect your platform <span style="font-size:11px;font-weight:500;color:var(--text-muted);margin-left:6px">optional — the right path for real production</span></h4>
+                    <h4>Connect your platform <span style="font-size:11px;font-weight:500;color:var(--text-muted);margin-left:6px">optional - the right path for real production</span></h4>
                 </div>
                 <p style="font-size:12.5px;color:var(--text-muted);margin-bottom:14px;line-height:1.55">Praetor isn't a black box that reaches into someone else's infrastructure. It works through a contract. <strong style="color:var(--text-primary)">Connect your platform here</strong> and Praetor will (1) link your repo for tier-2 code analysis, (2) generate the adapter file you drop into your own deployment, and (3) take over Real-Time once your adapter goes live.</p>
 
@@ -1180,7 +1227,7 @@
                 <!-- GitHub tab -->
                 <div class="int-pane active" id="int-pane-github">
                     <div id="int-gh-disconnected" style="display:block">
-                        <p style="font-size:12.5px;color:var(--text-secondary);margin-bottom:12px">Sign in with your GitHub account to scope tier-2 code analysis to one of your repos. Real OAuth via device flow — no password entry, no callback URL needed.</p>
+                        <p style="font-size:12.5px;color:var(--text-secondary);margin-bottom:12px">Sign in with your GitHub account to scope tier-2 code analysis to one of your repos. Real OAuth via device flow - no password entry, no callback URL needed.</p>
                         <button class="btn btn-primary btn-sm" id="int-gh-connect"><span id="int-gh-connect-icon">⚡</span> Connect GitHub</button>
                         <p style="font-size:11.5px;color:var(--text-muted);margin-top:10px" id="int-gh-mode-hint"></p>
                     </div>
@@ -1188,7 +1235,7 @@
                         <p style="font-size:12.5px;color:var(--text-secondary);margin-bottom:10px;line-height:1.55">
                             <strong style="color:var(--text-primary)">Step 1.</strong> Click the URL below (opens a new GitHub tab).<br>
                             <strong style="color:var(--text-primary)">Step 2.</strong> On GitHub, paste this code and click Authorize.<br>
-                            <strong style="color:var(--text-primary)">Step 3.</strong> Come back here — Praetor polls automatically.
+                            <strong style="color:var(--text-primary)">Step 3.</strong> Come back here - Praetor polls automatically.
                         </p>
                         <div style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:10px;padding:12px;display:flex;align-items:center;gap:14px;margin-bottom:10px">
                             <a id="int-gh-verif-link" href="#" target="_blank" rel="noopener" style="color:var(--accent-blue);font-weight:600;font-size:13px;text-decoration:none;flex:1"></a>
@@ -1214,7 +1261,7 @@
                 <!-- Cloud tab -->
                 <div class="int-pane" id="int-pane-cloud" style="display:none">
                     <div style="background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.2);border-radius:10px;padding:12px 14px;font-size:12px;color:var(--text-secondary);line-height:1.55;margin-bottom:14px">
-                        <strong style="color:var(--accent-orange)">Demo mode — credentials never leave your browser.</strong> Cloud-provider integration is scaffolded for the hackathon submission. Forms below use <code style="font-size:11px">localStorage</code> only, not server transmission. To make this real, deploy the adapter (next tab) into your cloud — your credentials stay in <em>your</em> infrastructure, Praetor just talks HTTP to your adapter.
+                        <strong style="color:var(--accent-orange)">Demo mode - credentials never leave your browser.</strong> Cloud-provider integration is scaffolded for the hackathon submission. Forms below use <code style="font-size:11px">localStorage</code> only, not server transmission. To make this real, deploy the adapter (next tab) into your cloud - your credentials stay in <em>your</em> infrastructure, Praetor just talks HTTP to your adapter.
                     </div>
                     <div class="cloud-providers" id="int-cloud-providers"></div>
                 </div>
@@ -1254,7 +1301,7 @@
                     <div class="rt-step-num" id="rt-num-1">1</div>
                     <h4>Connect to a deployed site</h4>
                 </div>
-                <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px">Paste the URL of a site that exposes the operator contract (<code style="font-size:11px">/ops/health</code>, <code style="font-size:11px">/ops/restart</code>, etc). The site can be hosted anywhere — Render, Vercel, Fly, HF Space.</p>
+                <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px">Paste the URL of a site that exposes the operator contract (<code style="font-size:11px">/ops/health</code>, <code style="font-size:11px">/ops/restart</code>, etc). The site can be hosted anywhere - Render, Vercel, Fly, HF Space.</p>
                 <div class="rt-input">
                     <input type="text" id="rt-site-url" placeholder="https://your-deployed-site.example.com" autocomplete="off">
                     <button class="btn btn-primary btn-sm" id="rt-connect">Connect</button>
@@ -1276,11 +1323,11 @@
                 <div id="rt-evidence" style="margin-top:10px"></div>
             </div>
 
-            <!-- Codebase source — three options as a single card with tabbed source picker -->
+            <!-- Codebase source - three options as a single card with tabbed source picker -->
             <div class="obs-card rt-step">
                 <div class="rt-step-h">
                     <div class="rt-step-num" id="rt-num-3">3</div>
-                    <h4>Link your codebase <span style="font-weight:400;color:var(--text-muted);font-size:12px;margin-left:8px">— for tier-2 escalation when ops can't fully heal</span></h4>
+                    <h4>Link your codebase <span style="font-weight:400;color:var(--text-muted);font-size:12px;margin-left:8px">- for tier-2 escalation when ops can't fully heal</span></h4>
                 </div>
                 <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px">For toy sites, runtime ops are usually enough. For real sites at Paytm / Amazon / Airbnb scale, the bug often lives in the code itself. Praetor reads the code only when ops actions don't fully heal the fault.</p>
                 <div class="cb-tabs">
@@ -1325,7 +1372,7 @@
                     <div class="rt-step-num" id="rt-num-4">4</div>
                     <h4>Run Praetor</h4>
                 </div>
-                <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px">Praetor uses the classification it just made. No need to tell it what's wrong — it figured that out.</p>
+                <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px">Praetor uses the classification it just made. No need to tell it what's wrong - it figured that out.</p>
                 <div style="display:flex;gap:10px;flex-wrap:wrap">
                     <button class="btn btn-green btn-sm" id="rt-run" disabled>▶ Run Praetor</button>
                     <button class="btn btn-outline btn-sm" id="rt-heal" disabled>↻ Reset site</button>
@@ -1339,12 +1386,12 @@
                         <button class="rt-chaos-btn" data-scenario="oom_crash" disabled>
                             <div class="ic">⚡</div>
                             <div class="ttl">OOM Crash</div>
-                            <div class="desc">memory limit too low — service crashes</div>
+                            <div class="desc">memory limit too low - service crashes</div>
                         </button>
                         <button class="rt-chaos-btn" data-scenario="db_pool_exhaustion" disabled>
                             <div class="ic">⚡</div>
                             <div class="ttl">DB Pool Exhaustion</div>
-                            <div class="desc">connection leak — postgres exhausted</div>
+                            <div class="desc">connection leak - postgres exhausted</div>
                         </button>
                         <button class="rt-chaos-btn" data-scenario="bad_deployment_cascade" disabled>
                             <div class="ic">⚡</div>
@@ -1369,7 +1416,7 @@
     </div>
 </div>
 
-<!-- (legacy About tab removed — replaced by Home + What We Offer) -->
+<!-- (legacy About tab removed - replaced by Home + What We Offer) -->
 <div id="tab-about-legacy" class="tab-content" style="display:none">
     <div class="hero">
         <div class="hero-label"><span class="dot"></span> Incident-response simulator · AI-coached</div>
@@ -1390,7 +1437,7 @@
     <div class="section">
         <div class="section-label">The Problem</div>
         <h2>Production Incidents Are Costing Billions</h2>
-        <p class="section-sub">The status quo is unsustainable — and there is no training ground</p>
+        <p class="section-sub">The status quo is unsustainable - and there is no training ground</p>
         <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:32px">
             <div class="step-card" style="border-left:3px solid var(--accent-red);text-align:left"><div style="font-size:32px;font-weight:900;color:var(--accent-red);margin-bottom:4px">$1M-$5M</div><div style="font-size:13px;color:var(--text-secondary)">Cost per hour of downtime for enterprises</div></div>
             <div class="step-card" style="border-left:3px solid var(--accent-orange);text-align:left"><div style="font-size:32px;font-weight:900;color:var(--accent-orange);margin-bottom:4px">8.85 hrs</div><div style="font-size:13px;color:var(--text-secondary)">Average Mean Time To Resolution</div></div>
@@ -1407,7 +1454,7 @@
         <div class="steps-grid">
             <div class="step-card"><div class="step-num">01</div><div class="step-icon">🚨</div><h3>Alert Fires</h3><p>You're paged. Alert tells you which services are screaming, not why.</p></div>
             <div class="step-card"><div class="step-num">02</div><div class="step-icon">🔍</div><h3>Investigate</h3><p>Click the service map. Read logs. Check metrics. Your coach nudges you toward the right clue.</p></div>
-            <div class="step-card"><div class="step-num">03</div><div class="step-icon">🔬</div><h3>Diagnose</h3><p>Trace the dependency chain to find the real root cause — not the surface symptom.</p></div>
+            <div class="step-card"><div class="step-num">03</div><div class="step-icon">🔬</div><h3>Diagnose</h3><p>Trace the dependency chain to find the real root cause - not the surface symptom.</p></div>
             <div class="step-card"><div class="step-num">04</div><div class="step-icon">⚡</div><h3>Remediate</h3><p>Restart, rollback, or reconfigure. Every decision is scored and explained.</p></div>
         </div>
     </div>
@@ -1417,7 +1464,7 @@
         <h2>An AI Coach in Your Corner</h2>
         <p class="section-sub">Every mistake becomes a learning moment, not a bruise</p>
         <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px">
-            <div class="step-card"><div style="font-size:28px;margin-bottom:10px">💡</div><h3>Contextual Hints</h3><p>The coach reads your game state and suggests the next best action — with the reason why.</p></div>
+            <div class="step-card"><div style="font-size:28px;margin-bottom:10px">💡</div><h3>Contextual Hints</h3><p>The coach reads your game state and suggests the next best action - with the reason why.</p></div>
             <div class="step-card"><div style="font-size:28px;margin-bottom:10px">📘</div><h3>Plain-English Why</h3><p>Click "Why?" on any log or metric to get a jargon-free explanation.</p></div>
             <div class="step-card"><div style="font-size:28px;margin-bottom:10px">🗺️</div><h3>Visual Service Map</h3><p>See the cascade spread through the dependency graph in real time.</p></div>
             <div class="step-card"><div style="font-size:28px;margin-bottom:10px">🏆</div><h3>Post-mortem Review</h3><p>Finish an incident, see your grade, compare against a senior SRE's playbook.</p></div>
@@ -1426,7 +1473,7 @@
     <hr class="divider">
     <div class="section">
         <div class="section-label">Incident Scenarios</div>
-        <h2>3 Scenarios — Easy to Hard</h2>
+        <h2>3 Scenarios - Easy to Hard</h2>
         <p class="section-sub">Each one teaches a different diagnostic skill. Unlock progressively.</p>
         <div class="tasks-grid">
             <div class="tcard"><div class="tcard-top"><span class="diff-badge diff-easy">YOUR FIRST PAGE</span><span class="tcard-score" style="color:var(--accent-green)">5 min</span></div><h3>OOM Crash</h3><p>payment-service crashes with OutOfMemoryError. Learn how to read logs, spot memory limits, and restart correctly.</p><div class="tcard-meta"><span>⏱ 15 steps</span><span>🎯 4 learning goals</span></div></div>
@@ -1450,12 +1497,12 @@
             </div>
             <div class="arch-card"><h3>📊 Per-Service Simulation</h3>
                 <ul class="feat-list">
-                    <li><span class="dot"></span> <strong>Health states</strong> — healthy, degraded, unhealthy, crashed</li>
-                    <li><span class="dot"></span> <strong>Live metrics</strong> — CPU, memory, latency p50/p99, error rate</li>
-                    <li><span class="dot"></span> <strong>Structured logs</strong> — timestamped with realistic error patterns</li>
-                    <li><span class="dot"></span> <strong>Deployment history</strong> — version tracking + rollback</li>
-                    <li><span class="dot"></span> <strong>Dependencies</strong> — upstream/downstream failure cascading</li>
-                    <li><span class="dot"></span> <strong>Resource quotas</strong> — CPU/memory limits per replica</li>
+                    <li><span class="dot"></span> <strong>Health states</strong> - healthy, degraded, unhealthy, crashed</li>
+                    <li><span class="dot"></span> <strong>Live metrics</strong> - CPU, memory, latency p50/p99, error rate</li>
+                    <li><span class="dot"></span> <strong>Structured logs</strong> - timestamped with realistic error patterns</li>
+                    <li><span class="dot"></span> <strong>Deployment history</strong> - version tracking + rollback</li>
+                    <li><span class="dot"></span> <strong>Dependencies</strong> - upstream/downstream failure cascading</li>
+                    <li><span class="dot"></span> <strong>Resource quotas</strong> - CPU/memory limits per replica</li>
                 </ul>
             </div>
         </div>
@@ -1465,7 +1512,7 @@
         <div class="guide-card"><h3>💡 Ready to train?</h3>
             <div class="guide-steps">
                 <div class="guide-step"><div class="guide-step-num">1</div><div class="guide-step-text">Click <strong>Training</strong> in the nav bar. Your first-run tutorial will walk you through the UI.</div></div>
-                <div class="guide-step"><div class="guide-step-num">2</div><div class="guide-step-text">Start with <strong>"Your first page"</strong> — a simple OOM crash, solvable in ~5 minutes.</div></div>
+                <div class="guide-step"><div class="guide-step-num">2</div><div class="guide-step-text">Start with <strong>"Your first page"</strong> - a simple OOM crash, solvable in ~5 minutes.</div></div>
                 <div class="guide-step"><div class="guide-step-num">3</div><div class="guide-step-text">Your AI coach appears on the right. Stuck? Click <code>🤖 Hint</code>. Want an explanation of a log line? Click <code>Why?</code> on any action card.</div></div>
                 <div class="guide-step"><div class="guide-step-num">4</div><div class="guide-step-text">Finish an incident and see your <strong>post-mortem</strong>: grade, rubric breakdown, and what a senior SRE would have done differently.</div></div>
             </div>
@@ -1492,7 +1539,7 @@
     <div class="offer-wrap">
         <div class="offer-hero">
             <h1 class="offer-h1">An <span class="em">end-to-end</span><br>SRE training system,<br>not just an environment.</h1>
-            <p class="offer-h1-sub">A full RL substrate, a behavioral-clone seed dataset, an SFT+GRPO training notebook, an interactive observability dashboard, a sim-to-real bridge, and a tier-2 code escalation module — packaged as one product.</p>
+            <p class="offer-h1-sub">A full RL substrate, a behavioral-clone seed dataset, an SFT+GRPO training notebook, an interactive observability dashboard, a sim-to-real bridge, and a tier-2 code escalation module - packaged as one product.</p>
         </div>
 
         <div class="home-section-h">Built for three audiences</div>
@@ -1503,7 +1550,7 @@
                 <h3>A clean RL benchmark</h3>
                 <ul>
                     <li>OpenEnv-compatible spec with full <code>action_space</code> / <code>observation_space</code> declarations</li>
-                    <li>Six independent reward components — RLVR with no learned reward model to game</li>
+                    <li>Six independent reward components - RLVR with no learned reward model to game</li>
                     <li>Parametric scenario families with seed-deterministic trajectories</li>
                     <li>Out-of-the-box SFT + GRPO Colab notebook (Qwen2.5-Coder-1.5B, 4-bit LoRA via Unsloth)</li>
                     <li>Anti-reward-hacking regression tests pinning the four common exploits</li>
@@ -1528,7 +1575,7 @@
                     <li>Sim-to-real demo: same trained policy, deployed HTTP site, real chaos injection</li>
                     <li>Tier-2 code escalation: when ops can't fully heal, the agent investigates the codebase</li>
                     <li>268 passing tests covering every critical path</li>
-                    <li>Public Space, Colab notebook, blog, video — all linked in the README</li>
+                    <li>Public Space, Colab notebook, blog, video - all linked in the README</li>
                 </ul>
             </div>
         </div>
@@ -1640,7 +1687,7 @@
         <div class="offer-curriculum" style="margin-bottom:96px">
             <div class="home-section-h">The incident curriculum</div>
             <h2 class="offer-h1" style="font-size:clamp(28px,3.5vw,44px);margin-bottom:14px">Six fault shapes.<br><span class="em">Every one is real.</span></h2>
-            <p style="font-size:15px;line-height:1.65;color:var(--text-secondary);max-width:680px;margin-bottom:36px">Praetor's curriculum mirrors the most common production incident classes. Each scenario is parametric — every <code>(seed, difficulty)</code> pair produces a fresh instance — so the agent learns the <em>shape</em> of the fault, not three fixed cases.</p>
+            <p style="font-size:15px;line-height:1.65;color:var(--text-secondary);max-width:680px;margin-bottom:36px">Praetor's curriculum mirrors the most common production incident classes. Each scenario is parametric - every <code>(seed, difficulty)</code> pair produces a fresh instance - so the agent learns the <em>shape</em> of the fault, not three fixed cases.</p>
             <div class="curriculum-grid">
                 <div class="curr-card" data-diff="easy">
                     <div class="curr-head">
@@ -1659,7 +1706,7 @@
                     </div>
                     <div class="curr-sig">PSQLException: pool exhausted (20/20)</div>
                     <div class="curr-fix"><strong>Fix:</strong> raise pool size + restart the leaking service. The agent must trace symptoms from the user-facing frontend two layers down to the DB before acting.</div>
-                    <div class="curr-real">GitHub 2018, Discord 2020, Shopify 2016 — all cascade-from-DB outages.</div>
+                    <div class="curr-real">GitHub 2018, Discord 2020, Shopify 2016 - all cascade-from-DB outages.</div>
                 </div>
 
                 <div class="curr-card" data-diff="hard">
@@ -1667,7 +1714,7 @@
                         <div class="curr-name">Bad Deployment Cascade</div>
                         <div class="curr-diff">Hard</div>
                     </div>
-                    <div class="curr-sig">Memory leak v2.4.0 — autoscaler exhausted quota</div>
+                    <div class="curr-sig">Memory leak v2.4.0 - autoscaler exhausted quota</div>
                     <div class="curr-fix"><strong>Fix:</strong> rollback the bad deploy <em>before</em> restarting the starved dependents. Action ordering matters. Wrong order is the rubric's whole point.</div>
                     <div class="curr-real">Knight Capital 2012 ($440M), CrowdStrike 2024 (global Windows outage), Facebook BGP 2021.</div>
                 </div>
@@ -1678,7 +1725,7 @@
                         <div class="curr-diff">Easy</div>
                     </div>
                     <div class="curr-sig">[Errno 28] No space left on device</div>
-                    <div class="curr-fix"><strong>Fix:</strong> restart cycles the volume. The trap is that metrics look mostly fine — only logs reveal the ENOSPC error pattern.</div>
+                    <div class="curr-fix"><strong>Fix:</strong> restart cycles the volume. The trap is that metrics look mostly fine - only logs reveal the ENOSPC error pattern.</div>
                     <div class="curr-real">Slack 2020 (logs filled root), GitHub 2018, Stripe 2017 (audit log spillover).</div>
                 </div>
 
@@ -1688,7 +1735,7 @@
                         <div class="curr-diff">Medium</div>
                     </div>
                     <div class="curr-sig">Lock wait timeout exceeded; txn rolled back</div>
-                    <div class="curr-fix"><strong>Fix:</strong> rollback the deploy that introduced the slow query. The trap is that <em>restart</em> is a quick fix that doesn't last — the binary still has the bad query.</div>
+                    <div class="curr-fix"><strong>Fix:</strong> rollback the deploy that introduced the slow query. The trap is that <em>restart</em> is a quick fix that doesn't last - the binary still has the bad query.</div>
                     <div class="curr-real">GitHub 2020 (24h incident, slow query in DB upgrade), Instagram 2017 migration.</div>
                 </div>
 
@@ -1707,7 +1754,7 @@
         <div class="loop-section">
             <div class="home-section-h">From page to verdict</div>
             <h2 class="offer-h1" style="font-size:clamp(28px,3.5vw,44px);margin-bottom:14px">The autonomous loop, <span class="em">end-to-end.</span></h2>
-            <p style="font-size:15px;line-height:1.65;color:var(--text-secondary);max-width:720px">Once the alert lands, no humans in the loop. Praetor runs the same five-stage cycle a senior on-call engineer runs — except it never sleeps, never panics, and writes a clean trace of every decision.</p>
+            <p style="font-size:15px;line-height:1.65;color:var(--text-secondary);max-width:720px">Once the alert lands, no humans in the loop. Praetor runs the same five-stage cycle a senior on-call engineer runs - except it never sleeps, never panics, and writes a clean trace of every decision.</p>
             <div class="loop-grid">
                 <div class="loop-stage">
                     <div class="loop-num">1</div>
@@ -1717,12 +1764,12 @@
                 <div class="loop-stage">
                     <div class="loop-num">2</div>
                     <h4>Investigate</h4>
-                    <p><code>list_services</code>, <code>read_logs</code>, <code>check_metrics</code>, <code>describe_service</code> — picks the right diagnostics for the symptom.</p>
+                    <p><code>list_services</code>, <code>read_logs</code>, <code>check_metrics</code>, <code>describe_service</code> - picks the right diagnostics for the symptom.</p>
                 </div>
                 <div class="loop-stage">
                     <div class="loop-num">3</div>
                     <h4>Decide</h4>
-                    <p>The trained policy outputs a typed action. Restart vs rollback vs reconfigure — the right one for <em>this</em> fault.</p>
+                    <p>The trained policy outputs a typed action. Restart vs rollback vs reconfigure - the right one for <em>this</em> fault.</p>
                 </div>
                 <div class="loop-stage">
                     <div class="loop-num">4</div>
@@ -1736,7 +1783,7 @@
                 </div>
             </div>
             <div class="loop-escalate">
-                <strong>If runtime ops aren't enough — escalate to code</strong>
+                <strong>If runtime ops aren't enough - escalate to code</strong>
                 When stage 5 doesn't go green, Praetor opens the linked codebase (GitHub, Azure Repos, or uploaded ZIP), greps for files matching the failing service + scenario keywords, ranks suspects, and writes a Code Escalation Report with a suggested fix. Diagnosis-only today; the next step is shipping the patch as a PR.
             </div>
         </div>
@@ -1778,7 +1825,7 @@
     </div>
 </div>
 
-<!-- ═══════ APPRENTICE — JUNIOR SRE MODE ═══════ -->
+<!-- ═══════ APPRENTICE - JUNIOR SRE MODE ═══════ -->
 <div id="tab-apprentice" class="tab-content">
     <!-- Auth screen (shown when user is not signed in) -->
     <div id="auth-screen" class="auth-screen hidden">
@@ -1913,7 +1960,7 @@ const API = window.location.origin;
 const TAB_ORDER = ['home', 'observatory', 'apprentice', 'realtime', 'offer', 'api'];
 // Auto-create a guest user so the apprentice tab opens straight to the
 // scenario picker. Real sign-in (Google/email) still works for users who
-// want their progress namespaced — this is just a clean default.
+// want their progress namespaced - this is just a clean default.
 (function ensureGuestUser() {
     try {
         if (!localStorage.getItem('ic_user')) {
@@ -1945,10 +1992,45 @@ function switchTab(t) {
 }
 // On load, honor #hash so video links can deep-link into a phase.
 // Default to Home (which sets data-tab and triggers Home.init).
+// === Theme (light/dark) =====================================================
+// Apply on load BEFORE first paint where possible (we're already in body
+// scope here, so the next-best moment is DOMContentLoaded). Persisted in
+// localStorage; falls back to OS preference on first visit.
+(function initTheme() {
+    function applyTheme(t) {
+        document.documentElement.setAttribute('data-theme', t === 'light' ? 'light' : 'dark');
+    }
+    let stored = null;
+    try { stored = localStorage.getItem('praetor_theme'); } catch (_) {}
+    if (stored === 'light' || stored === 'dark') {
+        applyTheme(stored);
+    } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
+        applyTheme('light');
+    } else {
+        applyTheme('dark');
+    }
+    window.__praetorTheme = {
+        get: () => document.documentElement.getAttribute('data-theme') || 'dark',
+        set: (t) => {
+            applyTheme(t);
+            try { localStorage.setItem('praetor_theme', t); } catch (_) {}
+        },
+        toggle: () => {
+            const next = (document.documentElement.getAttribute('data-theme') === 'light') ? 'dark' : 'light';
+            window.__praetorTheme.set(next);
+        },
+    };
+})();
+
 window.addEventListener('DOMContentLoaded', () => {
     const h = (location.hash || '').replace('#', '');
     if (TAB_ORDER.includes(h)) switchTab(h);
     else switchTab('home');
+    // Wire theme toggle button
+    const tt = document.getElementById('theme-toggle');
+    if (tt && window.__praetorTheme) {
+        tt.addEventListener('click', () => window.__praetorTheme.toggle());
+    }
 });
 
 async function refreshCoachClick() {
@@ -1983,7 +2065,7 @@ async function runSc(id) {
             await new Promise(r => setTimeout(r, 300));
             steps.innerHTML = '';
             scStep(id, '<span class="dot-ok"></span> <code>GET /health</code> <span class="sc-val">' + ms + 'ms</span>');
-            scResult(id, '✓ Environment healthy — status: ' + data.status + ' (' + ms + 'ms)', 'success');
+            scResult(id, '✓ Environment healthy - status: ' + data.status + ' (' + ms + 'ms)', 'success');
         } else if (id === 'tasks') {
             scStep(id, '<span class="dot-run"></span> <code>GET /tasks</code>');
             const {data, ms} = await apiCall('GET', '/tasks');
@@ -2031,7 +2113,7 @@ async function runSc(id) {
             }
             const st = await apiCall('GET', '/state');
             const sc = st.data.current_score;
-            scResult(id, '🏆 Score: ' + sc.toFixed(2) + ' / 1.00 ' + (sc >= 0.9 ? '— Perfect resolution!' : ''), sc >= 0.9 ? 'success' : 'partial');
+            scResult(id, '🏆 Score: ' + sc.toFixed(2) + ' / 1.00 ' + (sc >= 0.9 ? '- Perfect resolution!' : ''), sc >= 0.9 ? 'success' : 'partial');
         } else if (id === 'cascade') {
             scStep(id, '<span class="dot-run"></span> Initializing cascading failure...');
             await apiCall('POST', '/reset', {task_id: 'db_pool_exhaustion'});
@@ -2059,7 +2141,7 @@ async function runSc(id) {
 }
 </script>
 <script>
-// Home tab — pulls live counts from /runs so the marquee shows real data.
+// Home tab - pulls live counts from /runs so the marquee shows real data.
 window.Home = {
     _inited: false,
     async init() {
@@ -2075,7 +2157,7 @@ window.Home = {
             const totalEl = document.getElementById('home-stat-runs');
             const resEl = document.getElementById('home-stat-resolved');
             if (totalEl) totalEl.textContent = String(total);
-            if (resEl) resEl.textContent = total ? `${Math.round(100 * resolved / total)}%` : '—';
+            if (resEl) resEl.textContent = total ? `${Math.round(100 * resolved / total)}%` : '-';
         } catch (e) {}
     },
 };

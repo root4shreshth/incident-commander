@@ -1,11 +1,11 @@
-"""Backend Protocol — the typed contract every backend must implement.
+"""Backend Protocol - the typed contract every backend must implement.
 
 The env orchestrator (`IncidentCommanderEnv`) talks to whatever backend is
 plugged in through this interface. Three backends share it:
 
-  * SimulatedBackend  — in-memory Python `Cluster` (for fast training)
-  * RealBackend       — Docker Compose shell-outs (for sim-to-real demo)
-  * CodeAwareBackend  — git worktree + pytest (Phase 2 roadmap)
+  * SimulatedBackend  - in-memory Python `Cluster` (for fast training)
+  * RealBackend       - Docker Compose shell-outs (for sim-to-real demo)
+  * CodeAwareBackend  - git worktree + pytest (Phase 2 roadmap)
 
 The env never touches `Cluster` directly anymore; it asks the backend for
 state via `snapshot()` and routes actions via `execute()`. This is what
@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 
 @dataclass
 class ServiceSnapshot:
-    """A typed view of one service's state — same shape across sim and real backends."""
+    """A typed view of one service's state - same shape across sim and real backends."""
     name: str
     health: str  # "healthy" | "degraded" | "unhealthy" | "crashed" | "restarting"
     version: str

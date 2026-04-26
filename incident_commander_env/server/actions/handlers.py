@@ -1,4 +1,4 @@
-"""Action handlers — one pure function per action_type, dispatched via dict."""
+"""Action handlers - one pure function per action_type, dispatched via dict."""
 
 from __future__ import annotations
 
@@ -368,7 +368,7 @@ def handle_update_config(
     if scenario is not None and scenario.on_config_update(
         cluster, action.target_service, key, value
     ):
-        # Scenario confirms this is the correct fix — clear the relevant anomalies
+        # Scenario confirms this is the correct fix - clear the relevant anomalies
         # it knows about. We clear all anomalies on the service because the scenario
         # has full knowledge of which ones it injected.
         if svc.has_anomaly("db_pool_exhaustion"):

@@ -158,7 +158,7 @@ class TestCertExpiryScenario:
         assert "tls" in joined or "ssl" in joined or "certificate" in joined
 
     def test_metrics_look_almost_normal(self):
-        """The whole point of cert_expiry is that metrics LOOK fine — just no traffic."""
+        """The whole point of cert_expiry is that metrics LOOK fine - just no traffic."""
         env = IncidentCommanderEnv()
         env.reset(task_id="cert_expiry", seed=1)
         scenario = env._scenario

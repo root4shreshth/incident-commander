@@ -1,4 +1,4 @@
-"""EpisodeContext — the typed bundle every reward component reads from.
+"""EpisodeContext - the typed bundle every reward component reads from.
 
 Centralizing the read surface lets us:
 1. Compute reward components in pure functions (no global state, no env coupling).

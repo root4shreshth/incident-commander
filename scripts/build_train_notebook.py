@@ -44,7 +44,7 @@ cells = []
 
 # ─── 1. Title ──────────────────────────────────────────────────────────────
 cells.append(md(r"""
-# Praetor — SFT + GRPO training notebook
+# Praetor - SFT + GRPO training notebook
 
 This notebook trains the **Praetor** incident-response agent end-to-end:
 
@@ -71,8 +71,8 @@ This notebook trains the **Praetor** incident-response agent end-to-end:
 
 T4's GRPO budget is intentionally trimmed (30 steps vs A100's 200) to fit a
 ~3-hour total wall-clock. 30 steps is enough to see the policy improving
-across the 6 reward components — the trend is visible, the killer per-component
-plot still tells the story — even if the policy hasn't fully converged. If
+across the 6 reward components - the trend is visible, the killer per-component
+plot still tells the story - even if the policy hasn't fully converged. If
 you have more time, raise `GRPO_STEPS` in cell 2.
 
 ### Before you run
@@ -87,7 +87,7 @@ you have more time, raise `GRPO_STEPS` in cell 2.
 
 # ─── 2. Setup (deps + clone) ────────────────────────────────────────────────
 cells.append(md(r"""
-## Cell 1 — Setup: install dependencies + clone the repo
+## Cell 1 - Setup: install dependencies + clone the repo
 
 **Expected runtime: 2–3 minutes (any GPU).** Most of the wall-clock is the
 `unsloth` install and a single git clone.
@@ -126,7 +126,7 @@ print(f"Setup OK in {time.monotonic()-_t0:.1f}s. CWD: /content/incident-commande
 
 # ─── 3. Compute detection ──────────────────────────────────────────────────
 cells.append(md(r"""
-## Cell 2 — Compute detection
+## Cell 2 - Compute detection
 
 **Expected runtime: < 1 second.** Reports the GPU and adjusts later cells'
 batch sizes accordingly.
@@ -158,7 +158,7 @@ print(f"GRPO rollouts  : {GRPO_NUM_GENERATIONS} per prompt")
 
 # ─── 4. Load model + tokenizer ─────────────────────────────────────────────
 cells.append(md(r"""
-## Cell 3 — Load Qwen2.5-Coder-1.5B in 4-bit with LoRA
+## Cell 3 - Load Qwen2.5-Coder-1.5B in 4-bit with LoRA
 
 **Expected runtime: 2–3 minutes on A100, 3–5 minutes on T4.** Downloads
 ~1.5 GB of model weights, applies the 4-bit quantization, and attaches
@@ -199,7 +199,7 @@ else:
 
 # ─── 5. Build SFT dataset ──────────────────────────────────────────────────
 cells.append(md(r"""
-## Cell 4 — Build the SFT chat dataset
+## Cell 4 - Build the SFT chat dataset
 
 **Expected runtime: < 30 seconds.** Materializes ~120 (system, user, assistant)
 chat rows from `IDEAL_TRAJECTORIES` in `incident_commander_env/server/coach.py`,
@@ -229,7 +229,7 @@ print(f"  scenarios covered     : {sorted({r['scenario'] for r in raw_rows})}")
 
 # ─── 6. SFT training ───────────────────────────────────────────────────────
 cells.append(md(r"""
-## Cell 5 — SFT training (1 epoch)
+## Cell 5 - SFT training (1 epoch)
 
 **Expected runtime: 30–40 minutes on A100, 75–90 minutes on T4.** This is
 the longest training cell; you'll see TRL's per-step progress bar.
@@ -283,7 +283,7 @@ print(f"SFT phase complete in {time.monotonic()-_t0:.1f}s")
 
 # ─── 7. SFT sanity eval ────────────────────────────────────────────────────
 cells.append(md(r"""
-## Cell 6 — SFT sanity-eval (9 episodes)
+## Cell 6 - SFT sanity-eval (9 episodes)
 
 **Expected runtime: ~2 minutes on A100, ~5 minutes on T4.** Quick
 random-vs-SFT comparison on 3 seeds × 3 families to confirm SFT learned
@@ -330,7 +330,7 @@ def hf_generate(messages, max_new=160):
     # Decode ONLY the newly-generated tokens. Slicing on token IDs avoids
     # the bug where `full[len(text):]` fails because tokenize=False keeps
     # special tokens in `text` but skip_special_tokens=True strips them
-    # from `full` — so `full.startswith(text)` is False and the whole
+    # from `full` - so `full.startswith(text)` is False and the whole
     # transcript (system prompt + user + assistant) gets returned, which
     # then makes the JSON parser pick up the EXAMPLE inside the system
     # prompt instead of the model's actual response.
@@ -367,11 +367,11 @@ for cond, rpt in [("random", report_random), ("sft", report_sft)]:
 
 # ─── 8. Build GRPO dataset ─────────────────────────────────────────────────
 cells.append(md(r"""
-## Cell 7 — Build the GRPO prompt dataset
+## Cell 7 - Build the GRPO prompt dataset
 
 **Expected runtime: < 30 seconds.** GRPO needs a list of prompts to roll
 out completions against. We build one prompt per `(scenario_family, seed)`
-combination drawn from a **curriculum** — easier scenarios appear earlier,
+combination drawn from a **curriculum** - easier scenarios appear earlier,
 harder ones appear later.
 """))
 
@@ -413,7 +413,7 @@ print(f"  family distribution: {dict((f, sum(1 for p in prompts if p['task_id'] 
 
 # ─── 9. GRPO training ──────────────────────────────────────────────────────
 cells.append(md(r"""
-## Cell 8 — GRPO training
+## Cell 8 - GRPO training
 
 **Expected runtime: 2–3 hours on A100 (200 steps), ~60 minutes on T4 (30 steps).** This is the
 longest cell. You'll see per-step reward + KL-divergence in the progress
@@ -442,7 +442,7 @@ else:
 
     # Defensive monkeypatch: transformers >=4.50 calls `sampler_fn(dataset)`
     # with one positional arg, but Unsloth's GRPOTrainer override expects
-    # `_get_train_sampler(self)` only — the dataloader build crashes with
+    # `_get_train_sampler(self)` only - the dataloader build crashes with
     # `TypeError: takes 1 positional argument but 2 were given`. We wrap
     # the bound method to swallow any extra positional/keyword args. The
     # patched class might live in a few different module paths depending on
@@ -471,7 +471,7 @@ else:
         except (ImportError, AttributeError):
             continue
     if not _patched:
-        print("(GRPO sampler monkeypatch: no matching class found — proceeding without patch)")
+        print("(GRPO sampler monkeypatch: no matching class found - proceeding without patch)")
 
     reset_history()  # clear sidecar between runs
 
@@ -512,7 +512,7 @@ print(f"\nGRPO phase complete in {elapsed:.1f}s ({elapsed/60:.1f} min)")
 
 # ─── 10. Final eval ────────────────────────────────────────────────────────
 cells.append(md(r"""
-## Cell 9 — Final eval (random vs SFT+GRPO)
+## Cell 9 - Final eval (random vs SFT+GRPO)
 
 **Expected runtime: 5–7 minutes on A100, 12–15 minutes on T4.**
 6 families × 10 held-out seeds × 2 conditions = 120 episodes total.
@@ -533,7 +533,7 @@ EVAL_FAMILIES = [
 FINAL_SEEDS = list(range(8000, 8010))   # 10 held-out seeds
 TOTAL_FINAL = len(EVAL_FAMILIES) * len(FINAL_SEEDS)
 
-print(f"Final eval — {TOTAL_FINAL} episodes per condition × 2 conditions = {TOTAL_FINAL*2} total\n")
+print(f"Final eval - {TOTAL_FINAL} episodes per condition × 2 conditions = {TOTAL_FINAL*2} total\n")
 
 _t0 = time.monotonic()
 print("→ random baseline")
@@ -563,7 +563,7 @@ for fam in EVAL_FAMILIES:
 
 # ─── 11. Plots ─────────────────────────────────────────────────────────────
 cells.append(md(r"""
-## Cell 10 — Render the 4 canonical plots
+## Cell 10 - Render the 4 canonical plots
 
 **Expected runtime: < 1 minute.** Saves all four to `/content/results/` so
 you can download them directly into the README.
@@ -673,7 +673,7 @@ print(f"\nAll plots written to {out_dir}/ in {time.monotonic()-_t0:.1f}s")
 
 # ─── 12. Push LoRA to HF Hub ───────────────────────────────────────────────
 cells.append(md(r"""
-## Cell 11 — Push LoRA adapter to your HuggingFace Hub (optional)
+## Cell 11 - Push LoRA adapter to your HuggingFace Hub (optional)
 
 **Expected runtime: 2–3 minutes.** Skipped if the `HF_USER` and `HF_TOKEN`
 environment variables aren't set. Set them in Colab via:
@@ -688,7 +688,7 @@ HF_USER = os.environ.get("HF_USER", "")
 HF_TOKEN = os.environ.get("HF_TOKEN", "")
 
 if not HF_USER or not HF_TOKEN:
-    print("HF_USER / HF_TOKEN not set — skipping Hub push.")
+    print("HF_USER / HF_TOKEN not set - skipping Hub push.")
     print("To enable: Colab sidebar → 🔑 Secrets → add both, then re-run this cell.")
 else:
     from huggingface_hub import login, create_repo
@@ -705,7 +705,7 @@ print(f"\nDone in {time.monotonic()-_t0:.1f}s")
 
 # ─── 13. README results table ──────────────────────────────────────────────
 cells.append(md(r"""
-## Cell 12 — Print the README results table
+## Cell 12 - Print the README results table
 
 **Expected runtime: < 1 second.** Copy this block straight into the
 README's *Eval results* section, replacing the placeholder rows.

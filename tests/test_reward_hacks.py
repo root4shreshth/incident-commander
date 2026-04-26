@@ -3,18 +3,18 @@
 Each test asserts that an exploit path which previously yielded reward without
 solving the underlying problem now correctly fails to score. These tests exist
 because the OpenEnv hackathon judging guide explicitly calls out reward-hacking
-as a top failure mode and asks for "anti-cheating checks" — this file is the
+as a top failure mode and asks for "anti-cheating checks" - this file is the
 receipts.
 
 Exploits covered:
-    a) update_config string-match heal — any key containing "pool" + "size"
+    a) update_config string-match heal - any key containing "pool" + "size"
        used to silently clear db_pool_exhaustion. Now requires the strict
        allowlist key `db.pool.max_size` AND a value > 50, delegated to
        scenario.on_config_update.
     b) restart() unconditionally cleared all anomalies. Now restart only cures
        anomalies in `Service._RESTART_CURABLE` (oom, connection_leak), and OOM
        only if the memory limit was actually raised.
-    c) Redundancy bypass via parameter tweak — exact-dict comparison meant
+    c) Redundancy bypass via parameter tweak - exact-dict comparison meant
        `{lines: 50}` and `{lines: 51}` slipped through. Now redundancy is keyed
        on (action_type, target_service) within the last 3 actions.
     d) Rollback to currently-active version silently appended a fresh "active"
@@ -164,7 +164,7 @@ class TestRestartCurable:
         assert db.health == ServiceHealth.DEGRADED
 
     def test_restart_does_clear_connection_leak(self):
-        # connection_leak is in _RESTART_CURABLE — restart does clear it
+        # connection_leak is in _RESTART_CURABLE - restart does clear it
         cluster = Cluster()
         cluster.initialize()
         scenario = DBPoolScenario()

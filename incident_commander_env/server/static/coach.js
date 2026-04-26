@@ -1,4 +1,4 @@
-// coach.js — client-side wrapper around /coach/hint, /coach/explain and ideal trajectory.
+// coach.js - client-side wrapper around /coach/hint, /coach/explain and ideal trajectory.
 // Produces friendly human messages and renders them into the AI Coach panel.
 
 const Coach = (() => {

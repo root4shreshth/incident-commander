@@ -13,7 +13,7 @@ Format follows the standard SRE post-mortem skeleton:
   - What went well / what didn't (auto-derived from rewards)
   - Follow-ups (suggested action items + Phase-2 nods)
 
-The writer is dependency-free — pure stdlib — so it runs anywhere the
+The writer is dependency-free - pure stdlib - so it runs anywhere the
 env runs. The output is plain Markdown, so it renders nicely on GitHub,
 in any IDE, or piped to a CLI viewer.
 """
@@ -42,7 +42,7 @@ _SCENARIO_PRETTY = {
 
 def _ts(ts: Optional[float]) -> str:
     if ts is None:
-        return "—"
+        return "-"
     dt = datetime.datetime.fromtimestamp(float(ts), tz=datetime.timezone.utc)
     return dt.strftime("%Y-%m-%d %H:%M:%S UTC")
 
@@ -142,7 +142,7 @@ def _suggested_followups(scenario: str, totals: Dict[str, float]) -> List[str]:
     }
     items = list(base.get(scenario, ["File a generic follow-up ticket for this incident class."]))
     if totals.get("penalty", 0) < -0.05:
-        items.append("Tighten the scenario's penalty bookkeeping — agent took actions that didn't help.")
+        items.append("Tighten the scenario's penalty bookkeeping - agent took actions that didn't help.")
     return items
 
 
@@ -170,7 +170,7 @@ def build_postmortem_markdown(events: List[Dict[str, Any]]) -> str:
     seed = start.get("seed")
     alert = start.get("alert") or "(alert text not captured)"
 
-    # Find the resolve_incident step if any — its message contains the
+    # Find the resolve_incident step if any - its message contains the
     # agent's stated root cause + resolution.
     resolve_msg = ""
     resolve_action: Dict[str, Any] = {}
@@ -195,7 +195,7 @@ def build_postmortem_markdown(events: List[Dict[str, Any]]) -> str:
                  f"**Wall-clock:** {duration_s:.1f}s")
     lines.append("")
     lines.append(f"- **Scenario family:** `{task_id}`")
-    lines.append(f"- **Seed:** `{seed if seed is not None else '—'}`")
+    lines.append(f"- **Seed:** `{seed if seed is not None else '-'}`")
     lines.append(f"- **Author:** `{model}` (autonomous)")
     lines.append(f"- **Started:** {_ts(started_at)}")
     lines.append(f"- **Resolved:** {_ts(ended_at)}")
@@ -268,7 +268,7 @@ def build_postmortem_markdown(events: List[Dict[str, Any]]) -> str:
     lines.append("---")
     lines.append("")
     lines.append(
-        f"*Generated automatically by Praetor — incident commander for SREs. "
+        f"*Generated automatically by Praetor - incident commander for SREs. "
         f"Trace: episode.jsonl in this directory.*"
     )
     lines.append("")

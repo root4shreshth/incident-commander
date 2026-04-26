@@ -1,9 +1,9 @@
-"""Task 1 (Easy): Single service OOM crash — parametric.
+"""Task 1 (Easy): Single service OOM crash - parametric.
 
 A randomly chosen service crashes due to OutOfMemoryError. Logs clearly show
 the error. Agent must identify the service, read logs, and restart with a
 higher memory limit. Each `(seed, difficulty)` pair gives a different
-instance of the family — same fault shape, different specific service /
+instance of the family - same fault shape, different specific service /
 memory ceiling / step budget.
 
 Why parametric: with three hardcoded scenarios an RL agent overfits in ~100
@@ -28,7 +28,7 @@ from incident_commander_env.server.simulation.metrics_engine import apply_oom_an
 from incident_commander_env.server.simulation.service import ServiceHealth
 
 
-# Pool of services that may be the "victim" — chosen seed-deterministically.
+# Pool of services that may be the "victim" - chosen seed-deterministically.
 _OOM_CANDIDATES = [
     "payment-service",
     "order-service",
@@ -40,7 +40,7 @@ _OOM_CANDIDATES = [
 class OOMCrashScenario(BaseScenario):
     task_id = "oom_crash"
     difficulty = "easy"
-    description = "Single service OOM crash — a service is down due to OutOfMemoryError"
+    description = "Single service OOM crash - a service is down due to OutOfMemoryError"
     root_cause_keywords = ["oom", "memory", "out of memory", "outofmemory", "memory limit"]
 
     # `relevant_services` is computed in __init__ but typed here for the

@@ -1,4 +1,4 @@
-"""Cluster orchestrator — holds all services, dependency graph, and simulation state."""
+"""Cluster orchestrator - holds all services, dependency graph, and simulation state."""
 
 from __future__ import annotations
 

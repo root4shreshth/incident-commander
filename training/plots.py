@@ -7,10 +7,10 @@ the README and HF blog.
 Plot inventory (the four images that anchor the submission's
 "Showing Improvement in Rewards" judging axis):
 
-  1. make_reward_curve          — total reward over training steps
-  2. make_reward_components     — six reward components on the same axes (the killer image)
-  3. make_success_bars          — per-scenario success rate per condition (bar chart)
-  4. make_action_distribution   — pre/post action histogram
+  1. make_reward_curve          - total reward over training steps
+  2. make_reward_components     - six reward components on the same axes (the killer image)
+  3. make_success_bars          - per-scenario success rate per condition (bar chart)
+  4. make_action_distribution   - pre/post action histogram
 """
 
 from __future__ import annotations

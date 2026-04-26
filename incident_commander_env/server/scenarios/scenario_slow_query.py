@@ -39,7 +39,7 @@ _STABLE_VERSIONS = ["v2.4.6", "v2.4.6", "v3.0.5"]
 class SlowQueryScenario(BaseScenario):
     task_id = "slow_query"
     difficulty = "medium"
-    description = "Lock contention — a slow query introduced in a recent deploy"
+    description = "Lock contention - a slow query introduced in a recent deploy"
     root_cause_keywords = [
         "lock", "deadlock", "slow query", "lock wait", "for update",
         "rollback", "deploy", "version",
@@ -62,7 +62,7 @@ class SlowQueryScenario(BaseScenario):
         self.relevant_services = {self.target_service}
         self.max_steps = max(15, int(22 * (1.5 - max(0.0, min(1.0, difficulty)))))
         self.alert_message = (
-            f"WARNING: latency on {self.target_service} has exploded — p99 > 8s, "
+            f"WARNING: latency on {self.target_service} has exploded - p99 > 8s, "
             f"throughput collapsed. Connection pool filling with locked txns. "
             f"Recent deploy ({self.bad_version}) is suspicious."
         )
@@ -147,7 +147,7 @@ class SlowQueryScenario(BaseScenario):
     def compute_penalties(self, actions: List[ActionRecord], cluster: Cluster) -> float:
         penalty = 0.0
         for a in actions:
-            # Restarting the locked service is a quick fix that doesn't last —
+            # Restarting the locked service is a quick fix that doesn't last -
             # it's the wrong move for this scenario.
             if a.action_type == "restart_service" and a.target_service == self.target_service:
                 penalty -= 0.10

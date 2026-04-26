@@ -19,7 +19,7 @@ SCENARIO_REGISTRY = {
     "cert_expiry": CertExpiryScenario,
 }
 
-# Phase 2 — load community / YAML-authored scenarios from scenarios/yaml/
+# Phase 2 - load community / YAML-authored scenarios from scenarios/yaml/
 # at import time. Failures are non-fatal: a malformed YAML file just gets
 # skipped with a warning, the rest of the system keeps running.
 _YAML_DIR = Path(__file__).parent / "yaml"
@@ -27,10 +27,10 @@ try:
     _yaml_scenarios = load_yaml_scenarios(_YAML_DIR)
     for tid, cls in _yaml_scenarios.items():
         if tid in SCENARIO_REGISTRY:
-            print(f"[praetor] yaml scenario {tid!r} skipped — collides with built-in")
+            print(f"[praetor] yaml scenario {tid!r} skipped - collides with built-in")
             continue
         SCENARIO_REGISTRY[tid] = cls
-except Exception as _exc:  # pragma: no cover — defensive
+except Exception as _exc:  # pragma: no cover - defensive
     print(f"[praetor] yaml scenarios skipped: {_exc}")
 
 

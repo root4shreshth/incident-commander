@@ -1,11 +1,11 @@
-/* Integrations panel — connect a real platform to Praetor.
+/* Integrations panel - connect a real platform to Praetor.
  *
  * Three tabs:
- *   GitHub  — REAL OAuth via device flow. Demo fallback if GITHUB_CLIENT_ID
+ *   GitHub  - REAL OAuth via device flow. Demo fallback if GITHUB_CLIENT_ID
  *             is not set on the server.
- *   Cloud   — DEMO MODE. Forms render, credentials live in localStorage,
+ *   Cloud   - DEMO MODE. Forms render, credentials live in localStorage,
  *             never transmitted. Honest about its limits.
- *   Adapter — REAL code generation. Produces a praetor_adapter.py the user
+ *   Adapter - REAL code generation. Produces a praetor_adapter.py the user
  *             drops into their own deployment.
  *
  * Talks to the /integrations/* router defined in incident_commander_env/server/integrations.py.
@@ -91,7 +91,7 @@
       if (hint) {
         hint.innerHTML = s && s.client_id_configured
           ? 'Real OAuth ready (GITHUB_CLIENT_ID is set).'
-          : 'No GITHUB_CLIENT_ID set — will run in DEMO mode. To enable real OAuth: register an OAuth App at <a href="https://github.com/settings/developers" target="_blank" rel="noopener" style="color:var(--accent-blue)">github.com/settings/developers</a>, set GITHUB_CLIENT_ID in .env, restart.';
+          : 'No GITHUB_CLIENT_ID set - will run in DEMO mode. To enable real OAuth: register an OAuth App at <a href="https://github.com/settings/developers" target="_blank" rel="noopener" style="color:var(--accent-blue)">github.com/settings/developers</a>, set GITHUB_CLIENT_ID in .env, restart.';
       }
       setGhMode('disconnected');
     }
@@ -154,7 +154,7 @@
         throttleNote.textContent = '';
       }
     };
-    // First poll after 1.5s, then every 2s — server gates real GitHub calls
+    // First poll after 1.5s, then every 2s - server gates real GitHub calls
     setTimeout(poll, 1500);
     state.githubPollTimer = setInterval(poll, 2000);
   }
@@ -199,7 +199,7 @@
       row.innerHTML = `
         <div style="flex:1;min-width:0">
           <div class="name" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(r.full_name)}</div>
-          <div class="meta" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(r.language || '—')} · ${r.private ? '🔒 private' : 'public'} · ⭐${r.stargazers_count || 0}</div>
+          <div class="meta" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(r.language || '-')} · ${r.private ? '🔒 private' : 'public'} · ⭐${r.stargazers_count || 0}</div>
         </div>
         <button class="btn btn-outline btn-xs">Pick</button>
       `;

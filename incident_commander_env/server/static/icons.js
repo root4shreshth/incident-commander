@@ -1,4 +1,4 @@
-// icons.js — inline Lucide SVG icon library.
+// icons.js - inline Lucide SVG icon library.
 // Usage: Icons.siren()              -> default 18px, currentColor
 //        Icons.siren(22)            -> 22px
 //        Icons.siren(22, 'my-cls')  -> custom class

@@ -31,7 +31,7 @@ STABLE_VERSION = "v2.3.1"
 class BadDeployScenario(BaseScenario):
     task_id = "bad_deployment_cascade"
     difficulty = "hard"
-    description = "Bad deployment cascade — memory leak triggers autoscaler, exhausts resource quota, starves secondary services"
+    description = "Bad deployment cascade - memory leak triggers autoscaler, exhausts resource quota, starves secondary services"
     alert_message = (
         "CRITICAL: Multiple services degraded. Cluster resource quota at 95%. "
         "Autoscaler events detected for order-service. "
@@ -215,7 +215,7 @@ class BadDeployScenario(BaseScenario):
     def is_correct_op(self, action, cluster):
         """Bad-deploy is fixed by rolling back order-service then restarting starved deps.
 
-        Critically, restart of order-service is NOT correct — must be a rollback.
+        Critically, restart of order-service is NOT correct - must be a rollback.
         Restarting starved services (inventory, notification) IS correct because
         they need to come back up after the bad deploy is reverted.
         """

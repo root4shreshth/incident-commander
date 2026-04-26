@@ -6,11 +6,11 @@ This module implements that as a step-gated sampler that returns a list of
 `(family, difficulty, weight)` tuples to draw from at each gradient step.
 
 Phases (default schedule):
-  Phase 1 (steps   0..100): 100% oom_crash @ difficulty=0.3 — easiest
+  Phase 1 (steps   0..100): 100% oom_crash @ difficulty=0.3 - easiest
   Phase 2 (steps 100..200): mix oom_crash + db_pool_exhaustion at moderate diff
   Phase 3 (steps 200..400): full mix across all 3 families at varied difficulty
 
-The schedule can be advanced "early" by calling `try_advance(success_rate)` —
+The schedule can be advanced "early" by calling `try_advance(success_rate)` -
 once the policy starts solving the current phase reliably, jump ahead.
 """
 

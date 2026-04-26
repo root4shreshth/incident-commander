@@ -57,7 +57,7 @@ def compute_step_reward(
 ) -> float:
     """Compute per-step scalar reward.
 
-    Backwards-compatible signature — old call sites pass the first five
+    Backwards-compatible signature - old call sites pass the first five
     positional args and get a float back. New call sites pass scenario +
     cluster + terminal flags as keyword args for full multi-component
     behaviour.

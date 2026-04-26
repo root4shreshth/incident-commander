@@ -1,7 +1,7 @@
 name: incident_commander_env
 version: "0.2.0"
 description: >-
-  SRE/DevOps Cloud Incident Response & Diagnostics — an OpenEnv environment
+  SRE/DevOps Cloud Incident Response & Diagnostics - an OpenEnv environment
   for training LLM agents to diagnose and remediate cascading production
   incidents across a simulated 9-service microservices cluster. Theme #3.1
   Professional Tasks. Six-component verifiable reward, deterministic
@@ -24,7 +24,7 @@ tags:
   - agentic
   - theme-professional-tasks
 
-# Action space — discriminated by action_type. Each action carries optional
+# Action space - discriminated by action_type. Each action carries optional
 # typed parameters; see `incident_commander_env.models.IncidentAction`.
 action_space:
   type: discrete-with-params
@@ -80,7 +80,7 @@ action_space:
         - {name: root_cause, type: str, required: true}
         - {name: resolution, type: str, required: true}
 
-# Observation space — see `incident_commander_env.models.IncidentObservation`
+# Observation space - see `incident_commander_env.models.IncidentObservation`
 observation_space:
   type: structured
   fields:
@@ -102,14 +102,14 @@ reward:
   decomposition:
     - {component: r_diagnostic,  range: [0.0, 0.05],   description: "Investigative reads on relevant or adjacent services"}
     - {component: r_correct_op,  range: [0.0, 0.15],   description: "Scenario-defined right-move (delegated to scenario.is_correct_op)"}
-    - {component: r_resolution,  range: [-0.05, 0.30], description: "Terminal — accurate root-cause declaration; -0.05 if false claim"}
+    - {component: r_resolution,  range: [-0.05, 0.30], description: "Terminal - accurate root-cause declaration; -0.05 if false claim"}
     - {component: r_format,      range: [0.0, 0.01],   description: "Per-step credit for well-formed action"}
     - {component: r_efficiency,  range: [0.0, 0.10],   description: "Bonus when resolved within <=50% of step budget"}
     - {component: r_penalty,     range: [-0.30, 0.0],  description: "Sum of harmful_restart, redundancy, handler_error penalties"}
   time_decay: 0.995
   validator_clamp: [0.01, 0.99]
 
-# Scenario families (parametric — seeded reset draws from the family distribution)
+# Scenario families (parametric - seeded reset draws from the family distribution)
 scenarios:
   oom_crash:
     skill_tag: "Your first page"

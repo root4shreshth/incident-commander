@@ -5,8 +5,8 @@ r_format, r_efficiency, r_penalty) has isolated unit tests that pin its
 behavior. The hackathon judging guide demands "multiple independent reward
 functions, not just one"; these tests are the receipts.
 
-The components are tested at the function level — no env, no cluster
-required — by hand-building an `EpisodeContext` and asserting the
+The components are tested at the function level - no env, no cluster
+required - by hand-building an `EpisodeContext` and asserting the
 component's float output matches the documented constants.
 """
 

@@ -3,7 +3,7 @@
 This module makes Praetor self-targetable for the Real-Time tab demo. The
 WebsiteBackend expects any deployed site to expose an `/ops/*` HTTP contract
 (health, metrics, logs, restart, rollback, scale, config, break, heal). Most
-deployed sites — Netlify static apps, plain FastAPI projects — don't have
+deployed sites - Netlify static apps, plain FastAPI projects - don't have
 these endpoints out of the box. Without a sample target, the demo bricks on
 "GET /ops/health failed: HTTP 404."
 
@@ -79,7 +79,7 @@ def _service_health_str(service_obj: Any) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Pydantic request bodies (loose — the WebsiteBackend isn't strict about them)
+# Pydantic request bodies (loose - the WebsiteBackend isn't strict about them)
 # ---------------------------------------------------------------------------
 
 
@@ -117,7 +117,7 @@ def make_ops_router(env: IncidentCommanderEnv) -> APIRouter:
     """Build a FastAPI router exposing the operator contract on top of `env`.
 
     The router shares a single `IncidentCommanderEnv` instance with the rest
-    of the app (or a dedicated demo instance — see app.py wiring).
+    of the app (or a dedicated demo instance - see app.py wiring).
     """
     router = APIRouter(prefix="/ops", tags=["ops-contract"])
 
@@ -262,7 +262,7 @@ def make_ops_router(env: IncidentCommanderEnv) -> APIRouter:
         if body.scenario not in valid:
             return {"ok": False, "error": f"unknown scenario: {body.scenario}",
                     "valid_scenarios": sorted(valid)}
-        # Re-init the env with the chosen scenario — that injects the fault.
+        # Re-init the env with the chosen scenario - that injects the fault.
         obs = env.reset(task_id=body.scenario, seed=0)
         return {
             "ok": True,

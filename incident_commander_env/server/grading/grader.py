@@ -1,4 +1,4 @@
-"""Episode-end deterministic grader — computes 0.0-1.0 score from scenario rubric."""
+"""Episode-end deterministic grader - computes 0.0-1.0 score from scenario rubric."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""Crowdsourced scenario library — load scenarios from YAML files.
+"""Crowdsourced scenario library - load scenarios from YAML files.
 
 Closes the "YAML scenario authoring DSL" gap from the Phase 2 roadmap.
 A community contributor writes a small YAML file (no Python required),
@@ -46,7 +46,7 @@ from incident_commander_env.server.simulation.service import ServiceHealth
 
 
 # ---------------------------------------------------------------------------
-# YAML parsing — prefer PyYAML when available, fall back to a minimal parser.
+# YAML parsing - prefer PyYAML when available, fall back to a minimal parser.
 # ---------------------------------------------------------------------------
 
 def _parse_yaml(text: str) -> Dict[str, Any]:
@@ -58,7 +58,7 @@ def _parse_yaml(text: str) -> Dict[str, Any]:
 
 
 def _minimal_yaml_parse(text: str) -> Dict[str, Any]:
-    """Tiny subset YAML parser — handles flat key:value, nested dicts, and
+    """Tiny subset YAML parser - handles flat key:value, nested dicts, and
     lists of strings/scalars. Sufficient for our scenario schema, but we
     encourage installing PyYAML for anything fancier.
     """
@@ -172,7 +172,7 @@ def _minimal_yaml_parse(text: str) -> Dict[str, Any]:
             key = key.strip()
             val = val.strip()
             if val == "":
-                # Look ahead — is the next non-empty line a list ('- ') or another nested key?
+                # Look ahead - is the next non-empty line a list ('- ') or another nested key?
                 j = i + 1
                 while j < len(lines) and not lines[j].strip():
                     j += 1
@@ -240,7 +240,7 @@ def build_scenario_class(spec: Dict[str, Any]) -> type:
     Methods are bound to the class via `type()` at construction time so that
     Python's ABC machinery sees them and doesn't flag the class as abstract.
     Assigning methods after `class X(BaseScenario): pass` does NOT clear the
-    abstract-method set — `type()` does.
+    abstract-method set - `type()` does.
     """
     validate_scenario_dict(spec)
     spec = dict(spec)  # defensive copy
@@ -380,7 +380,7 @@ def load_yaml_scenarios(yaml_dir: Path) -> Dict[str, type]:
             out[cls.task_id] = cls
         except YAMLScenarioError as exc:
             print(f"[praetor] yaml scenario {path.name} skipped: {exc}")
-        except Exception as exc:  # pragma: no cover — defensive
+        except Exception as exc:  # pragma: no cover - defensive
             print(f"[praetor] yaml scenario {path.name} failed to load: {exc}")
     return out
 

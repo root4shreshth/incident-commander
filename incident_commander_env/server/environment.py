@@ -1,4 +1,4 @@
-"""IncidentCommanderEnv — the core OpenEnv environment implementation.
+"""IncidentCommanderEnv - the core OpenEnv environment implementation.
 
 Delegates execution to a `Backend` (sim, real, or code-aware) so the same
 trained policy runs unchanged across substrates. The env's job is now:
@@ -108,7 +108,7 @@ class IncidentCommanderEnv:
                 done=True,
             )
 
-        # Create scenario (parametric — seed and difficulty go into __init__ for
+        # Create scenario (parametric - seed and difficulty go into __init__ for
         # those scenarios that accept them; legacy scenarios fall back to a no-arg call)
         scenario_cls = SCENARIO_REGISTRY[task_id]
         try:
@@ -131,7 +131,7 @@ class IncidentCommanderEnv:
         self._last_breakdown = None
 
         # Build initial observation. For the dependency graph we ask the
-        # underlying cluster (sim only) — real backends can return None here.
+        # underlying cluster (sim only) - real backends can return None here.
         dep_graph = None
         cluster = getattr(self._backend, "cluster", None)
         if cluster is not None and hasattr(cluster, "dependency_graph"):
@@ -239,7 +239,7 @@ class IncidentCommanderEnv:
             final_score = self._grade(cluster)
             self._state.current_score = round(final_score, 4)
             observation.message += (
-                f"\n\nSTEP LIMIT REACHED — Incident unresolved.\n"
+                f"\n\nSTEP LIMIT REACHED - Incident unresolved.\n"
                 f"Partial score: {final_score:.2f}/1.00\n"
                 f"Steps used: {self._state.step_count}/{self._scenario.max_steps}"
             )

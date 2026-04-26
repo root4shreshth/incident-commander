@@ -1,4 +1,4 @@
-"""RealBackend — wraps a Docker Compose stack for the sim-to-real demo.
+"""RealBackend - wraps a Docker Compose stack for the sim-to-real demo.
 
 The user vibecodes a small site under `targets/site/` exposing the contract
 documented in the README:
@@ -11,7 +11,7 @@ documented in the README:
 RealBackend implements the same `Backend` Protocol as `SimulatedBackend` so
 the trained policy and reward components run unchanged across substrates.
 
-Robustness — if `compose_root` does not exist or `docker` is missing, this
+Robustness - if `compose_root` does not exist or `docker` is missing, this
 backend degrades to a clearly-labelled stub mode that returns helpful error
 observations without crashing the env. That keeps tests green on a machine
 with no Docker installed and lets the user discover misconfiguration via
@@ -127,7 +127,7 @@ class RealBackend:
         # Inject the scenario's chaos profile so the env reproduces the fault.
         chaos = _ops.chaos_inject(self.compose_root, scenario.task_id, timeout=30)
         if not chaos.ok:
-            # Tolerate — the user might run chaos differently. Leave a breadcrumb.
+            # Tolerate - the user might run chaos differently. Leave a breadcrumb.
             self._stub_reason = f"chaos.py inject failed: {chaos.error}"
 
     def teardown(self) -> None:
@@ -279,7 +279,7 @@ class RealBackend:
             )
         try:
             return handler(self, action, scenario)
-        except Exception as exc:  # pragma: no cover — defensive
+        except Exception as exc:  # pragma: no cover - defensive
             return IncidentObservation(
                 message=f"RealBackend error executing {action.action_type}: {exc}",
                 error=f"{type(exc).__name__}: {exc}",
@@ -317,7 +317,7 @@ class RealBackend:
 
 
 # ---------------------------------------------------------------------------
-# Action handlers — translate IncidentAction → docker shell-outs
+# Action handlers - translate IncidentAction → docker shell-outs
 # ---------------------------------------------------------------------------
 
 def _classify_health(
@@ -572,7 +572,7 @@ def _rollback_deployment(
     )
 
 
-# Allowlist mirroring the sim handler — defined in actions.handlers but
+# Allowlist mirroring the sim handler - defined in actions.handlers but
 # duplicated here so we don't reach across the package.
 _KNOWN_CONFIG_KEYS = {
     "db.pool.max_size",
@@ -641,7 +641,7 @@ def _run_diagnostic(
     cmd = str(action.parameters.get("command") or "check_connectivity")
     if backend._stub_mode:
         return IncidentObservation(
-            message=f"[stub] diagnostic '{cmd}' — Docker unavailable.",
+            message=f"[stub] diagnostic '{cmd}' - Docker unavailable.",
             diagnostic_result="stub",
         )
     if cmd == "check_connectivity":

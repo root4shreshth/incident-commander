@@ -6,7 +6,7 @@ pure function `(ActionRecord, EpisodeContext) -> float`, isolated from the
 others, and unit-testable in three lines.
 
 The aggregate signal is `RewardBreakdown.total()`. TRL's GRPOTrainer logs each
-component to wandb separately — that's how you get the "reward components
+component to wandb separately - that's how you get the "reward components
 diverging during training" plot which is the strongest visual evidence of
 non-trivial learning.
 
@@ -16,9 +16,9 @@ Component table:
 |------------------|---------------------------------------------------|----------------|
 | r_diagnostic     | first read on a relevant or adjacent service       | +0.02 .. +0.05 |
 | r_correct_op     | scenario-defined right move (delegated)            | +0.15          |
-| r_resolution     | terminal — accurate root-cause declaration         | +0.05 .. +0.30 |
+| r_resolution     | terminal - accurate root-cause declaration         | +0.05 .. +0.30 |
 | r_format         | action parsed cleanly (no fallback)                | +0.01          |
-| r_efficiency     | terminal — solved in <=50% of step budget          | 0 or +0.10     |
+| r_efficiency     | terminal - solved in <=50% of step budget          | 0 or +0.10     |
 | r_penalty        | redundancy + harmful_restart + handler errors      | -0.30 .. 0     |
 """
 
@@ -53,7 +53,7 @@ R_PENALTY_REDUNDANCY_WINDOW = 3
 
 
 # ---------------------------------------------------------------------------
-# RewardBreakdown — the typed aggregate
+# RewardBreakdown - the typed aggregate
 # ---------------------------------------------------------------------------
 
 @dataclass
@@ -91,14 +91,14 @@ class RewardBreakdown:
 
 
 # ---------------------------------------------------------------------------
-# Component functions — pure (ActionRecord, EpisodeContext) -> float
+# Component functions - pure (ActionRecord, EpisodeContext) -> float
 # ---------------------------------------------------------------------------
 
 def r_diagnostic(action: ActionRecord, ctx: EpisodeContext) -> float:
     """Reward investigative actions, more for the relevant ones.
 
     Suppressed if the same (action_type, target) pair was used in the recent
-    window — that path returns the redundancy penalty instead, in `r_penalty`.
+    window - that path returns the redundancy penalty instead, in `r_penalty`.
     Note we don't *also* zero the reward here; the penalty path already
     nets a negative.
     """
@@ -117,7 +117,7 @@ def r_correct_op(action: ActionRecord, ctx: EpisodeContext) -> float:
     The scenario decides what counts as "correct" via `is_correct_op` (default
     in BaseScenario, overridable). This is the strongest single signal an
     agent gets and is why scenarios that delegate the heal-decision (see
-    Track A.2 — anti-cheat) keep this reward honest.
+    Track A.2 - anti-cheat) keep this reward honest.
     """
     if action.action_type not in REMEDIATIVE_ACTIONS:
         return 0.0

@@ -3,13 +3,13 @@
 A service's TLS cert ticked over the expiry boundary. The process is alive
 and serving HTTP-internal traffic fine, but inbound HTTPS handshakes fail
 outright (`ssl.SSLError: certificate has expired`). Liveness probe (HTTP)
-passes, readiness probe (HTTPS) fails. Confusing for the agent — metrics
+passes, readiness probe (HTTPS) fails. Confusing for the agent - metrics
 look almost normal except error_rate is at 90%+.
 
 Resolution: restart the service. In the sim model, restart triggers the
 cert renewal hook (Let's Encrypt / cert-manager / similar) and the listener
 reloads with the new cert. The agent must read logs to spot the SSLError
-pattern — metrics alone won't tell them what's wrong.
+pattern - metrics alone won't tell them what's wrong.
 
 Why this scenario matters: cert-expiry is the most embarrassing class of
 real-world outage. Every major company has been bitten by it (Spotify
@@ -44,7 +44,7 @@ _CERT_VICTIMS = [
 class CertExpiryScenario(BaseScenario):
     task_id = "cert_expiry"
     difficulty = "easy"
-    description = "TLS certificate expired — inbound HTTPS handshakes failing"
+    description = "TLS certificate expired - inbound HTTPS handshakes failing"
     root_cause_keywords = [
         "tls", "ssl", "certificate", "handshake", "expired", "cert",
         "let's encrypt", "renewal",
@@ -123,7 +123,7 @@ class CertExpiryScenario(BaseScenario):
 
     def compute_penalties(self, actions: List[ActionRecord], cluster: Cluster) -> float:
         penalty = 0.0
-        # Rolling back doesn't help — the cert is on the cluster, not the binary.
+        # Rolling back doesn't help - the cert is on the cluster, not the binary.
         for a in actions:
             if a.action_type == "rollback_deployment" and a.target_service == self.target_service:
                 penalty -= 0.10

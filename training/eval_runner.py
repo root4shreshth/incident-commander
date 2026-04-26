@@ -10,7 +10,7 @@ into the README's results table:
   - action_distribution (per family)
   - per_episode_breakdown (the 6 reward components summed across the episode)
 
-The runner is model-agnostic — it takes an `act` callable that maps
+The runner is model-agnostic - it takes an `act` callable that maps
 (observation_message, conversation_history) -> action_dict. Concrete
 adapters for HF transformers pipelines + a random baseline are provided.
 """
@@ -76,7 +76,7 @@ class EvalReport:
 
 
 # ---------------------------------------------------------------------------
-# Action-string parsing — robust against various LLM output shapes
+# Action-string parsing - robust against various LLM output shapes
 # ---------------------------------------------------------------------------
 
 _FALLBACK_ACTION = {
@@ -127,7 +127,7 @@ def _coerce_action(parsed: Dict[str, Any]) -> Dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# Policies — concrete `ActFn` implementations
+# Policies - concrete `ActFn` implementations
 # ---------------------------------------------------------------------------
 
 def random_policy(rng_seed: int = 0) -> ActFn:
@@ -135,7 +135,7 @@ def random_policy(rng_seed: int = 0) -> ActFn:
 
     Used as the floor baseline in the eval table. If even the random policy
     occasionally resolves a scenario, that's a sign the task isn't impossibly
-    hard — which is what the docs explicitly warn against ("RL only works if
+    hard - which is what the docs explicitly warn against ("RL only works if
     success probability is greater than zero").
     """
     import random as _random
@@ -289,7 +289,7 @@ def run_episode(
                 f"Action result:\n{obs.message}\n\nWhat is your next action?"
             ),
         })
-        # Trim to keep within model context — keep system + last N
+        # Trim to keep within model context - keep system + last N
         if len(history) > max_history_messages + 1:
             history = [history[0]] + history[-(max_history_messages):]
 
@@ -306,7 +306,7 @@ def run_episode(
             "breakdown_totals": dict(breakdown_totals),
         })
         logger.close()
-        # Phase 2 — auto-write postmortem.md alongside episode.jsonl and append
+        # Phase 2 - auto-write postmortem.md alongside episode.jsonl and append
         # a row to runs/RUNBOOK.md. Failures are non-fatal: trace data is the
         # source of truth, postmortem is a derived artifact.
         try:
@@ -371,7 +371,7 @@ def evaluate(
                 try:
                     on_episode(idx, total, family, seed, ep)
                 except Exception:
-                    # Progress callback never blocks the eval — failures are silent.
+                    # Progress callback never blocks the eval - failures are silent.
                     pass
 
     by_family: Dict[str, Dict[str, Any]] = {}

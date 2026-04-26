@@ -96,7 +96,7 @@ app.add_middleware(
 # Same OpenEnv API regardless; only the execution path differs.
 env = IncidentCommanderEnv(backend=get_backend())
 
-# Self-target demo environment — completely separate from `env` above so the
+# Self-target demo environment - completely separate from `env` above so the
 # Real-Time tab can drive this one through the operator-contract endpoints
 # without trampling the user's interactive Apprentice/Observatory state.
 # This is what makes "point Real-Time at http://127.0.0.1:8000" work without
@@ -104,8 +104,8 @@ env = IncidentCommanderEnv(backend=get_backend())
 ops_demo_env = IncidentCommanderEnv(backend=get_backend())
 app.include_router(make_ops_router(ops_demo_env))
 
-# Integrations — GitHub OAuth (real, via device flow), cloud-provider stubs
-# (demo mode — never store credentials server-side), and the adapter generator
+# Integrations - GitHub OAuth (real, via device flow), cloud-provider stubs
+# (demo mode - never store credentials server-side), and the adapter generator
 # that produces a praetor_adapter.py the user drops into their own deployment.
 app.include_router(make_integrations_router())
 
@@ -156,7 +156,7 @@ class StepResponse(BaseModel):
 def reset(request: ResetRequest = ResetRequest()) -> Dict[str, Any]:
     """Reset environment and start a new incident episode.
 
-    Optional `seed` makes the episode deterministic — same seed plus same
+    Optional `seed` makes the episode deterministic - same seed plus same
     action sequence yields identical observations and rewards. This is the
     OpenEnv contract for reproducible RL training.
     """
@@ -340,7 +340,7 @@ def list_runs() -> Dict[str, Any]:
     """List available recorded trained-agent runs."""
     try:
         from training.episode_logger import iter_runs
-    except Exception as exc:  # pragma: no cover — defensive
+    except Exception as exc:  # pragma: no cover - defensive
         return {"runs": [], "error": f"training extras not installed: {exc}"}
     if not RUNS_ROOT.exists():
         return {"runs": [], "runs_root": str(RUNS_ROOT)}
@@ -353,7 +353,7 @@ def watch_run(run_id: str) -> Dict[str, Any]:
     """Return the events of a single recorded run for replay in observe mode."""
     try:
         from training.episode_logger import read_episode
-    except Exception as exc:  # pragma: no cover — defensive
+    except Exception as exc:  # pragma: no cover - defensive
         return {"error": f"training extras not installed: {exc}", "events": []}
     # Sanitize: prevent traversal outside RUNS_ROOT
     safe_id = run_id.replace("..", "").replace("/", "").replace("\\", "")
@@ -381,7 +381,7 @@ def observe_page():
     page = STATIC_DIR / "observe.html"
     if page.exists():
         return FileResponse(page)
-    return {"error": "observe.html missing — copy it under static/."}
+    return {"error": "observe.html missing - copy it under static/."}
 
 
 @app.get("/dataset/export")
@@ -394,20 +394,20 @@ def dataset_export(format: str = "jsonl"):
     pitch: "the env is also the dataset endpoint."
 
     Query string:
-        format=jsonl (default) — one JSON object per line, newline-separated.
-        format=summary         — one JSON object per *run* (no per-step events).
+        format=jsonl (default) - one JSON object per line, newline-separated.
+        format=summary         - one JSON object per *run* (no per-step events).
     """
     from fastapi.responses import StreamingResponse
     try:
         from training.episode_logger import iter_runs, read_episode
-    except Exception as exc:  # pragma: no cover — defensive
+    except Exception as exc:  # pragma: no cover - defensive
         def _err():
             yield json.dumps({"error": f"training extras not installed: {exc}"}) + "\n"
         return StreamingResponse(_err(), media_type="application/x-ndjson")
 
     if not RUNS_ROOT.exists():
         def _empty():
-            yield json.dumps({"error": "runs/ is empty — visit /runs to populate."}) + "\n"
+            yield json.dumps({"error": "runs/ is empty - visit /runs to populate."}) + "\n"
         return StreamingResponse(_empty(), media_type="application/x-ndjson")
 
     fmt = (format or "jsonl").lower()
@@ -486,7 +486,7 @@ def _seed_demo_runs(force: bool = False) -> Dict[str, Any]:
                 for f, s in report.by_family.items()
             },
         }
-    except Exception as exc:  # pragma: no cover — never crash on this
+    except Exception as exc:  # pragma: no cover - never crash on this
         print(f"[praetor] demo-runs seeding failed: {exc}")
         return {"seeded": False, "error": f"{type(exc).__name__}: {exc}"}
 
@@ -513,32 +513,32 @@ def admin_regenerate_demo_runs(force: bool = False) -> Dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# Phase 3 — Real-time / sim-to-real on a deployed site.
+# Phase 3 - Real-time / sim-to-real on a deployed site.
 #
 # State machine: connect → inject chaos → run agent → (if not healed) escalate.
 # Agent runs in a background thread; UI polls /realtime/status/<run_id>.
 # ---------------------------------------------------------------------------
 
-# In-memory store of active real-time runs. Bounded — we only need the current
+# In-memory store of active real-time runs. Bounded - we only need the current
 # run for the demo, but keeping the last few makes A/B comparison possible.
 _REALTIME_RUNS: Dict[str, Dict[str, Any]] = {}
 _REALTIME_LOCK = threading.Lock()
 _REALTIME_CONFIG: Dict[str, Any] = {
     "site_url": None,
-    # Tier 2 codebase config — one of three sources, mutually exclusive
+    # Tier 2 codebase config - one of three sources, mutually exclusive
     "repo_url": None,           # github or azure-devops URL
     "repo_token": None,         # PAT for either provider
     "repo_source": None,        # "github" | "azure" | "zip" | None
-    "repo_local_path": None,    # populated when source="zip" — the extracted dir
+    "repo_local_path": None,    # populated when source="zip" - the extracted dir
     "service_names": ["frontend", "api", "postgres"],
 }
 
 # Where uploaded ZIPs are extracted. Cleaned up across server restarts.
 _CODEBASE_ROOT = Path(os.getenv("CODEBASE_ROOT", "uploaded_codebase")).resolve()
-_MAX_ZIP_BYTES = 25 * 1024 * 1024  # 25 MB — big enough for most codebases, small enough to be safe
+_MAX_ZIP_BYTES = 25 * 1024 * 1024  # 25 MB - big enough for most codebases, small enough to be safe
 
 
-# Demo policy — replays a known-good action sequence per scenario family.
+# Demo policy - replays a known-good action sequence per scenario family.
 # Replaced by the trained LoRA when the user hooks one up; intentionally
 # deterministic so the live demo doesn't fail on stage.
 _DEMO_PLAYBOOK: Dict[str, List[Dict[str, Any]]] = {
@@ -546,24 +546,24 @@ _DEMO_PLAYBOOK: Dict[str, List[Dict[str, Any]]] = {
         {"action_type": "list_services",
          "why": "Always start with cluster overview so I can spot which service is unhealthy before drilling in."},
         {"action_type": "read_logs",     "target_service": "api",
-         "why": "The api service is failing — read its logs to confirm the failure mode. Looking specifically for OOMKilled / java.lang.OutOfMemoryError patterns."},
+         "why": "The api service is failing - read its logs to confirm the failure mode. Looking specifically for OOMKilled / java.lang.OutOfMemoryError patterns."},
         {"action_type": "check_metrics", "target_service": "api",
          "why": "Logs suggest OOM; verifying with metrics (memory_mb vs memory_limit_mb) gives me a confident diagnosis before I touch a knob."},
         {"action_type": "restart_service", "target_service": "api",
          "parameters": {"memory_limit": "1024Mi"},
-         "why": "Restart with a higher memory ceiling — 1024Mi gives 4× headroom over the original 256Mi, absorbing the workload spike. OOM is restart-curable in this scenario; smaller bumps tend to be revisited."},
+         "why": "Restart with a higher memory ceiling - 1024Mi gives 4× headroom over the original 256Mi, absorbing the workload spike. OOM is restart-curable in this scenario; smaller bumps tend to be revisited."},
         {"action_type": "resolve_incident",
-         "parameters": {"root_cause": "OOM on api — memory limit too low",
+         "parameters": {"root_cause": "OOM on api - memory limit too low",
                         "resolution": "restart api with 1024Mi"},
          "why": "Service is healthy and the fix is durable. Declaring resolved so the postmortem captures the root cause + remediation in the runbook."},
     ],
     "db_pool_exhaustion": [
         {"action_type": "list_services",
-         "why": "Cluster-wide view first — multiple services are likely degraded if a shared dependency is the cause."},
+         "why": "Cluster-wide view first - multiple services are likely degraded if a shared dependency is the cause."},
         {"action_type": "read_logs",     "target_service": "api",
-         "why": "User-facing service is failing — start where the symptom is."},
+         "why": "User-facing service is failing - start where the symptom is."},
         {"action_type": "read_logs",     "target_service": "postgres",
-         "why": "API logs point downstream — postgres is the shared dependency, look for pool-exhaustion signatures there."},
+         "why": "API logs point downstream - postgres is the shared dependency, look for pool-exhaustion signatures there."},
         {"action_type": "update_config", "target_service": "postgres",
          "parameters": {"key": "db.pool.max_size", "value": 100},
          "why": "Raise the connection pool ceiling so legitimate traffic stops queuing. 100 is a safe value above the observed peak; the underlying connection-leak fix is a separate code change."},
@@ -576,45 +576,45 @@ _DEMO_PLAYBOOK: Dict[str, List[Dict[str, Any]]] = {
     ],
     "bad_deployment_cascade": [
         {"action_type": "list_services",
-         "why": "Multiple services are reported failing — get the blast-radius picture first."},
+         "why": "Multiple services are reported failing - get the blast-radius picture first."},
         {"action_type": "read_logs",     "target_service": "api",
-         "why": "Spot the recent deployment marker — look for v1.1 references and memory-leak symptoms."},
+         "why": "Spot the recent deployment marker - look for v1.1 references and memory-leak symptoms."},
         {"action_type": "rollback_deployment", "target_service": "api",
          "parameters": {"to_version": "v1.0"},
-         "why": "Rollback FIRST — restart alone won't help, the leak is in the v1.1 binary. Reverting to v1.0 stops the bleeding before we restore dependent services."},
+         "why": "Rollback FIRST - restart alone won't help, the leak is in the v1.1 binary. Reverting to v1.0 stops the bleeding before we restore dependent services."},
         {"action_type": "restart_service", "target_service": "api",
          "why": "After rollback, restart cycles cleanly onto v1.0 and frees the resource quota the autoscaler was burning."},
         {"action_type": "resolve_incident",
          "parameters": {"root_cause": "v1.1 bundled a memory leak",
                         "resolution": "rolled back api to v1.0 and restarted"},
-         "why": "Resolution names the offending version — important for the postmortem so the team can prevent the same v1.1 from being re-deployed without a code fix."},
+         "why": "Resolution names the offending version - important for the postmortem so the team can prevent the same v1.1 from being re-deployed without a code fix."},
     ],
     "disk_full": [
         {"action_type": "list_services",
-         "why": "Confirm which service is degraded — disk-full failures often look like generic 5xx until you read logs."},
+         "why": "Confirm which service is degraded - disk-full failures often look like generic 5xx until you read logs."},
         {"action_type": "read_logs",     "target_service": "api",
-         "why": "Look for ENOSPC / 'No space left on device' — the smoking gun for disk-full incidents."},
+         "why": "Look for ENOSPC / 'No space left on device' - the smoking gun for disk-full incidents."},
         {"action_type": "check_metrics", "target_service": "api",
-         "why": "Confirm CPU and memory are normal — that confirms it's NOT an OOM and rules out memory-bump as a fix."},
+         "why": "Confirm CPU and memory are normal - that confirms it's NOT an OOM and rules out memory-bump as a fix."},
         {"action_type": "restart_service", "target_service": "api",
-         "why": "Restart cycles the volume — in our deployment model the pod's tmp/log directory clears on restart. Permanent fix is log rotation, but restart is the right immediate action."},
+         "why": "Restart cycles the volume - in our deployment model the pod's tmp/log directory clears on restart. Permanent fix is log rotation, but restart is the right immediate action."},
         {"action_type": "resolve_incident",
-         "parameters": {"root_cause": "log volume on api filled — writes returning ENOSPC",
+         "parameters": {"root_cause": "log volume on api filled - writes returning ENOSPC",
                         "resolution": "restarted api to cycle the volume"},
          "why": "Volume is clean and writes succeed. Following up with a log-rotation policy fix is queued separately."},
     ],
     "slow_query": [
         {"action_type": "list_services",
-         "why": "Cluster overview — slow-query incidents typically show one service degraded and dependencies fine."},
+         "why": "Cluster overview - slow-query incidents typically show one service degraded and dependencies fine."},
         {"action_type": "check_metrics", "target_service": "api",
          "why": "Latency p99 spike + low throughput is the lock-contention signature. Confirming before diving into logs."},
         {"action_type": "read_logs",     "target_service": "api",
-         "why": "Logs will show 'Lock wait timeout exceeded' or 'deadlock detected' — the SQL-level smoking gun."},
+         "why": "Logs will show 'Lock wait timeout exceeded' or 'deadlock detected' - the SQL-level smoking gun."},
         {"action_type": "describe_service", "target_service": "api",
-         "why": "Pull deployment history — if a recent version introduced the slow query, rollback (not restart) is the right fix."},
+         "why": "Pull deployment history - if a recent version introduced the slow query, rollback (not restart) is the right fix."},
         {"action_type": "rollback_deployment", "target_service": "api",
          "parameters": {"to_version": "v1.0"},
-         "why": "Restart alone clears the active txns but the slow query is still in the binary — it'll lock up again. Rollback reverts both."},
+         "why": "Restart alone clears the active txns but the slow query is still in the binary - it'll lock up again. Rollback reverts both."},
         {"action_type": "resolve_incident",
          "parameters": {"root_cause": "v1.1 introduced a slow query holding row-locks",
                         "resolution": "rolled back api to v1.0"},
@@ -622,13 +622,13 @@ _DEMO_PLAYBOOK: Dict[str, List[Dict[str, Any]]] = {
     ],
     "cert_expiry": [
         {"action_type": "list_services",
-         "why": "One service unhealthy, others fine, but the difference matters — cert-expiry has a confusing signature."},
+         "why": "One service unhealthy, others fine, but the difference matters - cert-expiry has a confusing signature."},
         {"action_type": "check_metrics", "target_service": "api",
-         "why": "Verify metrics look almost normal except error_rate at 99% and request rate near zero — that's the cert-expiry pattern, not a crash."},
+         "why": "Verify metrics look almost normal except error_rate at 99% and request rate near zero - that's the cert-expiry pattern, not a crash."},
         {"action_type": "read_logs",     "target_service": "api",
-         "why": "Confirm with logs — looking for 'ssl.SSLError: certificate has expired'. Metrics alone won't tell you cert-expiry; the logs are the source of truth."},
+         "why": "Confirm with logs - looking for 'ssl.SSLError: certificate has expired'. Metrics alone won't tell you cert-expiry; the logs are the source of truth."},
         {"action_type": "restart_service", "target_service": "api",
-         "why": "Restart triggers the cert renewal hook — listener reloads with the new cert and HTTPS handshakes start succeeding."},
+         "why": "Restart triggers the cert renewal hook - listener reloads with the new cert and HTTPS handshakes start succeeding."},
         {"action_type": "resolve_incident",
          "parameters": {"root_cause": "TLS cert on api expired",
                         "resolution": "restarted api to renew cert and reload listener"},
@@ -671,7 +671,7 @@ class RealtimeRunRequest(BaseModel):
 def realtime_connect(req: RealtimeConnectRequest) -> Dict[str, Any]:
     """Validate that a deployed site implements the operator contract,
     AND auto-classify the current fault (if any). Praetor doesn't ask the
-    user what's wrong — it figures it out from the site's metrics and
+    user what's wrong - it figures it out from the site's metrics and
     health response. The user just hits "Run agent."""
     backend = WebsiteBackend(
         site_url=req.site_url,
@@ -731,7 +731,7 @@ def _classify_current_fault(
     scenario: Optional[str] = None
     confidence = 0.0
 
-    # Look at /ops/health first — it sometimes reports the verdict directly
+    # Look at /ops/health first - it sometimes reports the verdict directly
     overall_status = (health_body.get("status") or "").lower()
     services_arr = health_body.get("services") or []
     degraded = [
@@ -775,7 +775,7 @@ def _classify_current_fault(
         try:
             err = float(m.get("error_rate_percent", 0) or 0)
             if err > 30:
-                evidence.append(f"{svc} error rate at {err:.0f}% — sustained 5xx")
+                evidence.append(f"{svc} error rate at {err:.0f}% - sustained 5xx")
                 if scenario is None:
                     scenario = "bad_deployment_cascade"
                     confidence = max(confidence, 0.5)
@@ -793,17 +793,17 @@ def _classify_current_fault(
             if not r.ok or not isinstance(r.body, dict):
                 continue
             text = " ".join(map(str, (r.body.get("logs") or [])))[:4000].lower()
-            # Cert expiry — very specific
+            # Cert expiry - very specific
             if "tls" in text and ("certificate" in text or "handshake" in text or "expired" in text):
                 scenario = "cert_expiry"; confidence = 0.8
                 evidence.append(f"{svc} logs mention TLS / expired certificate")
                 break
-            # Disk full — very specific
+            # Disk full - very specific
             if "no space left" in text or "enospc" in text or "disk usage" in text:
                 scenario = "disk_full"; confidence = 0.75
                 evidence.append(f"{svc} logs mention disk full / ENOSPC")
                 break
-            # Lock contention — specific to slow query
+            # Lock contention - specific to slow query
             if "lock wait" in text or "deadlock" in text or "for update" in text:
                 scenario = "slow_query"; confidence = 0.7
                 evidence.append(f"{svc} logs mention lock-wait / deadlock")
@@ -828,7 +828,7 @@ def _classify_current_fault(
 
     fault_detected = scenario is not None or overall_status in ("degraded", "down")
     if not fault_detected:
-        narrative = "Site is healthy. Praetor has nothing to fix yet — connect with a fault, or use the test-fault buttons below to simulate one."
+        narrative = "Site is healthy. Praetor has nothing to fix yet - connect with a fault, or use the test-fault buttons below to simulate one."
     else:
         sname = {
             "oom_crash": "OOM (out-of-memory)",
@@ -891,11 +891,11 @@ def realtime_codebase_link(req: CodebaseLinkRequest) -> Dict[str, Any]:
     if not url:
         return {"linked": False, "error": "repo_url is required"}
 
-    # Format validation — flexible but informative
+    # Format validation - flexible but informative
     if src == "github":
         if "github.com" not in url.lower():
             return {"linked": False, "error": "Expected a github.com URL (got: " + url + ")"}
-        # Append .git if it's missing — git tolerates either, but ls-remote prefers explicit
+        # Append .git if it's missing - git tolerates either, but ls-remote prefers explicit
         canonical = url if url.endswith(".git") else url + ".git"
     elif src == "azure":
         low = url.lower()
@@ -918,7 +918,7 @@ def realtime_codebase_link(req: CodebaseLinkRequest) -> Dict[str, Any]:
                 "https://", f"https://anything:{token}@", 1
             )
 
-    # Reachability test — does this URL respond to git protocol?
+    # Reachability test - does this URL respond to git protocol?
     # GIT_TERMINAL_PROMPT=0 prevents git from blocking on credential prompts.
     # GIT_ASKPASS=echo similarly disables GUI askpass helpers on some systems.
     git_env = dict(os.environ)
@@ -933,7 +933,7 @@ def realtime_codebase_link(req: CodebaseLinkRequest) -> Dict[str, Any]:
         )
     except FileNotFoundError:
         # `git` not installed on the server. Fall back to format-only validation
-        # — better than refusing every link request.
+        # - better than refusing every link request.
         with _REALTIME_LOCK:
             _REALTIME_CONFIG["repo_url"] = url
             _REALTIME_CONFIG["repo_token"] = req.repo_token
@@ -941,7 +941,7 @@ def realtime_codebase_link(req: CodebaseLinkRequest) -> Dict[str, Any]:
             _REALTIME_CONFIG["repo_local_path"] = None
         return {
             "linked": True, "source": src, "repo_url": url,
-            "warning": "git not installed on server — URL was format-validated but not pinged",
+            "warning": "git not installed on server - URL was format-validated but not pinged",
         }
     except _sp.TimeoutExpired:
         return {"linked": False, "error": "git ls-remote timed out (network or unreachable host)"}
@@ -954,11 +954,11 @@ def realtime_codebase_link(req: CodebaseLinkRequest) -> Dict[str, Any]:
         # Common error mapping for nicer UX
         low_err = err.lower()
         if "authentication failed" in low_err or "could not read" in low_err or "401" in low_err or "403" in low_err:
-            friendly = "Authentication failed — check your token (PAT must have repo read access)"
+            friendly = "Authentication failed - check your token (PAT must have repo read access)"
         elif "not found" in low_err or "repository not found" in low_err or "404" in low_err:
-            friendly = "Repository not found at that URL — check spelling and access permissions"
+            friendly = "Repository not found at that URL - check spelling and access permissions"
         elif "could not resolve host" in low_err:
-            friendly = "Network error — could not resolve host"
+            friendly = "Network error - could not resolve host"
         elif "timeout" in low_err:
             friendly = "Connection timed out"
         else:
@@ -1003,7 +1003,7 @@ async def realtime_codebase_upload_multipart(file: UploadFile = File(...)) -> Di
     dest.mkdir()
     try:
         with zipfile.ZipFile(io.BytesIO(contents)) as zf:
-            # Path-traversal defense — reject any member whose resolved path escapes dest
+            # Path-traversal defense - reject any member whose resolved path escapes dest
             for member in zf.namelist():
                 norm = os.path.normpath(member).replace("\\", "/")
                 if norm.startswith("/") or norm.startswith(".."):
@@ -1124,7 +1124,7 @@ def realtime_run_report_pdf(run_id: str):
     """Render a real-time run as a downloadable PDF (Content-Disposition: attachment).
 
     The button in the Real-Time tab fetches this endpoint as a blob and triggers
-    a real .pdf download — no print-dialog round-trip required. The PDF is
+    a real .pdf download - no print-dialog round-trip required. The PDF is
     generated server-side via reportlab (pure-Python, no native deps), so this
     works identically on Windows / Linux / HF Space.
     """
@@ -1153,7 +1153,7 @@ def realtime_run_report_pdf(run_id: str):
             status_code=500,
             media_type="text/plain",
         )
-    except Exception as exc:  # pragma: no cover — defensive
+    except Exception as exc:  # pragma: no cover - defensive
         return Response(
             content=f"PDF generation failed: {type(exc).__name__}: {exc}".encode("utf-8"),
             status_code=500,
@@ -1201,7 +1201,7 @@ def _render_run_report_html(run_id: str, rec: Dict[str, Any]) -> str:
     """Build the print-ready HTML for a run's incident report.
 
     Inline CSS (no external assets), browser-print-friendly. Auto-triggers
-    print dialog on load via a tiny script — user picks 'Save as PDF' from
+    print dialog on load via a tiny script - user picks 'Save as PDF' from
     the destination dropdown.
     """
     import html as _html
@@ -1234,7 +1234,7 @@ def _render_run_report_html(run_id: str, rec: Dict[str, Any]) -> str:
 
     started_iso = (
         datetime.fromtimestamp(started_at, tz=timezone.utc).isoformat()
-        if started_at else "—"
+        if started_at else "-"
     )
 
     # Build the steps HTML
@@ -1245,7 +1245,7 @@ def _render_run_report_html(run_id: str, rec: Dict[str, Any]) -> str:
         params_str = (
             json.dumps(params, separators=(",", ": ")) if params else ""
         )
-        why = ev.get("why") or "—"
+        why = ev.get("why") or "-"
         message = (ev.get("message") or "").strip()
         target = a.get("target_service")
         steps_html.append(f"""
@@ -1268,9 +1268,9 @@ def _render_run_report_html(run_id: str, rec: Dict[str, Any]) -> str:
     tier2_html = ""
     if tier2_done:
         tier2_html = f"""
-<h2>Tier 2 — code investigation</h2>
-<p><strong>Summary:</strong> {esc(tier2_done.get("summary", "—"))}</p>
-<p><strong>Suggested fix:</strong> {esc(tier2_done.get("suggested_fix", "—"))}</p>
+<h2>Tier 2 - code investigation</h2>
+<p><strong>Summary:</strong> {esc(tier2_done.get("summary", "-"))}</p>
+<p><strong>Suggested fix:</strong> {esc(tier2_done.get("suggested_fix", "-"))}</p>
 <p><strong>Findings:</strong> {esc(tier2_done.get("n_findings", 0))} candidate code locations identified.</p>
         """
 
@@ -1278,7 +1278,7 @@ def _render_run_report_html(run_id: str, rec: Dict[str, Any]) -> str:
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Praetor Incident Report — {esc(run_id)}</title>
+<title>Praetor Incident Report - {esc(run_id)}</title>
 <style>
 @page {{ margin: 18mm 16mm; size: A4; }}
 * {{ box-sizing: border-box; }}
@@ -1320,7 +1320,7 @@ p {{ margin: 0 0 12px; font-size: 13.5px; }}
   <dt>Target</dt>          <dd>{esc(site_url)}</dd>
   <dt>Started</dt>         <dd>{esc(started_iso)}</dd>
   <dt>Steps used</dt>      <dd>{esc(len(steps))}</dd>
-  <dt>Wall-clock</dt>      <dd>{f"{duration_s:.2f} s" if duration_s else "—"}</dd>
+  <dt>Wall-clock</dt>      <dd>{f"{duration_s:.2f} s" if duration_s else "-"}</dd>
   <dt>Auto-classified</dt> <dd>{"yes" if rec.get("auto_classified") else "no"}</dd>
 </dl>
 
@@ -1336,7 +1336,7 @@ p {{ margin: 0 0 12px; font-size: 13.5px; }}
 <h2>Result</h2>
 <p>
   Status: <strong>{status_label}</strong>.
-  {'Tier-1 runtime ops resolved the incident — no code escalation needed.' if resolved else (
+  {'Tier-1 runtime ops resolved the incident - no code escalation needed.' if resolved else (
     'Tier-1 ops were not enough; tier-2 surfaced candidate code locations to investigate.'
     if tier2_done else 'Tier-1 ops did not fully heal the site, and tier-2 was not enabled.'
   )}
@@ -1344,7 +1344,7 @@ p {{ margin: 0 0 12px; font-size: 13.5px; }}
 </p>
 
 <div class="footer">
-  Generated by Praetor — autonomous SRE incident commander · {esc(started_iso)}
+  Generated by Praetor - autonomous SRE incident commander · {esc(started_iso)}
 </div>
 
 <script>
@@ -1374,10 +1374,10 @@ def realtime_config() -> Dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# Phase 2 — Webhook ingestion. Closes the "continuously monitors a fleet for
+# Phase 2 - Webhook ingestion. Closes the "continuously monitors a fleet for
 # new incidents" gap from the roadmap. PagerDuty, Prometheus, and a minimal
 # generic contract all converge to the same `/realtime/run-agent` background
-# worker — the dispatcher just classifies the alert and kicks it off.
+# worker - the dispatcher just classifies the alert and kicks it off.
 # ---------------------------------------------------------------------------
 
 
@@ -1497,7 +1497,7 @@ def _webhook_sim_worker(run_id: str, scenario: str) -> None:
             "steps_used": steps_used,
         })
         log.close()
-    except Exception as exc:  # pragma: no cover — defensive
+    except Exception as exc:  # pragma: no cover - defensive
         _realtime_append(run_id, {"type": "error", "message": f"{type(exc).__name__}: {exc}"})
         with _REALTIME_LOCK:
             _REALTIME_RUNS[run_id]["status"] = "error"
@@ -1561,7 +1561,7 @@ async def _handle_webhook(request, normalizer, provider_name: str) -> Dict[str, 
     response["substrate"] = "real" if _REALTIME_CONFIG.get("site_url") else "simulator"
     if not os.environ.get("PRAETOR_WEBHOOK_TOKEN"):
         response["warning"] = (
-            "PRAETOR_WEBHOOK_TOKEN env var is unset — webhook is in demo mode "
+            "PRAETOR_WEBHOOK_TOKEN env var is unset - webhook is in demo mode "
             "and accepts all requests. Set the token before pointing real "
             "alerts at this endpoint."
         )
@@ -1569,7 +1569,7 @@ async def _handle_webhook(request, normalizer, provider_name: str) -> Dict[str, 
 
 
 # ---------------------------------------------------------------------------
-# Phase 2 — Sandboxed shell action endpoint.
+# Phase 2 - Sandboxed shell action endpoint.
 # Lets a client (or the UI) exercise the agent's diagnostic shell with
 # the 20-command allowlist. Useful for debugging + showing judges that
 # Praetor has a safe escape hatch beyond the typed action vocabulary.
@@ -1623,7 +1623,7 @@ def shell_run(req: ShellRequest) -> Dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# Phase 2 — Postmortem endpoint. Returns the auto-generated postmortem.md
+# Phase 2 - Postmortem endpoint. Returns the auto-generated postmortem.md
 # for a run id (sim or real-time). Lets the dashboard render it.
 # ---------------------------------------------------------------------------
 
@@ -1635,7 +1635,7 @@ def get_postmortem(run_id: str) -> Dict[str, Any]:
     if not target.exists():
         return {"error": f"unknown run_id: {safe}"}
     pm_path = target / "postmortem.md"
-    # Lazy-generate if missing — useful for older runs that pre-date the writer.
+    # Lazy-generate if missing - useful for older runs that pre-date the writer.
     if not pm_path.exists():
         ep = target / "episode.jsonl"
         if not ep.exists():
@@ -1657,12 +1657,12 @@ def get_runbook() -> Dict[str, Any]:
     """Return the project-level runbook (incident ledger)."""
     rb = RUNS_ROOT / "RUNBOOK.md"
     if not rb.exists():
-        return {"markdown": "# Praetor Runbook\n\n(empty — run an incident to populate)\n"}
+        return {"markdown": "# Praetor Runbook\n\n(empty - run an incident to populate)\n"}
     return {"markdown": rb.read_text(encoding="utf-8"), "path": str(rb)}
 
 
 # ---------------------------------------------------------------------------
-# Phase 2 — Tier-2 patch / test / PR endpoints. Wraps code_investigator's
+# Phase 2 - Tier-2 patch / test / PR endpoints. Wraps code_investigator's
 # new propose_patch / apply_patch / run_tests / open_pull_request fns.
 # ---------------------------------------------------------------------------
 
@@ -1685,7 +1685,7 @@ def codebase_propose_and_test(req: CodeProposeRequest) -> Dict[str, Any]:
     repo_token = _REALTIME_CONFIG.get("repo_token")
     repo_source = _REALTIME_CONFIG.get("repo_source")
     if not (repo_url or repo_local):
-        return {"error": "no codebase linked — link via /realtime/codebase/link or upload a ZIP"}
+        return {"error": "no codebase linked - link via /realtime/codebase/link or upload a ZIP"}
     from training.code_investigator import (
         apply_patch, investigate, open_pull_request, propose_patch, run_tests, _clone_repo,
     )
@@ -1822,7 +1822,7 @@ def _realtime_run_worker(run_id: str, scenario: str, enable_tier2: bool) -> None
     backend = WebsiteBackend(site_url=site_url, service_names=_REALTIME_CONFIG.get("service_names"))
     try:
         backend.reset(scenario_obj)
-    except Exception as exc:  # pragma: no cover — defensive
+    except Exception as exc:  # pragma: no cover - defensive
         _realtime_append(run_id, {"type": "error", "message": f"reset failed: {exc}"})
         with _REALTIME_LOCK:
             _REALTIME_RUNS[run_id]["status"] = "error"
@@ -1845,7 +1845,7 @@ def _realtime_run_worker(run_id: str, scenario: str, enable_tier2: bool) -> None
         )
         try:
             obs = backend.execute(action, scenario_obj)
-        except Exception as exc:  # pragma: no cover — defensive
+        except Exception as exc:  # pragma: no cover - defensive
             _realtime_append(run_id, {
                 "type": "step", "step": i, "tier": "tier1",
                 "action": step_def, "error": f"{type(exc).__name__}: {exc}",
@@ -1966,7 +1966,7 @@ def _infer_target_service(scenario: str) -> Optional[str]:
 
 class _LiveScenario:
     """Minimal scenario shim used by the live website backend during a real-time
-    run. We don't need the full rubric here — backend.execute() only calls
+    run. We don't need the full rubric here - backend.execute() only calls
     `on_config_update` and reads `task_id`."""
 
     def __init__(self, task_id: str) -> None:
@@ -1978,7 +1978,7 @@ class _LiveScenario:
         pass
 
     def on_config_update(self, service: str, key: str, value: Any) -> bool:
-        # Live site decides healing — we just say "maybe yes" for known config keys.
+        # Live site decides healing - we just say "maybe yes" for known config keys.
         return key == "db.pool.max_size" and isinstance(value, (int, float)) and value >= 50
 
     def is_correct_op(self, action: Any) -> bool:

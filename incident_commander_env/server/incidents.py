@@ -1,13 +1,13 @@
-"""Webhook ingestion — turns external alerts into autonomous Praetor episodes.
+"""Webhook ingestion - turns external alerts into autonomous Praetor episodes.
 
 Three providers are supported out of the box:
 
-  * PagerDuty   — receives a v3 incident webhook
-  * Prometheus  — receives an Alertmanager v4 webhook
-  * Generic     — minimal contract for anything else (Datadog, Sentry, custom)
+  * PagerDuty   - receives a v3 incident webhook
+  * Prometheus  - receives an Alertmanager v4 webhook
+  * Generic     - minimal contract for anything else (Datadog, Sentry, custom)
 
 Each handler maps the alert payload to one of our scenario families using
-keyword heuristics, then kicks off a Praetor run in a background thread —
+keyword heuristics, then kicks off a Praetor run in a background thread -
 exactly the same path /realtime/run-agent uses, just triggered automatically.
 
 This closes the "continuously monitors a fleet for new incidents" gap in
@@ -27,7 +27,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 
 # ---------------------------------------------------------------------------
-# Provider-specific normalizers — each turns its native payload shape into
+# Provider-specific normalizers - each turns its native payload shape into
 # our internal `IncidentSignal` dict so the dispatcher doesn't care about
 # provider semantics.
 # ---------------------------------------------------------------------------
@@ -176,7 +176,7 @@ def classify_scenario(signal: Dict[str, Any]) -> Tuple[Optional[str], float, Lis
 
 
 # ---------------------------------------------------------------------------
-# Auth — token check
+# Auth - token check
 # ---------------------------------------------------------------------------
 
 def webhook_token_check(provided: Optional[str]) -> Tuple[bool, Optional[str]]:
@@ -186,7 +186,7 @@ def webhook_token_check(provided: Optional[str]) -> Tuple[bool, Optional[str]]:
     """
     expected = os.environ.get("PRAETOR_WEBHOOK_TOKEN")
     if not expected:
-        # Demo mode — accept all but caller will surface a warning.
+        # Demo mode - accept all but caller will surface a warning.
         return True, None
     if not provided or provided != expected:
         return False, "invalid X-Praetor-Token header"

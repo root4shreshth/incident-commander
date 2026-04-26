@@ -1,4 +1,4 @@
-/* IncidentCommander — Observe-mode replayer.
+/* IncidentCommander - Observe-mode replayer.
  *
  * Talks to two server endpoints:
  *   GET /runs            -> list of recorded trained-agent runs
@@ -57,31 +57,31 @@
 
   function renderRunsPicker() {
     const sel = $('run-picker');
-    sel.innerHTML = '<option value="">— select a run —</option>';
+    sel.innerHTML = '<option value="">- select a run -</option>';
     state.runs.forEach((r) => {
       const o = document.createElement('option');
       o.value = r.run_id;
       const tag = r.resolved ? '✓' : '✗';
-      const score = r.score != null ? r.score.toFixed(2) : '—';
+      const score = r.score != null ? r.score.toFixed(2) : '-';
       o.textContent = `${tag} ${r.run_id}  [${r.task_id || '?'}]  score=${score}  model=${r.model || '?'}`;
       sel.appendChild(o);
     });
   }
 
   function renderSummary(summary) {
-    $('m-run-id').textContent = summary.run_id || '—';
-    $('m-task').textContent = summary.task_id || '—';
-    $('m-seed').textContent = summary.seed != null ? String(summary.seed) : '—';
-    $('m-model').textContent = summary.model || '—';
-    $('m-alert').textContent = summary.alert || '—';
+    $('m-run-id').textContent = summary.run_id || '-';
+    $('m-task').textContent = summary.task_id || '-';
+    $('m-seed').textContent = summary.seed != null ? String(summary.seed) : '-';
+    $('m-model').textContent = summary.model || '-';
+    $('m-alert').textContent = summary.alert || '-';
     const verdict = summary.resolved == null
-      ? '—'
+      ? '-'
       : (summary.resolved
           ? '<span class="pill good">RESOLVED</span>'
           : '<span class="pill bad">UNRESOLVED</span>');
     $('m-verdict').innerHTML = verdict;
-    $('m-score').textContent = summary.score != null ? summary.score.toFixed(3) : '—';
-    $('m-steps').textContent = summary.steps_used != null ? String(summary.steps_used) : '—';
+    $('m-score').textContent = summary.score != null ? summary.score.toFixed(3) : '-';
+    $('m-steps').textContent = summary.steps_used != null ? String(summary.steps_used) : '-';
   }
 
   function renderRewardDecomp(totals) {
@@ -90,7 +90,7 @@
     bar.innerHTML = '';
     tbl.innerHTML = '';
     if (!totals) {
-      tbl.innerHTML = '<div class="key">—</div><div>no breakdown yet</div>';
+      tbl.innerHTML = '<div class="key">-</div><div>no breakdown yet</div>';
       return;
     }
     const components = ['diagnostic', 'correct_op', 'resolution', 'format', 'efficiency', 'penalty'];
@@ -131,8 +131,8 @@
       card.className = 'svc ' + (s.health || 'unknown');
       card.innerHTML = `
         <div class="name">${s.name}</div>
-        <div class="row"><span>${s.health || '—'}</span><span>v${s.version || '?'}</span></div>
-        <div class="row"><span>cpu ${s.cpu_percent != null ? s.cpu_percent.toFixed(0) : '—'}%</span><span>${s.memory_mb != null ? s.memory_mb.toFixed(0) : '—'}MB</span></div>
+        <div class="row"><span>${s.health || '-'}</span><span>v${s.version || '?'}</span></div>
+        <div class="row"><span>cpu ${s.cpu_percent != null ? s.cpu_percent.toFixed(0) : '-'}%</span><span>${s.memory_mb != null ? s.memory_mb.toFixed(0) : '-'}MB</span></div>
       `;
       root.appendChild(card);
     });

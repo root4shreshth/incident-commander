@@ -2,18 +2,18 @@
 
 We don't have GPU access here, so the *trained* condition curves can only be
 produced by running `training/train_grpo.ipynb` on Colab. What we CAN produce
-right now — and what's worth committing — is a real measurement of the
+right now - and what's worth committing - is a real measurement of the
 random-policy floor across all 6 scenario families × 30 seeds.
 
 That gives the README + blog four useful artifacts:
 
-  results/baseline_reward_per_episode.png   — reward signal across 180 eps
-  results/baseline_reward_components.png    — the 6 reward axes per ep
-  results/baseline_success_rates.png        — per-family success bars (single
+  results/baseline_reward_per_episode.png   - reward signal across 180 eps
+  results/baseline_reward_components.png    - the 6 reward axes per ep
+  results/baseline_success_rates.png        - per-family success bars (single
                                               random condition; trained
                                               conditions added post-Colab)
-  results/baseline_action_distribution.png  — action mix random uses
-  results/baseline_summary.json             — machine-readable numbers
+  results/baseline_action_distribution.png  - action mix random uses
+  results/baseline_summary.json             - machine-readable numbers
 
 Honest framing: these are the FLOOR every trained condition has to beat.
 When `train_grpo.ipynb` runs on A100, the same plot files get re-rendered
@@ -61,7 +61,7 @@ def main() -> None:
     out_dir = ROOT / "results"
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    print(f"[baseline] running random-policy eval — {len(FAMILIES)} families × {len(SEEDS)} seeds = {len(FAMILIES)*len(SEEDS)} episodes")
+    print(f"[baseline] running random-policy eval - {len(FAMILIES)} families × {len(SEEDS)} seeds = {len(FAMILIES)*len(SEEDS)} episodes")
     n_done = [0]
     def _progress(idx, total, family, seed, ep):
         n_done[0] += 1
@@ -88,7 +88,7 @@ def main() -> None:
         rewards=rewards_per_ep,
         window=20,
     )
-    # Override title — these aren't training rewards, they're per-episode.
+    # Override title - these aren't training rewards, they're per-episode.
     fig.axes[0].set_title("Random-baseline floor: reward per episode (180 episodes)")
     fig.axes[0].set_xlabel("episode index (across 6 scenario families)")
     save_figure(fig, str(out_dir / "baseline_reward_per_episode.png"))
@@ -105,7 +105,7 @@ def main() -> None:
         components_over_time=components_over_time,
     )
     fig.axes[0].set_title(
-        "Random-baseline 6-axis breakdown — the floor every trained run beats"
+        "Random-baseline 6-axis breakdown - the floor every trained run beats"
     )
     fig.axes[0].set_xlabel("episode index")
     save_figure(fig, str(out_dir / "baseline_reward_components.png"))
@@ -152,7 +152,7 @@ def main() -> None:
         "note": (
             "Random-policy floor across all 6 scenario families. "
             "The trained conditions (SFT, SFT+GRPO) are produced by running "
-            "training/train_grpo.ipynb on Colab — those numbers replace this "
+            "training/train_grpo.ipynb on Colab - those numbers replace this "
             "file's contents post-run."
         ),
     }

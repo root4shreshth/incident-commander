@@ -1,4 +1,4 @@
-"""AI Coach — deterministic, rule-based guidance for humans learning SRE incident response.
+"""AI Coach - deterministic, rule-based guidance for humans learning SRE incident response.
 
 Produces contextual hints, plain-English explanations, and structured post-mortems
 by inspecting the live cluster state and the user's action history. No LLM calls,
@@ -23,7 +23,7 @@ LEARNING_CONTEXT: Dict[str, Dict[str, Any]] = {
     "oom_crash": {
         "skill_tag": "Your first page",
         "backstory": (
-            "It's 3:42 AM. Your phone buzzes — PagerDuty. "
+            "It's 3:42 AM. Your phone buzzes - PagerDuty. "
             "The payment-service is throwing health check failures and customers "
             "can't check out. You're the on-call SRE. Let's go."
         ),
@@ -38,7 +38,7 @@ LEARNING_CONTEXT: Dict[str, Dict[str, Any]] = {
     "db_pool_exhaustion": {
         "skill_tag": "Trace the cascade",
         "backstory": (
-            "It's 2:23 PM. Support is blowing up — customers see 'Service Unavailable' "
+            "It's 2:23 PM. Support is blowing up - customers see 'Service Unavailable' "
             "on checkout. Multiple services are throwing 5xx errors. The frontend "
             "looks broken, but the real culprit is somewhere deeper."
         ),
@@ -59,7 +59,7 @@ LEARNING_CONTEXT: Dict[str, Dict[str, Any]] = {
         ),
         "learning_goals": [
             "Reading deployment history for recent changes",
-            "Rollback vs restart — when each is correct",
+            "Rollback vs restart - when each is correct",
             "Sequencing fixes under cascading failure",
         ],
         "est_minutes": 20,
@@ -85,7 +85,7 @@ LEARNING_CONTEXT: Dict[str, Dict[str, Any]] = {
         "backstory": (
             "3:09 PM. p99 latency on order-service has gone from 80ms to 8 seconds. "
             "Throughput collapsed. Connection pool full of txns waiting on row-locks. "
-            "A deploy went out two hours ago. What do you do — restart, or roll back?"
+            "A deploy went out two hours ago. What do you do - restart, or roll back?"
         ),
         "learning_goals": [
             "Spotting lock-contention vs other latency causes",
@@ -115,7 +115,7 @@ LEARNING_CONTEXT: Dict[str, Dict[str, Any]] = {
 
 
 # ---------------------------------------------------------------------------
-# Ideal trajectories — what a senior SRE would have done
+# Ideal trajectories - what a senior SRE would have done
 # ---------------------------------------------------------------------------
 
 IDEAL_TRAJECTORIES: Dict[str, List[Dict[str, Any]]] = {
@@ -128,7 +128,7 @@ IDEAL_TRAJECTORIES: Dict[str, List[Dict[str, Any]]] = {
         {
             "action": "read_logs",
             "target": "payment-service",
-            "why": "The crashed service. Logs show 'OutOfMemoryError' — the process ran out of memory.",
+            "why": "The crashed service. Logs show 'OutOfMemoryError' - the process ran out of memory.",
         },
         {
             "action": "check_metrics",
@@ -151,12 +151,12 @@ IDEAL_TRAJECTORIES: Dict[str, List[Dict[str, Any]]] = {
         {
             "action": "read_logs",
             "target": "frontend-bff",
-            "why": "Start where the user-visible symptom is. Logs show generic 5xx — not specific.",
+            "why": "Start where the user-visible symptom is. Logs show generic 5xx - not specific.",
         },
         {
             "action": "read_logs",
             "target": "order-service",
-            "why": "One layer deeper. Logs show 'connection leak — unable to acquire DB connection'.",
+            "why": "One layer deeper. Logs show 'connection leak - unable to acquire DB connection'.",
         },
         {
             "action": "read_logs",
@@ -204,7 +204,7 @@ IDEAL_TRAJECTORIES: Dict[str, List[Dict[str, Any]]] = {
             "action": "rollback_deployment",
             "target": "order-service",
             "params": {"to_version": "v2.3.1"},
-            "why": "Rollback first — this frees memory and removes the root cause in one move.",
+            "why": "Rollback first - this frees memory and removes the root cause in one move.",
         },
         {
             "action": "restart_service",
@@ -214,7 +214,7 @@ IDEAL_TRAJECTORIES: Dict[str, List[Dict[str, Any]]] = {
         {
             "action": "restart_service",
             "target": "notification-service",
-            "why": "Same reason — it was starved by quota pressure.",
+            "why": "Same reason - it was starved by quota pressure.",
         },
         {
             "action": "resolve_incident",
@@ -228,29 +228,29 @@ IDEAL_TRAJECTORIES: Dict[str, List[Dict[str, Any]]] = {
     ],
     "disk_full": [
         {"action": "list_services", "target": None,
-         "why": "Get the overview — notification-service is marked DEGRADED."},
+         "why": "Get the overview - notification-service is marked DEGRADED."},
         {"action": "read_logs", "target": "notification-service",
          "why": "The degraded service. Logs scream 'No space left on device' on every write."},
         {"action": "check_metrics", "target": "notification-service",
-         "why": "CPU and memory normal — confirming this isn't OOM. The fault is at the volume layer."},
+         "why": "CPU and memory normal - confirming this isn't OOM. The fault is at the volume layer."},
         {"action": "restart_service", "target": "notification-service",
          "why": "Restart cycles the pod, the volume gets cleaned + log-rotated, the service comes back."},
         {"action": "resolve_incident", "target": None,
          "params": {
-             "root_cause": "notification-service log volume hit 100% — writes returned ENOSPC",
+             "root_cause": "notification-service log volume hit 100% - writes returned ENOSPC",
              "resolution": "Restarted to cycle the volume; will follow up with log retention config",
          },
          "why": "Honest postmortem: restart bought time; permanent fix is rotation policy."},
     ],
     "slow_query": [
         {"action": "list_services", "target": None,
-         "why": "Confirm scope — order-service is degraded, others normal."},
+         "why": "Confirm scope - order-service is degraded, others normal."},
         {"action": "check_metrics", "target": "order-service",
          "why": "Latency p99 is 8s, throughput at 4 RPS. Lock contention pattern."},
         {"action": "read_logs", "target": "order-service",
          "why": "Logs spell it out: 'Lock wait timeout exceeded' from a SELECT … FOR UPDATE."},
         {"action": "describe_service", "target": "order-service",
-         "why": "Deployment history. v2.5.0 went out two hours ago — that's our suspect."},
+         "why": "Deployment history. v2.5.0 went out two hours ago - that's our suspect."},
         {"action": "rollback_deployment", "target": "order-service",
          "params": {"to_version": "v2.4.6"},
          "why": "Restart would clear the active txns but the slow query is in the binary. Rollback reverts both."},
@@ -269,7 +269,7 @@ IDEAL_TRAJECTORIES: Dict[str, List[Dict[str, Any]]] = {
         {"action": "read_logs", "target": "frontend-bff",
          "why": "Right there: 'TLS handshake failed: certificate has expired'. Cert problem, not code."},
         {"action": "restart_service", "target": "frontend-bff",
-         "why": "The cert renewal hook fires on restart — listener reloads with the renewed cert."},
+         "why": "The cert renewal hook fires on restart - listener reloads with the renewed cert."},
         {"action": "resolve_incident", "target": None,
          "params": {
              "root_cause": "Frontend TLS certificate expired at 08:00 UTC",
@@ -317,7 +317,7 @@ def compute_hint(
             try:
                 if int(new_limit) > 256:
                     return {
-                        "hint": f"Bingo. You raised memory to {new_limit}Mi — well above the old 256Mi cap. Now declare it resolved with a root cause.",
+                        "hint": f"Bingo. You raised memory to {new_limit}Mi - well above the old 256Mi cap. Now declare it resolved with a root cause.",
                         "suggested_action": {"action": "resolve_incident", "target": None},
                         "tone": "celebrate",
                     }
@@ -330,7 +330,7 @@ def compute_hint(
         if svc and svc.health == ServiceHealth.HEALTHY and task_id == "oom_crash":
             if last.target_service != "payment-service":
                 return {
-                    "hint": f"Ouch — {last.target_service} wasn't broken. Restarting healthy services costs you -0.10 and wastes time. The clue is the service that's *actually* crashed. Try list_services first.",
+                    "hint": f"Ouch - {last.target_service} wasn't broken. Restarting healthy services costs you -0.10 and wastes time. The clue is the service that's *actually* crashed. Try list_services first.",
                     "suggested_action": {"action": "list_services", "target": None},
                     "tone": "warn",
                 }
@@ -367,7 +367,7 @@ def compute_hint(
                 "tone": "encourage",
             }
 
-    # User already covered the ideal path — prompt resolve
+    # User already covered the ideal path - prompt resolve
     return {
         "hint": "You've touched every key diagnostic and fix. Now declare the incident resolved with a root-cause summary.",
         "suggested_action": {"action": "resolve_incident", "target": None},
@@ -388,7 +388,7 @@ _EXPLANATIONS = {
     "connection pool exhausted": (
         "**Connection pool exhausted** means every database connection slot is already in use and "
         "new requests can't get one. Usually caused by a service that opens connections but forgets "
-        "to release them — a 'connection leak'. Fix by raising the pool size *and* restarting the leaker."
+        "to release them - a 'connection leak'. Fix by raising the pool size *and* restarting the leaker."
     ),
     "connection leak": (
         "A **connection leak** is when code borrows a DB connection but never returns it. Over time "
@@ -398,7 +398,7 @@ _EXPLANATIONS = {
     "memory leak": (
         "A **memory leak** is when a process keeps allocating memory but never frees it. Memory usage "
         "climbs until the process crashes or the autoscaler spawns more replicas to cope, which "
-        "exhausts cluster quota. A bad deploy is the usual cause — rollback is the right call."
+        "exhausts cluster quota. A bad deploy is the usual cause - rollback is the right call."
     ),
     "autoscaler": (
         "The **autoscaler** spawns more replicas when load is high. That's helpful for real traffic "
@@ -414,7 +414,7 @@ _EXPLANATIONS = {
     ),
     "healthy": (
         "**Healthy** means the service is passing its health checks and serving traffic normally. "
-        "Don't restart healthy services — that costs you points and doesn't fix anything."
+        "Don't restart healthy services - that costs you points and doesn't fix anything."
     ),
     "rollback": (
         "**Rollback** reverts a service to its previous version. Use this when a recent deploy "
@@ -453,14 +453,14 @@ def explain_observation(task_id: str, last_action: Dict[str, Any], last_message:
         return {
             "explanation": (
                 f"**read_logs** pulls recent log lines from **{target}**. Look for lines tagged [ERROR] or "
-                "[CRITICAL] — they usually name the bug directly. Normal services mostly log [INFO]."
+                "[CRITICAL] - they usually name the bug directly. Normal services mostly log [INFO]."
             ),
             "matched_terms": [],
         }
     if action_type == "check_metrics":
         return {
             "explanation": (
-                f"**check_metrics** shows the live numbers for **{target}** — CPU %, memory (used vs limit), "
+                f"**check_metrics** shows the live numbers for **{target}** - CPU %, memory (used vs limit), "
                 "latency, error rate, request rate. Compare memory_mb to memory_limit_mb: if they're close, "
                 "you're about to OOM."
             ),
@@ -470,7 +470,7 @@ def explain_observation(task_id: str, last_action: Dict[str, Any], last_message:
         return {
             "explanation": (
                 f"**describe_service** shows **{target}**'s config and deployment history. The history is "
-                "gold when a recent deploy broke things — look for timestamps near the incident start."
+                "gold when a recent deploy broke things - look for timestamps near the incident start."
             ),
             "matched_terms": [],
         }
@@ -517,7 +517,7 @@ def build_postmortem(
     ideal = IDEAL_TRAJECTORIES.get(task_id, [])
     ctx = LEARNING_CONTEXT.get(task_id, {})
 
-    # Highlights — what went right and what was missed
+    # Highlights - what went right and what was missed
     passed_criteria = [c for c in details["criteria"] if c["passed"]]
     failed_criteria = [c for c in details["criteria"] if not c["passed"]]
 

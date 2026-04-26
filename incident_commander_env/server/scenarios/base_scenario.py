@@ -60,7 +60,7 @@ class BaseScenario(ABC):
 
         Return True if this config change is the correct fix for *this* scenario
         (in which case the relevant anomaly will be cleared by the handler).
-        Default: False — config alone does not heal.
+        Default: False - config alone does not heal.
 
         Scenarios override this to declare what config change resolves their fault,
         so the handler doesn't have to string-match parameter names heuristically.
@@ -71,11 +71,11 @@ class BaseScenario(ABC):
         """Return True if `action` is a correct remediation move for this scenario.
 
         Default: any remediation action targeting a service in the scenario's
-        relevant set counts. Scenarios override for tighter behavior — e.g. the
+        relevant set counts. Scenarios override for tighter behavior - e.g. the
         bad-deploy scenario should reject restart-of-order-service in favor of
         rollback.
 
-        Subclasses MUST be defensive — this is invoked from the reward path on
+        Subclasses MUST be defensive - this is invoked from the reward path on
         every step and a crash would corrupt training. Wrap risky logic in
         try/except and return False on error.
         """
@@ -91,7 +91,7 @@ class BaseScenario(ABC):
         rubric = self.get_rubric()
         score = sum(weight for _, check, weight in rubric if check(actions, cluster))
         penalties = self.compute_penalties(actions, cluster)
-        # Clamp to strict (0, 1) — hackathon validator rejects exactly 0.0 and 1.0
+        # Clamp to strict (0, 1) - hackathon validator rejects exactly 0.0 and 1.0
         raw = score + penalties
         return max(0.01, min(0.99, raw))
 

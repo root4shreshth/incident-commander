@@ -1,4 +1,4 @@
-"""WebsiteBackend tests — exercise HTTP-based action translation with the
+"""WebsiteBackend tests - exercise HTTP-based action translation with the
 underlying `_http` shell-out monkeypatched. Verifies:
 
   * each action_type produces a typed IncidentObservation
@@ -84,7 +84,7 @@ class TestStubMode:
 
 
 # ---------------------------------------------------------------------------
-# Reset wiring — /ops/heal + /ops/break
+# Reset wiring - /ops/heal + /ops/break
 # ---------------------------------------------------------------------------
 
 class TestReset:

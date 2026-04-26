@@ -28,7 +28,7 @@ def fake_repo(tmp_path: Path) -> Path:
         "# Service: api\n"
         "import functools\n"
         "\n"
-        "_cache = {}  # unbounded cache — memory grows forever\n"
+        "_cache = {}  # unbounded cache - memory grows forever\n"
         "\n"
         "@functools.lru_cache  # uses memory\n"
         "def lookup(key):\n"
@@ -140,7 +140,7 @@ class TestLLMHook:
             llm_call=lambda p: "not even json", cloned_root=fake_repo,
         )
         assert report.error is None
-        # Falls back to rule-based — produces SOME summary
+        # Falls back to rule-based - produces SOME summary
         assert report.summary
         assert report.suggested_fix
 
@@ -166,7 +166,7 @@ class TestEdgeCases:
             target_service="api",
             cloned_root=fake_repo,
         )
-        # No error — just thin findings (target_service still scores)
+        # No error - just thin findings (target_service still scores)
         assert report.error is None
 
     def test_scenario_keywords_table_complete(self):

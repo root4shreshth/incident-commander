@@ -1,4 +1,4 @@
-/* Phase 3 — Real-Time / Praetor on a deployed site.
+/* Phase 3 - Real-Time / Praetor on a deployed site.
  *
  * Flow:
  *   1) User pastes deployed URL → POST /realtime/connect
@@ -6,12 +6,12 @@
  *        AUTO-CLASSIFIES the fault. UI renders the verdict card.
  *   2) (Optional) link a codebase: GitHub URL, Azure DevOps URL, or ZIP upload
  *      ⤷ POST /realtime/codebase/{link,upload-multipart}
- *   3) User clicks "Run Praetor" → POST /realtime/run-agent (no scenario param —
+ *   3) User clicks "Run Praetor" → POST /realtime/run-agent (no scenario param -
  *      the server uses the auto-classified one).
  *      ⤷ poll GET /realtime/status/<run_id> every 700ms
  *      ⤷ stream events into the unified tier-1 + tier-2 timeline.
  *
- * The "inject test fault" buttons are SECONDARY (collapsed in a <details>) —
+ * The "inject test fault" buttons are SECONDARY (collapsed in a <details>) -
  * useful when the connected site is healthy and we want to demo the agent's
  * response without waiting for a real outage.
  */
@@ -93,11 +93,11 @@
     $('rt-connect').disabled = false;
     if (!data.connected) {
       const err = data.error || 'unknown error';
-      let detail = `Connection failed — ${err}`;
+      let detail = `Connection failed - ${err}`;
       // If the site doesn't implement /ops/health, suggest the built-in demo target
       if (/404|not found|failed/i.test(err)) {
         detail += '. The site needs to expose /ops/health (operator contract). ' +
-                  'Try the "Use built-in demo target" link below — it points at this server\'s own /ops/* endpoints.';
+                  'Try the "Use built-in demo target" link below - it points at this server\'s own /ops/* endpoints.';
       }
       setStatus(detail, 'bad');
       state.connected = false;
@@ -196,7 +196,7 @@
       source, repo_url: url, repo_token: token,
     });
     if (!data.linked) {
-      setCbStatus(`Link failed — ${data.error}`, 'bad');
+      setCbStatus(`Link failed - ${data.error}`, 'bad');
       state.codebaseLinked = false;
       return;
     }
@@ -215,7 +215,7 @@
       return;
     }
     setCbStatus(`Uploading ${file.name} (${(file.size/1024).toFixed(0)} KB)…`, null);
-    $('cb-drop-text').innerHTML = `<strong>${escapeHtml(file.name)}</strong> — uploading…`;
+    $('cb-drop-text').innerHTML = `<strong>${escapeHtml(file.name)}</strong> - uploading…`;
     const fd = new FormData();
     fd.append('file', file);
     try {
@@ -224,7 +224,7 @@
       });
       const data = await r.json();
       if (!data.linked) {
-        setCbStatus(`Upload failed — ${data.error}`, 'bad');
+        setCbStatus(`Upload failed - ${data.error}`, 'bad');
         return;
       }
       state.codebaseLinked = true;
@@ -245,14 +245,14 @@
     btnEl.disabled = true;
     const res = await api('POST', '/realtime/inject', { scenario });
     if (!res.injected) {
-      setStatus(`Injection failed — ${res.error || 'unknown'}`, 'bad');
+      setStatus(`Injection failed - ${res.error || 'unknown'}`, 'bad');
       btnEl.classList.remove('fired');
       btnEl.disabled = false;
       return;
     }
     pushTimelineLog({
       type: 'inject',
-      message: `Injected scenario "${scenario}" — site is now in a fault state. Re-classifying…`,
+      message: `Injected scenario "${scenario}" - site is now in a fault state. Re-classifying…`,
     });
     // Re-fetch classification by reconnecting with same URL
     setTimeout(async () => {
@@ -277,7 +277,7 @@
     const r = await api('POST', '/realtime/heal');
     $('rt-heal').disabled = false;
     if (r.healed) {
-      setStatus('Site healed — ready for another run', 'ok');
+      setStatus('Site healed - ready for another run', 'ok');
       pushTimelineLog({ type: 'heal', message: 'Site reset to clean state.' });
       enableChaosButtons(true);
       document.querySelectorAll('.rt-chaos-btn').forEach(b => b.classList.remove('fired'));
@@ -292,7 +292,7 @@
         }
       }
     } else {
-      setStatus(`Heal failed — ${r.error}`, 'bad');
+      setStatus(`Heal failed - ${r.error}`, 'bad');
     }
   }
 
@@ -305,11 +305,11 @@
     state.seenEventIdx = 0;
     clearTimeline();
     hideFinalReport();
-    showTierBanner('ops', 'Tier 1 — runtime ops · Praetor is investigating');
-    // Don't pass scenario — let the server auto-classify
+    showTierBanner('ops', 'Tier 1 - runtime ops · Praetor is investigating');
+    // Don't pass scenario - let the server auto-classify
     const data = await api('POST', '/realtime/run-agent', { enable_tier2: true });
     if (!data.run_id) {
-      setStatus(`Could not start agent run — ${data.error || 'unknown'}`, 'bad');
+      setStatus(`Could not start agent run - ${data.error || 'unknown'}`, 'bad');
       $('rt-run').disabled = false;
       $('rt-heal').disabled = false;
       return;
@@ -426,12 +426,12 @@
       if (ev.resolved) {
         showTierBanner('resolved', '✓ Tier 1 brought the site back to healthy.');
       } else {
-        showTierBanner('escalate', '⚠ Tier 1 left the site degraded — preparing tier 2 (code investigation)…');
+        showTierBanner('escalate', '⚠ Tier 1 left the site degraded - preparing tier 2 (code investigation)…');
       }
       return;
     }
     if (ev.type === 'escalate') {
-      showTierBanner('escalate', '⚙ Tier 2 — code investigation: ' + (ev.message || ''));
+      showTierBanner('escalate', '⚙ Tier 2 - code investigation: ' + (ev.message || ''));
       return;
     }
     if (ev.type === 'tier2_done') {
@@ -507,7 +507,7 @@
   }
 
   function buildResolutionPath(events) {
-    // Pick the meaningful actions — drop diagnostics, keep the moves
+    // Pick the meaningful actions - drop diagnostics, keep the moves
     const meaningful = new Set([
       'restart_service', 'rollback_deployment', 'scale_service',
       'update_config', 'resolve_incident',
@@ -535,7 +535,7 @@
     if (tier2) {
       return `Praetor investigated a <strong>${friendly}</strong> incident, took ${stepsTaken} runtime ops action${stepsTaken === 1 ? '' : 's'}, and determined the fault was not fully restorable from runtime ops alone. It escalated to tier-2 code investigation against the linked repository and identified candidate code locations to review (see below).`;
     }
-    return `Praetor took <strong>${stepsTaken}</strong> runtime ops action${stepsTaken === 1 ? '' : 's'} against the <strong>${friendly}</strong> fault but did not fully heal the site. Tier-2 code investigation was not enabled — link a repository in step 3 to let Praetor inspect the code path next time.`;
+    return `Praetor took <strong>${stepsTaken}</strong> runtime ops action${stepsTaken === 1 ? '' : 's'} against the <strong>${friendly}</strong> fault but did not fully heal the site. Tier-2 code investigation was not enabled - link a repository in step 3 to let Praetor inspect the code path next time.`;
   }
 
   function finalizeRun(data) {
@@ -561,7 +561,7 @@
     const escalated = !resolved && !!data.tier2_report;
     let statusClass, statusLabel;
     if (resolved)       { statusClass = 'good';  statusLabel = 'RESOLVED in tier 1'; }
-    else if (escalated) { statusClass = 'warn';  statusLabel = 'ESCALATED — tier 1 did not fully heal'; }
+    else if (escalated) { statusClass = 'warn';  statusLabel = 'ESCALATED - tier 1 did not fully heal'; }
     else                { statusClass = 'bad';   statusLabel = 'UNRESOLVED'; }
 
     const tags = deriveReportTags(scenario, events);
@@ -582,7 +582,7 @@
     // Stats grid
     html += `<div class="fr-stats">
       <div class="fr-stat"><div class="lbl">Steps taken</div><div class="val">${stepEvents.length}</div><div class="sub">tier-1 ops actions</div></div>
-      <div class="fr-stat"><div class="lbl">Wall-clock</div><div class="val">${durationS ? durationS.toFixed(1) + 's' : '—'}</div><div class="sub">end-to-end</div></div>
+      <div class="fr-stat"><div class="lbl">Wall-clock</div><div class="val">${durationS ? durationS.toFixed(1) + 's' : '-'}</div><div class="sub">end-to-end</div></div>
       <div class="fr-stat"><div class="lbl">Outcome</div><div class="val" style="color:var(--accent-${resolved ? 'green' : (escalated ? 'orange' : 'red')})">${resolved ? '✓ FIXED' : (escalated ? '↗ ESCALATED' : '✗ UNRESOLVED')}</div><div class="sub">${resolved ? '/ops/health = ok' : (escalated ? 'tier-2 surfaced fixes' : 'no tier-2 link')}</div></div>
       <div class="fr-stat"><div class="lbl">Services touched</div><div class="val">${tags.services.length || 0}</div><div class="sub">${tags.services.length ? tags.services.slice(0,3).join(', ') : 'none'}</div></div>
     </div>`;
@@ -662,7 +662,7 @@
 
       // Real PDF download: fetch the .pdf endpoint as a blob, build an
       // object-URL, and click an invisible <a download> to trigger a real
-      // file download — no browser print dialog, no popup blocker, no
+      // file download - no browser print dialog, no popup blocker, no
       // window.open. Falls back informatively on errors.
       const downloadPdf = async () => {
         setMsg('Generating PDF…', 'pending');
@@ -710,7 +710,7 @@
         }
         const win = window.open(htmlUrl, '_blank', 'noopener');
         if (!win) {
-          setMsg('Popup blocked — opening in this tab.', 'warn');
+          setMsg('Popup blocked - opening in this tab.', 'warn');
           window.location.href = htmlUrl;
           return;
         }
@@ -763,7 +763,7 @@
     document.querySelectorAll('.rt-chaos-btn').forEach(btn => {
       btn.addEventListener('click', () => onInject(btn.dataset.scenario, btn));
     });
-    // "Use built-in demo target" — points at this server's own /ops/* endpoints
+    // "Use built-in demo target" - points at this server's own /ops/* endpoints
     // so the user can demo Real-Time without deploying a separate site.
     const builtinLink = $('rt-use-builtin');
     if (builtinLink) {

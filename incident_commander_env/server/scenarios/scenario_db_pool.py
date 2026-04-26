@@ -27,7 +27,7 @@ from incident_commander_env.server.simulation.service import ServiceHealth
 class DBPoolScenario(BaseScenario):
     task_id = "db_pool_exhaustion"
     difficulty = "medium"
-    description = "Database connection pool exhaustion — cascading 5xx errors across multiple services"
+    description = "Database connection pool exhaustion - cascading 5xx errors across multiple services"
     alert_message = (
         "WARNING: Elevated 5xx error rates across multiple services. "
         "Customer-facing errors reported since 14:23 UTC. "
@@ -47,7 +47,7 @@ class DBPoolScenario(BaseScenario):
         rng = _random.Random(seed) if seed is not None else _random.Random(0)
         self.seed = seed
         self.difficulty_factor = float(difficulty) if difficulty is not None else 0.5
-        # Pool size varies on seed (this is the value the DB starts with —
+        # Pool size varies on seed (this is the value the DB starts with -
         # the `value > 50` heal threshold remains the bar to clear).
         self._pool_size_initial = rng.choice([16, 20, 24]) if seed is not None else 20
         # Step budget scales: difficulty=0 -> 38 steps, 1 -> 18 steps; default 0.5 -> 28
@@ -180,7 +180,7 @@ class DBPoolScenario(BaseScenario):
         """DB pool exhaustion is fixed by raising postgres pool size sufficiently
         AND restarting the leaking service (order-service) to clear stale conns.
 
-        Either move counts as a "correct op" — both are needed for full
+        Either move counts as a "correct op" - both are needed for full
         resolution; reward fires once per move.
         """
         if action.action_type == "update_config":

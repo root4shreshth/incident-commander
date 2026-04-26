@@ -1,6 +1,6 @@
 """Task 4 (Easy): Disk space exhausted on a service.
 
-A randomly chosen service hits 100% disk usage on its log volume — writes
+A randomly chosen service hits 100% disk usage on its log volume - writes
 start failing with `ENOSPC`, reads still work. Service is DEGRADED, not down.
 
 Resolution: restart the target service. In the sim model, restart cycles
@@ -9,7 +9,7 @@ agent must identify the failing service from logs (`No space left on
 device`) and restart it.
 
 Why this scenario matters: disk-full incidents are extremely common in
-real production — log retention misconfigured, a runaway batch job
+real production - log retention misconfigured, a runaway batch job
 spilling output, a metrics agent dumping to disk. Real outage post-mortems
 from companies like Slack, GitHub, and Stripe all feature it.
 """
@@ -41,7 +41,7 @@ _DISK_FULL_CANDIDATES = [
 class DiskFullScenario(BaseScenario):
     task_id = "disk_full"
     difficulty = "easy"
-    description = "Service degraded — disk space exhausted, writes failing"
+    description = "Service degraded - disk space exhausted, writes failing"
     root_cause_keywords = ["disk", "no space", "enospc", "volume", "log rotation"]
 
     relevant_services = {"notification-service"}
@@ -63,7 +63,7 @@ class DiskFullScenario(BaseScenario):
             f"PagerDuty alert at 11:18 UTC. Customer impact rising."
         )
         self.root_cause = (
-            f"{self.target_service}'s log volume ({self.mount}) is full — "
+            f"{self.target_service}'s log volume ({self.mount}) is full - "
             f"writes return ENOSPC. Restarting cycles the volume."
         )
 
@@ -126,7 +126,7 @@ class DiskFullScenario(BaseScenario):
                 and a.target_service != self.target_service
             ):
                 penalty -= 0.10
-            # Rolling back doesn't help — it doesn't free disk.
+            # Rolling back doesn't help - it doesn't free disk.
             if a.action_type == "rollback_deployment":
                 penalty -= 0.05
         return penalty

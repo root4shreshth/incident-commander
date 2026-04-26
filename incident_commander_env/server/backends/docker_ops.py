@@ -2,7 +2,7 @@
 
 Factored out so tests can mock the `_run` function and exercise the per-action
 translation logic without needing a real Docker daemon. Every helper returns a
-structured `DockerResult` instead of raising — RealBackend converts those into
+structured `DockerResult` instead of raising - RealBackend converts those into
 typed IncidentObservation responses.
 
 Conventions:
@@ -41,7 +41,7 @@ class DockerResult:
 
 
 # ---------------------------------------------------------------------------
-# low-level runner — the seam tests mock
+# low-level runner - the seam tests mock
 # ---------------------------------------------------------------------------
 
 def _run(
@@ -146,7 +146,7 @@ def compose_logs(
 
 
 def compose_ps_json(compose_root: Path, timeout: int = 15) -> DockerResult:
-    """`docker compose ps --format json` — one JSON object per line."""
+    """`docker compose ps --format json` - one JSON object per line."""
     return _run(
         ["docker", "compose", "ps", "--format", "json"],
         cwd=compose_root,
@@ -159,7 +159,7 @@ def compose_ps_json(compose_root: Path, timeout: int = 15) -> DockerResult:
 # ---------------------------------------------------------------------------
 
 def docker_stats_json(timeout: int = 10) -> DockerResult:
-    """`docker stats --no-stream --format json` — one JSON object per line."""
+    """`docker stats --no-stream --format json` - one JSON object per line."""
     return _run(
         [
             "docker",
@@ -177,7 +177,7 @@ def docker_inspect(container: str, timeout: int = 10) -> DockerResult:
 
 
 # ---------------------------------------------------------------------------
-# Chaos orchestration — invokes the user's chaos.py CLI on the vibecoded site
+# Chaos orchestration - invokes the user's chaos.py CLI on the vibecoded site
 # ---------------------------------------------------------------------------
 
 CHAOS_FOR_TASK = {
@@ -236,7 +236,7 @@ def http_health(url: str, timeout: float = 2.0) -> Tuple[bool, int]:
 
 
 # ---------------------------------------------------------------------------
-# Parsers — pull out the bits we care about from docker JSON output
+# Parsers - pull out the bits we care about from docker JSON output
 # ---------------------------------------------------------------------------
 
 def parse_compose_ps(stdout: str) -> List[Dict[str, Any]]:

@@ -1,4 +1,4 @@
-"""Phase 2 tests — webhooks, postmortem writer, tier-2 patch chain,
+"""Phase 2 tests - webhooks, postmortem writer, tier-2 patch chain,
 YAML loader, sandboxed shell.
 
 Each module gets focused unit tests + a thin integration check via the
@@ -72,7 +72,7 @@ class TestWebhookClassification:
         ("OutOfMemoryError on payment-service", "oom_crash"),
         ("Connection pool exhausted: 20/20", "db_pool_exhaustion"),
         ("Memory leak in v1.1 deploy autoscaler triggered", "bad_deployment_cascade"),
-        ("Disk usage at 99% on /var/log — no space left", "disk_full"),
+        ("Disk usage at 99% on /var/log - no space left", "disk_full"),
         ("Lock wait timeout exceeded on orders table", "slow_query"),
         ("TLS handshake failed: certificate has expired", "cert_expiry"),
     ])
@@ -293,7 +293,7 @@ class TestTier2Actions:
         from training.code_investigator import run_tests
         result = run_tests(fake_repo, framework="pytest")
         # Either pytest is present and the test passes, or pytest isn't on the
-        # path and we get a clean error — both are acceptable contract surfaces.
+        # path and we get a clean error - both are acceptable contract surfaces.
         if result.error and "command not found" in result.error.lower():
             pytest.skip("pytest not on PATH in test environment")
         assert result.framework == "pytest"
@@ -368,7 +368,7 @@ class TestYAMLLoader:
         from incident_commander_env.models import IncidentAction
         env = IncidentCommanderEnv()
         env.reset(task_id="dns_failure", seed=1)
-        # Exercise it briefly — should not crash
+        # Exercise it briefly - should not crash
         obs = env.step(IncidentAction(action_type="list_services"))
         assert obs.error is None or obs.message
 
@@ -397,7 +397,7 @@ class TestSandboxedShell:
     def test_shell_metachar_rejected(self):
         from incident_commander_env.server.actions.sandboxed_shell import parse_command
         cmd, args, err = parse_command("ls ; rm -rf /")
-        # shlex would parse this differently — we need to verify no "rm"
+        # shlex would parse this differently - we need to verify no "rm"
         # ever sneaks through. The first cmd is `ls`, which is allowed,
         # but the `;` triggers parse_command to see two tokens. Let's test
         # the metachar variant directly.

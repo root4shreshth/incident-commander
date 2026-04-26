@@ -37,7 +37,7 @@ def apply_healthy_baseline(service: Service, rng: Optional[random.Random] = None
 
 
 def apply_oom_anomaly(service: Service, rng: Optional[random.Random] = None) -> None:
-    """Set metrics for an OOM-crashed service. Deterministic — no rng usage."""
+    """Set metrics for an OOM-crashed service. Deterministic - no rng usage."""
     service.health = ServiceHealth.CRASHED
     m = service.metrics
     m.cpu_percent = 0.0
@@ -132,7 +132,7 @@ def apply_resource_starved(
 def apply_disk_full_anomaly(
     service: Service, rng: Optional[random.Random] = None
 ) -> None:
-    """Disk space exhausted. Service is degraded — writes failing, reads ok."""
+    """Disk space exhausted. Service is degraded - writes failing, reads ok."""
     r = _rng(rng)
     service.health = ServiceHealth.DEGRADED
     m = service.metrics

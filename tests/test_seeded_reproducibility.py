@@ -1,4 +1,4 @@
-"""Reproducibility tests — same seed + same action sequence -> identical observations.
+"""Reproducibility tests - same seed + same action sequence -> identical observations.
 
 Required by the OpenEnv/Gymnasium contract. Previously the env used the global
 `random` module which made trajectories non-reproducible across runs; we now
@@ -64,7 +64,7 @@ class TestSeedReproducibility:
         # Healthy-service metrics use rng.uniform; with two different seeds they should differ
         # somewhere in the trace.
         assert any(a.get("cpu") != b.get("cpu") for a, b in zip(trace_a, trace_b)), (
-            "Seeds produced identical traces — rng plumbing isn't actually using the seed"
+            "Seeds produced identical traces - rng plumbing isn't actually using the seed"
         )
 
     def test_no_seed_still_works(self):

@@ -1,4 +1,4 @@
-"""Sandboxed shell action — Phase 2.
+"""Sandboxed shell action - Phase 2.
 
 Adds a `run_shell` capability to Praetor's diagnostic vocabulary, with a
 strict 20-command allowlist. Lets the agent reach for tools the typed
@@ -33,7 +33,7 @@ from typing import Dict, List, Optional, Tuple
 
 
 # ---------------------------------------------------------------------------
-# Allowlist — 20 commands max, each with an argument validator.
+# Allowlist - 20 commands max, each with an argument validator.
 # ---------------------------------------------------------------------------
 
 # Format: command -> (description, argument_validator).
@@ -61,7 +61,7 @@ def _safe_path_args(args: List[str]) -> Tuple[bool, Optional[str]]:
 
 
 def _localhost_url(args: List[str]) -> Tuple[bool, Optional[str]]:
-    """For curl / wget — must hit localhost / 127.0.0.1 / our env's host."""
+    """For curl / wget - must hit localhost / 127.0.0.1 / our env's host."""
     if not args:
         return False, "URL required"
     url = args[-1]
@@ -184,7 +184,7 @@ def run_shell(
     cmd, args, err = parse_command(line)
     if err:
         return ShellResult(ok=False, command=line, error=err)
-    # Resolve binary — fail closed if it isn't installed on the system
+    # Resolve binary - fail closed if it isn't installed on the system
     binary = shutil.which(cmd)
     if not binary:
         return ShellResult(

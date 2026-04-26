@@ -70,7 +70,7 @@ class Service:
 
     # Anomalies that a plain restart genuinely fixes in the real world.
     # The rest (memory_leak, db_pool_exhaustion, cascade_degradation) require
-    # their actual root-cause fix — restarting only masks them. This set drives
+    # their actual root-cause fix - restarting only masks them. This set drives
     # the anti-cheat behaviour in restart().
     #
     # `resource_starved` is included because in the bad-deploy cascade scenario,
@@ -89,7 +89,7 @@ class Service:
     # Anomalies that a rollback genuinely fixes (because they were introduced
     # by a bad deploy). Anything else survives a rollback.
     # lock_contention is rollback-curable because it represents a slow query
-    # added in a recent deploy — reverting that deploy reverts the query.
+    # added in a recent deploy - reverting that deploy reverts the query.
     _ROLLBACK_CURABLE = frozenset({"memory_leak", "oom", "lock_contention"})
 
     def __init__(self, config: ServiceConfig) -> None:
@@ -135,7 +135,7 @@ class Service:
         # Restart only cures the anomalies that a real bounce actually fixes.
         # Memory leaks, pool exhaustion, resource starvation, and cascade
         # degradation all return after the restart unless their root cause is
-        # addressed — this prevents the "just restart everything" reward hack.
+        # addressed - this prevents the "just restart everything" reward hack.
         # Special case: OOM is only cured if the memory limit actually went up.
         cured: List[str] = []
         for anomaly in list(self._anomalies):

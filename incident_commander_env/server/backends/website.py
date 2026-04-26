@@ -1,4 +1,4 @@
-"""WebsiteBackend — talks to a deployed site's `/ops/*` operator API over HTTP.
+"""WebsiteBackend - talks to a deployed site's `/ops/*` operator API over HTTP.
 
 Replaces the Docker-Compose-shaped `RealBackend` for the actual sim-to-real
 demo. Far simpler contract: any deployable HTTP service that exposes the
@@ -56,7 +56,7 @@ class HttpResult:
 
 
 # ---------------------------------------------------------------------------
-# Thin HTTP client — single seam tests can monkeypatch
+# Thin HTTP client - single seam tests can monkeypatch
 # ---------------------------------------------------------------------------
 
 def _http(method: str, url: str, json_body: Optional[Dict[str, Any]] = None,
@@ -106,7 +106,7 @@ class WebsiteBackend:
         self._reset_done = False
         self._stub_mode = False
         self._stub_reason: Optional[str] = None
-        # We keep a shadow snapshot of mutations the agent has applied — rendered
+        # We keep a shadow snapshot of mutations the agent has applied - rendered
         # in /backend snapshot when the live site doesn't echo them all back.
         self._mem_limits_mb: Dict[str, int] = {}
         self._pool_sizes: Dict[str, int] = {}
@@ -126,7 +126,7 @@ class WebsiteBackend:
         return url.rstrip("/")
 
     def configure(self, site_url: str) -> None:
-        """Update target URL between episodes — used by /realtime/connect."""
+        """Update target URL between episodes - used by /realtime/connect."""
         self.site_url = self._normalize(site_url)
 
     # ---- Lifecycle ----------------------------------------------------------
@@ -145,7 +145,7 @@ class WebsiteBackend:
             return
         # Heal first so any prior chaos from a previous episode is cleared
         heal = _http("POST", self.site_url + "/ops/heal", json_body={}, timeout=8.0)
-        # If heal is missing we tolerate — site might not implement it (older contracts)
+        # If heal is missing we tolerate - site might not implement it (older contracts)
         if not heal.ok and heal.status != 404:
             self._stub_mode = True
             self._stub_reason = f"heal call failed: {heal.error}"
@@ -170,7 +170,7 @@ class WebsiteBackend:
         _http("POST", self.site_url + "/ops/heal", json_body={}, timeout=5.0)
 
     def tick(self) -> None:
-        # The deployed site advances on its own clock — nothing for us to do.
+        # The deployed site advances on its own clock - nothing for us to do.
         return
 
     # ---- Snapshot -----------------------------------------------------------
@@ -271,7 +271,7 @@ class WebsiteBackend:
     def check_resolved(self, scenario: "BaseScenario") -> bool:
         if self._stub_mode or not self.site_url:
             return False
-        # Poll /ops/health a few times — need a stable green window so a flaky
+        # Poll /ops/health a few times - need a stable green window so a flaky
         # restart doesn't false-positive.
         green = 0
         deadline = time.monotonic() + 12.0
@@ -312,7 +312,7 @@ class WebsiteBackend:
             )
         try:
             return handler(self, action, scenario)
-        except Exception as exc:  # pragma: no cover — defensive
+        except Exception as exc:  # pragma: no cover - defensive
             return IncidentObservation(
                 message=f"WebsiteBackend error executing {action.action_type}: {exc}",
                 error=f"{type(exc).__name__}: {exc}",

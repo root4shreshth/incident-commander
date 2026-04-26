@@ -1,4 +1,4 @@
-"""RealBackend tests — exercise the Docker Compose translation layer with the
+"""RealBackend tests - exercise the Docker Compose translation layer with the
 shell-out helpers monkeypatched. Verifies that:
 
   * each action_type produces a typed IncidentObservation
@@ -116,7 +116,7 @@ class TestStubMode:
 
 
 # ---------------------------------------------------------------------------
-# Reset wiring — compose up + chaos inject
+# Reset wiring - compose up + chaos inject
 # ---------------------------------------------------------------------------
 
 class TestReset:
@@ -283,7 +283,7 @@ class TestActions:
 
 
 # ---------------------------------------------------------------------------
-# Snapshot rollup — exercise stats + ps parsing
+# Snapshot rollup - exercise stats + ps parsing
 # ---------------------------------------------------------------------------
 
 class TestSnapshot:
@@ -327,7 +327,7 @@ class TestSnapshot:
 
 
 # ---------------------------------------------------------------------------
-# Helpers — _parse_mem_limit unit table
+# Helpers - _parse_mem_limit unit table
 # ---------------------------------------------------------------------------
 
 class TestMemParse:

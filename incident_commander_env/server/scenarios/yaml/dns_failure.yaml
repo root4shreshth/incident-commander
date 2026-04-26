@@ -1,4 +1,4 @@
-# DNS failure scenario — community-contributed via the YAML DSL.
+# DNS failure scenario - community-contributed via the YAML DSL.
 # Drop a file like this under scenarios/yaml/ and it auto-loads at startup.
 #
 # Real outages of this shape: AWS Route53 2017, Slack 2022 (DNS resolver
@@ -7,14 +7,14 @@
 
 task_id: dns_failure
 difficulty: medium
-description: "Service can't resolve dependency hostnames — DNS resolver misconfigured"
+description: "Service can't resolve dependency hostnames - DNS resolver misconfigured"
 target_service: api-gateway
 anomaly: connection_leak
 max_steps: 18
 
-alert: "WARN: api-gateway error rate at 60% — outbound HTTPS calls failing with 'Could not resolve host'. Process is alive."
+alert: "WARN: api-gateway error rate at 60% - outbound HTTPS calls failing with 'Could not resolve host'. Process is alive."
 
-root_cause: "DNS resolver in api-gateway pod is misconfigured — outbound name resolution failing for upstream services"
+root_cause: "DNS resolver in api-gateway pod is misconfigured - outbound name resolution failing for upstream services"
 root_cause_keywords: [dns, resolve, host, name, resolver]
 
 correct_action:
@@ -25,7 +25,7 @@ log_lines:
   - "[ERROR] api-gateway - Could not resolve host: payment-service.internal"
   - "[ERROR] api-gateway - Could not resolve host: order-service.internal"
   - "[ERROR] api-gateway - DNS resolver returned NXDOMAIN for 8 lookups in last 30s"
-  - "[WARN]  api-gateway - Falling back to cached IPs — entries will expire in 4 minutes"
+  - "[WARN]  api-gateway - Falling back to cached IPs - entries will expire in 4 minutes"
   - "[ERROR] api-gateway - Resolver timeout: 5000ms waiting on /etc/resolv.conf nameservers"
   - "[INFO]  api-gateway - Restart triggers fresh /etc/resolv.conf parse + cache flush"
 

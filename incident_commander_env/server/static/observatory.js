@@ -1,4 +1,4 @@
-/* Phase 1 — Observatory.
+/* Phase 1 - Observatory.
  *
  * Consumes /runs (list of recorded trained-agent traces) and /watch/{run_id}
  * (single trace) to render an interactive replay with reward decomposition,
@@ -51,12 +51,12 @@
 
   function renderRunsPicker() {
     const sel = $('obs-run-picker');
-    sel.innerHTML = '<option value="">— select a recorded run —</option>';
+    sel.innerHTML = '<option value="">- select a recorded run -</option>';
     state.filteredRuns.forEach((r) => {
       const o = document.createElement('option');
       o.value = r.run_id;
       const tag = r.resolved ? '✓' : '✗';
-      const score = r.score != null ? r.score.toFixed(2) : '—';
+      const score = r.score != null ? r.score.toFixed(2) : '-';
       o.textContent = `${tag} ${r.run_id.slice(0, 22)}… [${r.task_id || '?'}] score=${score} model=${r.model || '?'}`;
       sel.appendChild(o);
     });
@@ -66,12 +66,12 @@
     const total = state.runs.length;
     const resolved = state.runs.filter(r => r.resolved).length;
     const scores = state.runs.map(r => r.score).filter(s => s != null);
-    const avg = scores.length ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(2) : '—';
+    const avg = scores.length ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(2) : '-';
     const conditions = new Set(state.runs.map(r => r.model).filter(Boolean));
     $('obs-stat-runs').textContent = total;
-    $('obs-stat-resolved').textContent = total ? `${resolved}/${total}` : '—';
+    $('obs-stat-resolved').textContent = total ? `${resolved}/${total}` : '-';
     $('obs-stat-avg-score').textContent = avg;
-    $('obs-stat-conditions').textContent = conditions.size || '—';
+    $('obs-stat-conditions').textContent = conditions.size || '-';
   }
 
   function applyFilter() {
@@ -85,18 +85,18 @@
   }
 
   function renderSummary(summary) {
-    $('obs-ep-tag').textContent = summary.task_id || '—';
-    $('obs-run-id').textContent = summary.run_id || '—';
-    $('obs-task').textContent = summary.task_id || '—';
-    $('obs-seed').textContent = summary.seed != null ? String(summary.seed) : '—';
-    $('obs-model').textContent = summary.model || '—';
-    $('obs-alert').textContent = summary.alert || '—';
+    $('obs-ep-tag').textContent = summary.task_id || '-';
+    $('obs-run-id').textContent = summary.run_id || '-';
+    $('obs-task').textContent = summary.task_id || '-';
+    $('obs-seed').textContent = summary.seed != null ? String(summary.seed) : '-';
+    $('obs-model').textContent = summary.model || '-';
+    $('obs-alert').textContent = summary.alert || '-';
     let verdict = '<span class="obs-pill bad">UNRESOLVED</span>';
     if (summary.resolved === true) verdict = '<span class="obs-pill good">RESOLVED</span>';
     else if (summary.resolved == null) verdict = '<span class="obs-pill warn">PENDING</span>';
     $('obs-verdict').innerHTML = verdict;
-    $('obs-score').textContent = summary.score != null ? summary.score.toFixed(3) : '—';
-    $('obs-steps').textContent = summary.steps_used != null ? String(summary.steps_used) : '—';
+    $('obs-score').textContent = summary.score != null ? summary.score.toFixed(3) : '-';
+    $('obs-steps').textContent = summary.steps_used != null ? String(summary.steps_used) : '-';
   }
 
   function renderRewardDecomp(totals) {
@@ -104,7 +104,7 @@
     const tbl = $('obs-reward-table');
     stack.innerHTML = ''; tbl.innerHTML = '';
     if (!totals) {
-      tbl.innerHTML = '<div></div><div class="reward-name">—</div><div class="reward-val">no breakdown</div>';
+      tbl.innerHTML = '<div></div><div class="reward-name">-</div><div class="reward-val">no breakdown</div>';
       return;
     }
     let totalAbs = 0;
@@ -187,11 +187,11 @@
       const card = document.createElement('div');
       const h = (s.health || 'unknown').toLowerCase();
       card.className = 'obs-svc ' + h;
-      const cpu = s.cpu_percent != null ? Math.round(s.cpu_percent) + '%' : '—';
-      const mem = s.memory_mb != null ? Math.round(s.memory_mb) + 'MB' : '—';
+      const cpu = s.cpu_percent != null ? Math.round(s.cpu_percent) + '%' : '-';
+      const mem = s.memory_mb != null ? Math.round(s.memory_mb) + 'MB' : '-';
       card.innerHTML = `
         <div class="nm">${escapeHtml(s.name)}</div>
-        <div class="row"><span>${escapeHtml(s.health || '—')}</span><span>v${escapeHtml(s.version || '?')}</span></div>
+        <div class="row"><span>${escapeHtml(s.health || '-')}</span><span>v${escapeHtml(s.version || '?')}</span></div>
         <div class="row"><span>cpu ${cpu}</span><span>${mem}</span></div>
       `;
       root.appendChild(card);

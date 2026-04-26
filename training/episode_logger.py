@@ -1,4 +1,4 @@
-"""Episode logger — writes structured JSONL traces of agent runs.
+"""Episode logger - writes structured JSONL traces of agent runs.
 
 Each evaluation episode emits one JSONL file at `runs/<run_id>/episode.jsonl`
 with three event kinds, mirroring the format already used by `inference.py`:

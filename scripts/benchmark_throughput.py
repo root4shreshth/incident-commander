@@ -1,7 +1,7 @@
 """Benchmark how fast the simulator generates training data.
 
 The data-factory thesis: real Kubernetes resets in ~60s, our simulator resets in
-~10ms. That's the bottleneck for RL training in this domain — without high
+~10ms. That's the bottleneck for RL training in this domain - without high
 throughput you can't generate the trajectory volume RL needs.
 
 This script produces a single number that anchors that pitch. It writes
@@ -14,8 +14,8 @@ Usage::
     uv run python scripts/benchmark_throughput.py --resets 500 --steps 5000
 
 Reuses (no edits):
-- IncidentCommanderEnv (incident_commander_env/server/environment.py) — reset/step
-- random_policy() (training/eval_runner.py) — for step-rate measurement
+- IncidentCommanderEnv (incident_commander_env/server/environment.py) - reset/step
+- random_policy() (training/eval_runner.py) - for step-rate measurement
 """
 
 from __future__ import annotations
@@ -54,7 +54,7 @@ def _percentiles(values: List[float], pcts=(50.0, 95.0, 99.0)) -> Dict[str, floa
     sorted_values = sorted(values)
     out: Dict[str, float] = {}
     for p in pcts:
-        # Nearest-rank percentile — good enough for benchmark display.
+        # Nearest-rank percentile - good enough for benchmark display.
         k = max(0, min(len(sorted_values) - 1, int(round((p / 100.0) * (len(sorted_values) - 1)))))
         out[f"p{int(p)}_ms"] = sorted_values[k] * 1000.0
     return out
@@ -96,7 +96,7 @@ def benchmark_resets(env: IncidentCommanderEnv, n_per_family: int) -> Dict[str, 
 def benchmark_steps(env: IncidentCommanderEnv, n_steps: int) -> Dict[str, Any]:
     """Time `n_steps` env.step() calls under the random policy.
 
-    Resets are amortized — we reset every ~10 steps to keep episodes short
+    Resets are amortized - we reset every ~10 steps to keep episodes short
     and to match the typical RL rollout shape. Pure step time is what we
     report, exclusive of the resets in between.
     """
@@ -156,8 +156,8 @@ def render_markdown(result: Dict[str, Any]) -> str:
         "## Throughput",
         "",
         f"- Sim reset: **{overall['mean_ms']:.2f} ms** mean "
-        f"(p95 **{overall['p95_ms']:.2f} ms**) — **{overall['resets_per_sec']:.0f} resets/sec**",
-        f"- Sim step: **{steps['mean_ms']:.2f} ms** mean — **{steps['steps_per_sec']:.0f} steps/sec**",
+        f"(p95 **{overall['p95_ms']:.2f} ms**) - **{overall['resets_per_sec']:.0f} resets/sec**",
+        f"- Sim step: **{steps['mean_ms']:.2f} ms** mean - **{steps['steps_per_sec']:.0f} steps/sec**",
         f"- Real K8s reset baseline: **~{REAL_K8S_RESET_SECONDS:.0f} s** (cluster + pod ready)",
         f"- Headline: **~{speedup:,.0f}× faster** than real K8s reset",
         "",

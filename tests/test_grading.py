@@ -356,9 +356,9 @@ class TestComputeStepReward:
 
     The legacy `compute_step_reward` now returns the SUM of all six reward
     components (the multi-component refactor in Track A.1) rather than a
-    single matched component. These tests assert on relative shape — that
+    single matched component. These tests assert on relative shape - that
     diagnostic actions yield positive reward, harmful actions yield negative,
-    redundancy still penalizes, etc. — rather than exact arithmetic on a
+    redundancy still penalizes, etc. - rather than exact arithmetic on a
     single old constant. Per-component arithmetic is tested in
     `tests/test_reward_components.py`.
     """

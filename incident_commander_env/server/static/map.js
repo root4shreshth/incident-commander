@@ -1,4 +1,4 @@
-// map.js — SVG service dependency map with health-coded nodes and animated traffic lines.
+// map.js - SVG service dependency map with health-coded nodes and animated traffic lines.
 
 const ServiceMap = (() => {
   // Tier layout (top → bottom follows request flow).

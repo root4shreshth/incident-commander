@@ -1,4 +1,4 @@
-"""SimulatedBackend — wraps the existing in-memory `Cluster` simulation.
+"""SimulatedBackend - wraps the existing in-memory `Cluster` simulation.
 
 This is what the env runs by default and what the Colab training pipeline
 uses. Fast, fully reproducible with a seed, no external dependencies.

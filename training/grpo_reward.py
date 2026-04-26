@@ -1,7 +1,7 @@
-"""GRPO reward function — wraps the env's 6-component breakdown for TRL.
+"""GRPO reward function - wraps the env's 6-component breakdown for TRL.
 
 `GRPOTrainer` calls a reward function with `(prompts, completions, **kwargs)`
-and expects a list of floats — one reward per completion. The trainer
+and expects a list of floats - one reward per completion. The trainer
 relativizes those rewards within each prompt's group of N completions to
 compute the policy gradient.
 
@@ -13,7 +13,7 @@ Our reward function:
   5. Returns the per-step `breakdown.total()` as the scalar reward
 
 Each component is also recorded in a sidecar `_LAST_BREAKDOWNS` list so the
-Colab notebook's training loop can plot per-component reward over time —
+Colab notebook's training loop can plot per-component reward over time -
 that's the storytelling-grade visual evidence of non-trivial learning.
 
 Anti-reward-hacking note: because we use the verifiable rubric (RLVR), every

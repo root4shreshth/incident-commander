@@ -31,7 +31,7 @@ from incident_commander_env.server.scenarios.scenario_oom_crash import OOMCrashS
 
 
 # ---------------------------------------------------------------------------
-# Backend Protocol contract — every backend must support this surface
+# Backend Protocol contract - every backend must support this surface
 # ---------------------------------------------------------------------------
 
 class TestSimulatedBackendContract:

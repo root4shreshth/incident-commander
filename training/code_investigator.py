@@ -1,9 +1,9 @@
-"""Tier-2 code escalation — fires when Tier 1 (runtime ops) leaves the site degraded.
+"""Tier-2 code escalation - fires when Tier 1 (runtime ops) leaves the site degraded.
 
 Honest scoping: Tier 1 is the trained RL policy executing the 10 typed actions
 through the Backend Protocol. Tier 2 is a *rule-based + LLM-summarized* code
 investigation that fires only when Tier 1's recovery check fails. It is NOT
-RL-trained for this hackathon submission — it's the natural next step we wire
+RL-trained for this hackathon submission - it's the natural next step we wire
 in to demonstrate the full SRE workflow (ops first, code second).
 
 Phase 2 of the project roadmap promises to RL-train Tier 2 too via the
@@ -17,7 +17,7 @@ Phase 2 of the project roadmap promises to RL-train Tier 2 too via the
      likely to be related (memory allocations, large list/dict construction,
      long-lived caches without bounds).
   4. Optionally calls an LLM (OpenRouter / local) to write a one-paragraph
-     "Code Escalation Report" — suspected file, suspected lines, suggested
+     "Code Escalation Report" - suspected file, suspected lines, suggested
      direction. If no LLM is available, falls back to a rule-based summary.
 
 The module makes a deliberate choice to NOT modify the codebase. Tier 2 is
@@ -38,7 +38,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 
 # ---------------------------------------------------------------------------
-# What we look for, by scenario family. Loose — these are heuristics, not RL.
+# What we look for, by scenario family. Loose - these are heuristics, not RL.
 # ---------------------------------------------------------------------------
 
 SCENARIO_KEYWORDS: Dict[str, List[str]] = {
@@ -109,7 +109,7 @@ class CodeEscalationReport:
 
 
 # ---------------------------------------------------------------------------
-# Repo acquisition — shallow clone into a temp dir
+# Repo acquisition - shallow clone into a temp dir
 # ---------------------------------------------------------------------------
 
 def _clone_repo(repo_url: str, token: Optional[str] = None, timeout: int = 30) -> Optional[Path]:
@@ -226,7 +226,7 @@ def _extract_findings(
 
 
 # ---------------------------------------------------------------------------
-# Summary writer — LLM-optional
+# Summary writer - LLM-optional
 # ---------------------------------------------------------------------------
 
 def _rule_based_summary(
@@ -327,7 +327,7 @@ def investigate(
         repo_url:        the GitHub URL to inspect (or a local file:// path
                          when `cloned_root` is supplied for tests).
         scenario:        scenario family (drives keyword set).
-        target_service:  e.g. 'api' — biases the file ranking.
+        target_service:  e.g. 'api' - biases the file ranking.
         repo_token:      optional GitHub PAT for private repos.
         llm_call:        optional callable that takes a prompt string and
                          returns the LLM's raw text reply. If None, we use
@@ -396,7 +396,7 @@ __all__ = [
     "SCENARIO_KEYWORDS",
     "investigate",
     "cleanup_repo",
-    # Phase 2 — actually ship the fix
+    # Phase 2 - actually ship the fix
     "Patch",
     "TestResult",
     "PullRequestResult",
@@ -408,14 +408,14 @@ __all__ = [
 
 
 # ===========================================================================
-# Phase 2 — code-shipping actions (propose, apply, test, PR).
+# Phase 2 - code-shipping actions (propose, apply, test, PR).
 #
 # Tier-2 is no longer diagnosis-only. Given a CodeEscalationReport, Praetor
 # can:
-#   1. propose_patch  — synthesize a unified diff for the most-suspect line
-#   2. apply_patch    — apply the diff to a temp branch in the cloned repo
-#   3. run_tests      — run pytest (or other) against the patched tree
-#   4. open_pull_request — push the branch + open a PR via the GitHub API
+#   1. propose_patch  - synthesize a unified diff for the most-suspect line
+#   2. apply_patch    - apply the diff to a temp branch in the cloned repo
+#   3. run_tests      - run pytest (or other) against the patched tree
+#   4. open_pull_request - push the branch + open a PR via the GitHub API
 #
 # Safety posture for the hackathon:
 #   - propose / apply / test all happen in a temp clone, never the user's
@@ -460,7 +460,7 @@ class PullRequestResult:
 
 
 # ---------------------------------------------------------------------------
-# Patch synthesis — a small set of scenario-aware templates
+# Patch synthesis - a small set of scenario-aware templates
 # ---------------------------------------------------------------------------
 
 _PATCH_TEMPLATES: Dict[str, Dict[str, str]] = {
@@ -477,7 +477,7 @@ _PATCH_TEMPLATES: Dict[str, Dict[str, str]] = {
             "        for k in list(_cache)[: len(_cache) - _CACHE_MAX]:\n"
             "            _cache.pop(k, None)\n",
         "@functools.lru_cache":
-            "@functools.lru_cache(maxsize=1024)  # Bounded — was unbounded.",
+            "@functools.lru_cache(maxsize=1024)  # Bounded - was unbounded.",
     },
     "db_pool_exhaustion": {
         "engine.connect()":
@@ -530,7 +530,7 @@ def propose_patch(report: CodeEscalationReport) -> Optional[Patch]:
         snippet = finding.snippet
         for trigger, replacement in templates.items():
             if trigger.lower() in snippet.lower():
-                # Build a unified diff. Single-line, single-hunk — the smallest
+                # Build a unified diff. Single-line, single-hunk - the smallest
                 # actionable change to demonstrate the workflow.
                 old_line = snippet
                 new_block = replacement
@@ -559,7 +559,7 @@ def propose_patch(report: CodeEscalationReport) -> Optional[Patch]:
 
 
 # ---------------------------------------------------------------------------
-# Apply patch — write the new content into a branch, never the working tree
+# Apply patch - write the new content into a branch, never the working tree
 # ---------------------------------------------------------------------------
 
 def apply_patch(repo_root: Path, patch: Patch, branch: str = "praetor/auto-fix") -> bool:
@@ -578,7 +578,7 @@ def apply_patch(repo_root: Path, patch: Patch, branch: str = "praetor/auto-fix")
     subprocess.run(["git", "checkout", "-q", "-b", branch], cwd=repo_root,
                    check=False, timeout=10)
     # Read current file, line-edit (we already have the diff but applying it via
-    # `git apply` is brittle for our heuristic format — easier to do a direct
+    # `git apply` is brittle for our heuristic format - easier to do a direct
     # line replacement using the patch's structure).
     target = repo_root / patch.file_path
     if not target.exists():
@@ -608,7 +608,7 @@ def apply_patch(repo_root: Path, patch: Patch, branch: str = "praetor/auto-fix")
 
 
 # ---------------------------------------------------------------------------
-# Run tests — pytest by default; falls back to unittest discovery; npm if Node
+# Run tests - pytest by default; falls back to unittest discovery; npm if Node
 # ---------------------------------------------------------------------------
 
 def run_tests(
@@ -673,7 +673,7 @@ def run_tests(
 
 
 # ---------------------------------------------------------------------------
-# Open pull request — pushes branch + creates a GitHub PR
+# Open pull request - pushes branch + creates a GitHub PR
 # ---------------------------------------------------------------------------
 
 def open_pull_request(
@@ -695,12 +695,12 @@ def open_pull_request(
     if not enable_pr_open:
         return PullRequestResult(
             opened=False, dry_run=True, branch=branch,
-            error="enable_pr_open=False — preview only. Re-run with the flag to push the branch.",
+            error="enable_pr_open=False - preview only. Re-run with the flag to push the branch.",
         )
     if not token:
         return PullRequestResult(
             opened=False, dry_run=False, branch=branch,
-            error="no token — cannot push branch or open PR",
+            error="no token - cannot push branch or open PR",
         )
     if "github.com" not in repo_url.lower():
         return PullRequestResult(

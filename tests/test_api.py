@@ -124,7 +124,7 @@ class TestResetEndpoint:
 
     def test_reset_reward_is_near_zero(self, client: TestClient):
         # /reset returns 0.01 (not 0.0) because the OpenEnv validator rejects
-        # exactly 0.0 — it expects rewards in the strict (0, 1) range. Anything
+        # exactly 0.0 - it expects rewards in the strict (0, 1) range. Anything
         # in [0, 0.05] indicates "no real reward yet".
         resp = client.post("/reset", json={"task_id": "oom_crash"})
         assert 0.0 <= resp.json()["reward"] < 0.05

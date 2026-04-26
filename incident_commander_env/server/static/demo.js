@@ -1,4 +1,4 @@
-// demo.js — the human-facing incident response trainer.
+// demo.js - the human-facing incident response trainer.
 // Everything: state, API, service-map, action buttons, modals, coach, notebook, post-mortem.
 
 (function () {
@@ -122,8 +122,8 @@
         : `<button type="button" class="auth-btn" data-provider="google-demo" title="Set a Google Client ID in the meta tag to enable real OAuth.">${Icons.google(18)} Continue with Google <span style="margin-left:auto;font-size:10px;color:var(--text-muted);font-weight:600;letter-spacing:.5px">DEMO</span></button>`;
       social.innerHTML = `
         ${googleSlot}
-        <button type="button" class="auth-btn" data-provider="apple" title="Real Apple Sign-In requires backend OAuth — running in demo mode.">${Icons.apple(18)} Continue with Apple <span style="margin-left:auto;font-size:10px;color:var(--text-muted);font-weight:600;letter-spacing:.5px">DEMO</span></button>
-        <button type="button" class="auth-btn" data-provider="github" title="Real GitHub OAuth requires backend exchange — running in demo mode.">${Icons.github(18)} Continue with GitHub <span style="margin-left:auto;font-size:10px;color:var(--text-muted);font-weight:600;letter-spacing:.5px">DEMO</span></button>`;
+        <button type="button" class="auth-btn" data-provider="apple" title="Real Apple Sign-In requires backend OAuth - running in demo mode.">${Icons.apple(18)} Continue with Apple <span style="margin-left:auto;font-size:10px;color:var(--text-muted);font-weight:600;letter-spacing:.5px">DEMO</span></button>
+        <button type="button" class="auth-btn" data-provider="github" title="Real GitHub OAuth requires backend exchange - running in demo mode.">${Icons.github(18)} Continue with GitHub <span style="margin-left:auto;font-size:10px;color:var(--text-muted);font-weight:600;letter-spacing:.5px">DEMO</span></button>`;
 
       // If Google is configured, wire up the real GIS button
       if (Auth.isGoogleConfigured()) {
@@ -143,7 +143,7 @@
           const slot = document.getElementById('google-signin-btn');
           if (ok && slot) Auth.renderGoogleButton(slot, { theme: 'filled_black', width: 320 });
           else if (slot) {
-            // GIS failed to load — replace with demo fallback so user isn't stuck
+            // GIS failed to load - replace with demo fallback so user isn't stuck
             slot.outerHTML = `<button type="button" class="auth-btn" data-provider="google-demo">${Icons.google(18)} Continue with Google <span style="margin-left:auto;font-size:10px;color:var(--text-muted);font-weight:600;letter-spacing:.5px">DEMO</span></button>`;
           }
         });
@@ -159,7 +159,7 @@
     }
   }
 
-  // (floating paths animation removed — replaced with a static photo background for reliability)
+  // (floating paths animation removed - replaced with a static photo background for reliability)
 
   // ---------- Auth gating ----------
   function applyAuthGate() {
@@ -247,7 +247,7 @@
     const grid = $('#scenario-grid');
     if (!grid) return;
     grid.innerHTML = '';
-    // Curriculum order — easier scenarios first, each unlocking the next.
+    // Curriculum order - easier scenarios first, each unlocking the next.
     // The /tasks endpoint may return more than this list (server-side experimental
     // scenarios); we only render scenarios we know how to caption nicely.
     const order = [
@@ -364,7 +364,7 @@
     // Refresh live services for the map (unless it's a pure declare/resolve)
     if (actionType !== 'resolve_incident') {
       const ls = await api.listServices();
-      // Don't count list_services toward step budget beyond what server already did —
+      // Don't count list_services toward step budget beyond what server already did -
       // server will count it, but that's acceptable transparency.
       state.services = ls.observation?.services_summary || state.services;
       state.stepCount = (await fetch('/state').then(r => r.json())).step_count;
@@ -694,7 +694,7 @@
     if (actionType === 'check_metrics' && obs.metrics) {
       const m = obs.metrics;
       const memPct = m.memory_utilization_percent;
-      const memFlag = memPct > 90 ? `${inline(Icons.flame(13), 'kf-bad')} Memory ${memPct}% — OOM imminent</span>` : memPct > 70 ? `<span class="kf-warn">Memory ${memPct}%</span>` : `Memory ${memPct}%`;
+      const memFlag = memPct > 90 ? `${inline(Icons.flame(13), 'kf-bad')} Memory ${memPct}% - OOM imminent</span>` : memPct > 70 ? `<span class="kf-warn">Memory ${memPct}%</span>` : `Memory ${memPct}%`;
       const errFlag = m.error_rate_percent > 20 ? `<span class="kf-bad">Errors ${m.error_rate_percent}%</span>` : `Errors ${m.error_rate_percent}%`;
       return `<strong>${escapeHtml(target || '')}</strong> · CPU ${m.cpu_percent}% · ${memFlag} · ${errFlag} · p99 ${m.request_latency_p99_ms}ms`;
     }
@@ -737,7 +737,7 @@
   function renderPostMortem(pm) {
     const overlay = $('#postmortem-overlay');
     overlay.classList.remove('hidden');
-    const grade = pm.grade_letter || '—';
+    const grade = pm.grade_letter || '-';
     const gradeColor = { A: '#22c55e', B: '#3b82f6', C: '#f59e0b', D: '#ef4444', F: '#ef4444' }[grade] || '#94a3b8';
     const critIcon = (ok) => ok ? Icons.checkCircle2(16) : Icons.xCircle(16);
     const actIcon = (name) => {
@@ -769,7 +769,7 @@
     const studyLink = pm.study_link
       ? `<div class="pm-study">
           <div class="pm-study-title"><span class="inline-ic">${Icons.bookOpen(14)}</span> One thing to study next</div>
-          <div class="pm-study-body">${escapeHtml(pm.study_link.topic)} — you missed ${pm.study_link.weight_missed.toFixed(2)} points on this criterion. Open the relevant log again and see if you can spot what the rubric wanted.</div>
+          <div class="pm-study-body">${escapeHtml(pm.study_link.topic)} - you missed ${pm.study_link.weight_missed.toFixed(2)} points on this criterion. Open the relevant log again and see if you can spot what the rubric wanted.</div>
         </div>`
       : '';
 
@@ -818,15 +818,15 @@
     overlay.innerHTML = `
       <div class="tut-card">
         <div class="tut-header"><span class="tut-brand-icon">${Icons.siren(22)}</span><h2>Welcome, on-call SRE</h2></div>
-        <p class="tut-lead">This is a <strong>training ground for incident response</strong>. You'll be paged, investigate a real-looking outage, and fix it — with an AI coach helping along the way.</p>
+        <p class="tut-lead">This is a <strong>training ground for incident response</strong>. You'll be paged, investigate a real-looking outage, and fix it - with an AI coach helping along the way.</p>
         <div class="tut-steps">
-          <div class="tut-step"><span class="tut-num">1</span><div><strong>Pick a scenario</strong> — three difficulty levels. Start with "Your first page."</div></div>
-          <div class="tut-step"><span class="tut-num">2</span><div><strong>Watch the service map</strong> — red = broken. Click any service to see details.</div></div>
-          <div class="tut-step"><span class="tut-num">3</span><div><strong>Use the toolbox</strong> — buttons are grouped by intent: Investigate → Remediate → Declare.</div></div>
+          <div class="tut-step"><span class="tut-num">1</span><div><strong>Pick a scenario</strong> - three difficulty levels. Start with "Your first page."</div></div>
+          <div class="tut-step"><span class="tut-num">2</span><div><strong>Watch the service map</strong> - red = broken. Click any service to see details.</div></div>
+          <div class="tut-step"><span class="tut-num">3</span><div><strong>Use the toolbox</strong> - buttons are grouped by intent: Investigate → Remediate → Declare.</div></div>
           <div class="tut-step"><span class="tut-num">4</span><div><strong>Your AI coach</strong> is in the right panel. Stuck? It'll nudge you. Click "Why?" on any result for a plain-English explanation.</div></div>
           <div class="tut-step"><span class="tut-num">5</span><div><strong>Switch to Pro mode</strong> (top right) to turn off hints when you're ready.</div></div>
         </div>
-        <button class="btn btn-primary" id="tut-go">Got it — let's go</button>
+        <button class="btn btn-primary" id="tut-go">Got it - let's go</button>
       </div>`;
     $('#tut-go').addEventListener('click', () => {
       overlay.classList.add('hidden');
@@ -882,7 +882,7 @@
       if (!btn) return;
       const provider = btn.getAttribute('data-provider');
       if (!provider) return;
-      // google-demo means GIS isn't configured — sign in with a demo Google identity
+      // google-demo means GIS isn't configured - sign in with a demo Google identity
       if (provider === 'google-demo') {
         const user = {
           email: 'demo.google@asme.ai',

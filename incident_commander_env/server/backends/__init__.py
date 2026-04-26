@@ -2,11 +2,11 @@
 
 The env can run against several substrates with the same OpenEnv API:
 
-  * SimulatedBackend   — fast in-memory Python cluster (used for training)
-  * WebsiteBackend     — HTTP client for any deployed site exposing the
+  * SimulatedBackend   - fast in-memory Python cluster (used for training)
+  * WebsiteBackend     - HTTP client for any deployed site exposing the
                          operator contract (sim-to-real demo, Phase 3)
-  * RealBackend        — Docker Compose wrapper (legacy; kept for parity)
-  * CodeAwareBackend   — reserved for Phase 2 post-hackathon roadmap
+  * RealBackend        - Docker Compose wrapper (legacy; kept for parity)
+  * CodeAwareBackend   - reserved for Phase 2 post-hackathon roadmap
 
 `get_backend()` reads the `BACKEND` env var and returns the matching instance.
 Default is `sim`, which is what the HF Space runs (no Docker, no external

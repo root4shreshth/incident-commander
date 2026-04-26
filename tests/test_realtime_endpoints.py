@@ -1,11 +1,11 @@
 """Tests for the /realtime/* HTTP surface and the background-thread agent run.
 
 Mocks the website-side `_http` so no real network calls are made. Covers:
-  * /realtime/connect — validates and stores config
-  * /realtime/inject — fires /ops/break on the connected site
-  * /realtime/heal — fires /ops/heal
-  * /realtime/run-agent — kicks off background work, status reports completion
-  * /realtime/config — reflects the connected state
+  * /realtime/connect - validates and stores config
+  * /realtime/inject - fires /ops/break on the connected site
+  * /realtime/heal - fires /ops/heal
+  * /realtime/run-agent - kicks off background work, status reports completion
+  * /realtime/config - reflects the connected state
   * Path-traversal sanitization on /realtime/status/<run_id>
 """
 
@@ -48,7 +48,7 @@ def fake_http(monkeypatch):
                 return val
         return website_module.HttpResult(ok=True, status=200, body={"status": "ok"})
 
-    # Patch in BOTH places — the website backend uses one reference, the
+    # Patch in BOTH places - the website backend uses one reference, the
     # app module imports the same function for the realtime endpoints.
     monkeypatch.setattr(website_module, "_http", _fake)
     monkeypatch.setattr(app_module, "_site_http", _fake)

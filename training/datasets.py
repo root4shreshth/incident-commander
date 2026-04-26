@@ -9,9 +9,9 @@ Each (state, action) pair from a trajectory becomes one training row:
     assistant -> JSON action with a `thinking` field set to the trajectory's `why`
 
 We replay every trajectory under multiple seeds (default 5 per scenario family)
-to expose the model to varied surface forms of the same incident — different
+to expose the model to varied surface forms of the same incident - different
 log timestamps, slightly different metric noise, different OOM target services
-(in the OOM family) — so the policy learns the *shape* of the right move
+(in the OOM family) - so the policy learns the *shape* of the right move
 rather than memorizing one fixed render.
 
 Total dataset size with defaults:
@@ -101,7 +101,7 @@ def replay_trajectory(
          {"role": "user",   "content": ...},
          {"role": "assistant", "content": ...}]
 
-    Side note: the assistant content is the canonical "right answer" — the
+    Side note: the assistant content is the canonical "right answer" - the
     senior-SRE move + reasoning. SFT teaches the policy to emit this shape.
     """
     env = IncidentCommanderEnv()
@@ -177,7 +177,7 @@ def build_sft_dataset(
 
 
 def to_hf_dataset(rows: List[Dict[str, str]]):
-    """Convert chat rows to a HuggingFace Dataset (lazy import — Colab-only)."""
+    """Convert chat rows to a HuggingFace Dataset (lazy import - Colab-only)."""
     from datasets import Dataset
     return Dataset.from_list(rows)
 
