@@ -1797,7 +1797,7 @@
 <div id="tab-api" class="tab-content">
     <div class="section">
         <div class="section-label">Endpoints</div><h2>API Reference</h2>
-        <p class="section-sub">Base URL: <code style="background:var(--bg-elevated);padding:6px 12px;border-radius:8px;font-size:13px">http://localhost:8000</code></p>
+        <p class="section-sub">Base URL: <code id="api-base-url" style="background:var(--bg-elevated);padding:6px 12px;border-radius:8px;font-size:13px">https://hype4raj-incident-commander-env.hf.space</code></p>
         <div class="ep-card"><div class="ep-header" onclick="this.nextElementSibling.classList.toggle('open')"><span class="method m-post">POST</span><span class="ep-path">/reset</span><span class="ep-desc">Start a new incident episode</span></div><div class="ep-body"><pre><span class="k">Request:</span>  { <span class="s">"task_id"</span>: <span class="s">"oom_crash"</span> }
 <span class="k">Response:</span>
 { <span class="s">"observation"</span>: { <span class="s">"message"</span>: <span class="s">"INCIDENT ALERT..."</span>, <span class="s">"alert"</span>: <span class="s">"..."</span>, <span class="s">"dependency_graph"</span>: {...} },
@@ -2043,6 +2043,18 @@ window.addEventListener('DOMContentLoaded', () => {
     const tt = document.getElementById('theme-toggle');
     if (tt && window.__praetorTheme) {
         tt.addEventListener('click', () => window.__praetorTheme.toggle());
+    }
+    // API Reference: prefer the live origin when served from a real host
+    // (e.g. *.hf.space). When served from localhost / 127.0.0.1, keep the
+    // canonical HF Space URL so judges hitting the docs locally still see
+    // the deployed endpoint.
+    const apiBase = document.getElementById('api-base-url');
+    if (apiBase) {
+        const isLocal = /^(localhost|127\.0\.0\.1|0\.0\.0\.0)$/i.test(location.hostname)
+                     || location.protocol === 'file:';
+        if (!isLocal && location.origin) {
+            apiBase.textContent = location.origin;
+        }
     }
 });
 
