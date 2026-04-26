@@ -339,16 +339,24 @@ def evaluate(
     system_prompt: str,
     difficulty: float = 0.5,
     runs_root: Optional[str] = None,
+    on_episode: Optional[Callable[[int, int, str, int, "EpisodeRecord"], None]] = None,
 ) -> EvalReport:
     """Run `len(families) * len(seeds)` episodes and aggregate.
 
     If `runs_root` is set, every episode also emits a JSONL trace at
     `runs_root/<run_id>/episode.jsonl` so the dashboard observe mode can
     replay it back. The `condition_name` is used as part of the run id.
+
+    `on_episode(idx, total, family, seed, record)` is called after every
+    completed episode. Use it to print live progress in long-running notebooks
+    so the cell doesn't appear to hang. Defaults to None (silent).
     """
     episodes: List[EpisodeRecord] = []
+    total = len(families) * len(seeds)
+    idx = 0
     for family in families:
         for seed in seeds:
+            idx += 1
             ep = run_episode(
                 task_id=family,
                 seed=seed,
@@ -359,6 +367,12 @@ def evaluate(
                 model_label=condition_name,
             )
             episodes.append(ep)
+            if on_episode is not None:
+                try:
+                    on_episode(idx, total, family, seed, ep)
+                except Exception:
+                    # Progress callback never blocks the eval — failures are silent.
+                    pass
 
     by_family: Dict[str, Dict[str, Any]] = {}
     for family in families:
