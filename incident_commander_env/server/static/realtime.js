@@ -485,25 +485,67 @@
       html += `<div class="obs-pill bad" style="margin-bottom:10px">UNRESOLVED</div>`;
       html += `<p style="font-size:13px;color:var(--text-secondary)">Tier 1 ops actions did not fully heal the site, and tier 2 was not enabled (no codebase linked).</p>`;
     }
-    // Export-as-PDF button (opens a print-ready report in a new tab)
+    // Export-as-PDF button (opens a print-ready report in a new tab).
+    // We render real <button>s rather than <a target=_blank> so we can
+    // (a) catch popup blockers and fall back to a same-tab navigation,
+    // (b) probe the endpoint first and surface a clear error if the run
+    //     record was already evicted server-side.
     if (state.runId) {
       html += `
         <div class="rt-export-row">
-          <a class="btn btn-primary btn-sm" target="_blank" rel="noopener"
-             href="/realtime/run/${encodeURIComponent(state.runId)}/report"
-             title="Opens a print-ready report in a new tab. Use the browser's print dialog (or the button on the report) to save as PDF.">
+          <button class="btn btn-primary btn-sm" data-rt-export="pdf"
+            title="Opens the report in a new tab and triggers the browser print dialog. Pick 'Save as PDF' to download.">
             📄 Export as PDF
-          </a>
-          <a class="btn btn-outline btn-sm" target="_blank" rel="noopener"
-             href="/realtime/run/${encodeURIComponent(state.runId)}/report?noprint=1"
-             title="Open the report without auto-launching the print dialog.">
+          </button>
+          <button class="btn btn-outline btn-sm" data-rt-export="preview"
+            title="Open the report without the auto-print dialog.">
             ↗ Preview report
-          </a>
+          </button>
           <span class="rt-export-hint">PDF includes the alert, every step with reasoning, and the final result.</span>
+          <span class="rt-export-msg" data-rt-export-msg></span>
         </div>
       `;
     }
     body.innerHTML = html;
+
+    // Wire export buttons after the DOM has been swapped in.
+    if (state.runId) {
+      const runId = state.runId;
+      const reportUrl = '/realtime/run/' + encodeURIComponent(runId) + '/report';
+      const msgEl = body.querySelector('[data-rt-export-msg]');
+      const setMsg = (txt, kind) => {
+        if (!msgEl) return;
+        msgEl.textContent = txt || '';
+        msgEl.dataset.kind = kind || '';
+      };
+      const openReport = async (preview) => {
+        setMsg('Opening report…', 'pending');
+        const url = reportUrl + (preview ? '?noprint=1' : '');
+        // Probe first so a missing run record fails clearly, not silently.
+        try {
+          const head = await fetch(url, { method: 'GET', cache: 'no-store' });
+          if (!head.ok) {
+            setMsg(`Report not available (HTTP ${head.status}). The run record may have been cleared — start a new run and try again.`, 'error');
+            return;
+          }
+        } catch (err) {
+          setMsg('Network error: ' + err, 'error');
+          return;
+        }
+        const win = window.open(url, '_blank', 'noopener');
+        if (!win) {
+          // Popup blocked — fall back to same-tab navigation.
+          setMsg('Popup blocked — opening in this tab.', 'warn');
+          window.location.href = url;
+          return;
+        }
+        setMsg('Report opened in a new tab.', 'ok');
+      };
+      const pdfBtn = body.querySelector('[data-rt-export="pdf"]');
+      const prevBtn = body.querySelector('[data-rt-export="preview"]');
+      if (pdfBtn) pdfBtn.addEventListener('click', () => openReport(false));
+      if (prevBtn) prevBtn.addEventListener('click', () => openReport(true));
+    }
   }
 
   function renderTier2Report(report) {

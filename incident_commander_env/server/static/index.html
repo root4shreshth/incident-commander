@@ -396,6 +396,13 @@
         .rt-export-row .rt-export-hint {
             font-size: 11px; color: var(--text-muted); flex: 1; min-width: 200px;
         }
+        .rt-export-row .rt-export-msg {
+            font-size: 11.5px; color: var(--text-secondary); width: 100%;
+        }
+        .rt-export-row .rt-export-msg[data-kind="error"] { color: var(--accent-red); }
+        .rt-export-row .rt-export-msg[data-kind="warn"]  { color: var(--phase-accent); }
+        .rt-export-row .rt-export-msg[data-kind="ok"]    { color: var(--accent-green); }
+        .rt-export-row .rt-export-msg[data-kind="pending"] { color: var(--text-muted); font-style: italic; }
 
         /* Codebase source tabs */
         .cb-tabs{display:flex;gap:4px;background:var(--bg-elevated);padding:4px;border-radius:9px;margin-bottom:14px;border:1px solid var(--border)}
@@ -2005,7 +2012,7 @@ window.Home = {
 <script src="/static/map.js?v=4"></script>
 <script src="/static/demo.js?v=5"></script>
 <script src="/static/observatory.js?v=3"></script>
-<script src="/static/realtime.js?v=4"></script>
+<script src="/static/realtime.js?v=5"></script>
 <script src="/static/integrations.js?v=1"></script>
 </body>
 </html>
