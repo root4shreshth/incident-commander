@@ -70,12 +70,56 @@ On-call SRE is a $45B market and a multi-billion-token-per-day workload for LLMs
 
 ---
 
+## What the environment actually is
+
+A FastAPI server that exposes the OpenEnv contract — `POST /reset`, `POST /step`, `GET /state`, `GET /health`, `GET /tasks`, plus a typed observation/action surface. The agent talks to it the same way an OpenAI Gym agent talks to a Gym env, just over HTTP.
+
+**Inside the env:** a 9-service simulated microservices cluster.
+
+```
+            frontend-bff ──▶ api-gateway
+                              ├──▶ order-service ──▶ payment-service
+                              │                  ──▶ inventory-service
+                              │                  ──▶ postgres-db
+                              ├──▶ user-service  ──▶ auth-service
+                              └──▶ notification-service
+```
+
+Each service has live state: health (healthy / degraded / unhealthy / crashed / restarting), live metrics (CPU%, memory MB, p50 / p99 latency, error rate, active connections, RPS), a structured log buffer, deployment history, and config (memory limit, CPU limit, replicas, db pool size). Services have explicit dependencies — when one fails, dependents experience cascading effects the agent has to trace.
+
+**Each episode runs this loop:**
+
+1. **Reset.** A scenario family is selected (`oom_crash`, `db_pool_exhaustion`, …). With `(seed, difficulty)`, a fresh parametric instance is materialized — the broken service, the memory ceiling, the bad version are all randomized so the agent has to learn the *shape* of the fault, not memorize specific cases. The agent receives a PagerDuty-style alert string.
+
+2. **Investigate.** The agent picks from 10 typed actions:
+
+   | Action | Purpose |
+   |---|---|
+   | `list_services` | Cluster overview with health + key metrics for all 9 services |
+   | `describe_service` | Full config, deployment history, dependencies for one service |
+   | `read_logs` | Structured log lines with realistic error patterns (OOM, pool exhaustion, lock waits, cert errors) |
+   | `check_metrics` | CPU, memory, latency p50/p99, error rate, connections, RPS for one service |
+   | `restart_service` | Restart with optional new memory_limit |
+   | `scale_service` | Change replica count |
+   | `rollback_deployment` | Revert to a previous version (refuses rollback-to-self) |
+   | `update_config` | Change a runtime setting (allowlisted keys only, scenario decides if it heals) |
+   | `run_diagnostic` | Probes like check_connectivity, check_health, check_resources, check_dns |
+   | `resolve_incident` | Declare resolved with `root_cause` + `resolution` strings |
+
+3. **Reward.** Every step produces a 6-component breakdown — diagnostic, correct_op, resolution, format, efficiency, penalty — emitted independently to wandb so each axis is plottable on its own. No learned reward model, no LLM-as-judge. Pure math over the action history and cluster state.
+
+4. **Done.** Either the scenario's resolution criteria are met (service healthy + correct fix applied + root cause keywords matched), the agent declares `resolve_incident`, or the step budget runs out. A structured post-mortem is auto-generated alongside the episode trace, and a one-line summary is appended to the project-level RUNBOOK.md.
+
+**Same surface across substrates.** Because the env delegates execution to a `Backend` Protocol, the exact same agent and reward function run unchanged against (a) the in-memory simulator (used for training), (b) a real deployed website that implements the operator API contract (used for the sim-to-real demo), or (c) the codebase itself for tier-2 escalation when runtime ops aren't enough.
+
+---
+
 ## Hackathon judging matrix
 
 | Rubric (% weight) | What we ship for it |
 |---|---|
 | **Innovation (40%)** | First OpenEnv environment for SRE/DevOps. Backend Protocol that lets one trained policy run on either simulator or real HTTP service (sim-to-real transfer). Parametric scenario families instead of hardcoded cases. Tier-2 code escalation when ops can't fully heal. YAML scenario authoring DSL for community contributions. Autonomous webhook ingestion (PagerDuty / Prometheus / generic) — no humans between page and verdict. |
-| **Storytelling (30%)** | Three-act demo: train → eval → real outage rescue. Per-component wandb plots show the policy learning each reward axis separately. Auto-generated post-mortem markdown after every episode. Three-phase unified product UI: **Observatory** (LLM agent replays) / **Apprentice** (human trainer) / **Real-Time** (sim-to-real on a deployed site). Real-world outage citations on each scenario card (Microsoft Teams cert expiry, Knight Capital deploy, Slack disk-full, GitHub slow query, etc.) anchor abstract claims. |
+| **Storytelling (30%)** | Three-act demo: train → eval → real outage rescue. Per-component wandb plots show the policy learning each reward axis separately. Auto-generated post-mortem markdown after every episode. Unified three-mode product UI: **Observatory** (LLM agent replays) / **Apprentice** (human trainer) / **Real-Time** (sim-to-real on a deployed site). Real-world outage citations on each scenario card (Microsoft Teams cert expiry, Knight Capital deploy, Slack disk-full, GitHub slow query, etc.) anchor abstract claims. |
 | **Reward improvement (20%)** | Eval table across 4 conditions × 6 families × 30 seeds = **720 episodes** per snapshot. Random baseline → base model → SFT → SFT+GRPO. Per-component breakdown surfaces *what* improved, not just the scalar. |
 | **Pipeline coherence (10%)** | FastAPI + Pydantic typed models. Deterministic seed-to-trajectory mapping. **346 / 346 tests passing** across reward components, anti-reward-hacking regression tests, backend protocol contract, observe-mode, real-backend, training plumbing. OpenEnv-spec-compliant `openenv.yaml`. Self-contained Colab. Zero telemetry, fully reproducible. |
 
@@ -250,24 +294,24 @@ Two examples ship with the repo: `dns_failure.yaml` and `rate_limit.yaml`.
 
 ---
 
-## The three-phase product UI
+## The unified dashboard — three modes, one product
 
-A unified dashboard with five tabs (Home, Observatory, Apprentice, Real-Time, What we offer, API). Each phase has its own accent color and visual identity.
+A single dashboard with six tabs (Home, Observatory, Apprentice, Real-Time, What we offer, API). The three middle tabs are the product's three usage modes — one per audience — sharing the same backend, the same scenario library, and the same trained policy.
 
-### Phase 1 — Observatory (for ML researchers)
+### Tab 1 · Observatory (for ML researchers)
 - Replay any recorded trained-agent run
 - 6-component reward decomposition with per-component sparklines
 - Live-animated service map (red → amber → green as the agent acts)
 - Filter chips: all families, by family, ✓ resolved
 - Aggregate success-rate bars across conditions
 
-### Phase 2 — Apprentice (for SREs / engineers)
+### Tab 2 · Apprentice (for SREs / engineers)
 - Tree-shaped curriculum: OOM Crash unlocks three scenarios, DB Pool unlocks two more
 - 8 scenario cards (6 built-in + 2 YAML); locked cards greyed until prereq cleared
 - AI coach with contextual hints + plain-English "Why?" explanations on every action
 - Structured post-mortem with senior-SRE comparison after each incident
 
-### Phase 3 — Real-Time (for hackathon judges + production deployments)
+### Tab 3 · Real-Time (for hackathon judges + production deployments)
 - Connect any deployed site that implements the operator contract
 - Praetor probes `/ops/health` + `/ops/metrics` + `/ops/logs` and **auto-classifies** the fault — no manual scenario picking
 - Three codebase source options for tier-2 escalation: **GitHub**, **Azure Repos**, **ZIP upload**
@@ -276,18 +320,18 @@ A unified dashboard with five tabs (Home, Observatory, Apprentice, Real-Time, Wh
 
 ---
 
-## Phase 2 capabilities — all shipped
+## The autonomous capability stack
 
-The Phase 2 roadmap (autonomous monitoring, code-aware fixes, post-mortem closure, scenario library, sandboxed shell) shipped as part of this submission, not a future promise.
+Beyond the basic OpenEnv contract, Praetor closes the full SRE loop end-to-end: the alert lands automatically, the agent investigates and remediates, verifies recovery, and if runtime ops aren't enough, opens the codebase and ships a patch. Every capability below is shipped today.
 
-| Capability | Status | How it works |
-|---|---|---|
-| **Continuous monitoring via webhook** | ✅ Shipped | `POST /incidents/webhook/{pagerduty,prometheus,generic}`. Heuristic classifier picks scenario from alert text. Token-gated via `PRAETOR_WEBHOOK_TOKEN` env var. Once paged, no humans in the loop. |
-| **Tier-2 code escalation: ship the patch** | ✅ Shipped | `POST /codebase/propose-and-test` chain: `investigate` → `propose_patch` → `apply_patch` (on a fresh branch, never the working tree) → `run_tests` (auto-detects pytest/unittest/npm) → `open_pull_request` (push + GitHub REST API). PR opening is hard-gated by `enable_pr_open=True` AND a write-scope token. |
-| **Auto post-mortem + runbook ledger** | ✅ Shipped | After every episode, `training/postmortem_writer.py` generates a structured `postmortem.md` (summary / alert / root cause / resolution / timeline / reward decomp / what went well / what didn't / scenario-specific action items) and appends a row to `RUNBOOK.md`. |
-| **YAML scenario authoring DSL** | ✅ Shipped | Drop a YAML under `scenarios/yaml/`, it auto-loads. Two examples ship: `dns_failure`, `rate_limit_exhaustion`. PyYAML optional. |
-| **Sandboxed shell action** | ✅ Shipped | 20-command allowlist (ls, ps, df, du, grep, find, head, tail, curl localhost-only, etc). Per-command argument validators (no path traversal, no shell metachars, network commands localhost-only). Hard 10s timeout, 8 KB output cap. `GET /shell/allowlist`, `POST /shell/run`. |
-| **Auto-detect fault on connect** | ✅ Shipped | `/realtime/connect` probes the site and infers the scenario family from metrics + log patterns. User doesn't pick from a list. |
+| Capability | How it works |
+|---|---|
+| **Continuous monitoring via webhook** | `POST /incidents/webhook/{pagerduty,prometheus,generic}`. Heuristic classifier picks scenario from alert text. Token-gated via `PRAETOR_WEBHOOK_TOKEN` env var. Once paged, no humans in the loop. |
+| **Tier-2 code escalation: ship the patch** | `POST /codebase/propose-and-test` chain: `investigate` → `propose_patch` → `apply_patch` (on a fresh branch, never the working tree) → `run_tests` (auto-detects pytest/unittest/npm) → `open_pull_request` (push + GitHub REST API). PR opening is hard-gated by `enable_pr_open=True` AND a write-scope token. |
+| **Auto post-mortem + runbook ledger** | After every episode, `training/postmortem_writer.py` generates a structured `postmortem.md` (summary / alert / root cause / resolution / timeline / reward decomp / what went well / what didn't / scenario-specific action items) and appends a row to `RUNBOOK.md`. |
+| **YAML scenario authoring DSL** | Drop a YAML under `scenarios/yaml/`, it auto-loads. Two examples ship: `dns_failure`, `rate_limit_exhaustion`. PyYAML optional. |
+| **Sandboxed shell action** | 20-command allowlist (ls, ps, df, du, grep, find, head, tail, curl localhost-only, etc). Per-command argument validators (no path traversal, no shell metachars, network commands localhost-only). Hard 10s timeout, 8 KB output cap. `GET /shell/allowlist`, `POST /shell/run`. |
+| **Auto-detect fault on connect** | `/realtime/connect` probes the site and infers the scenario family from metrics + log patterns. User doesn't pick from a list. |
 
 ---
 
@@ -305,9 +349,9 @@ We followed the hackathon's recommended recipe explicitly.
 ~16 ideal trajectories × 8 seed variants per family ≈ 128 (state, action, rationale) tuples drawn from `IDEAL_TRAJECTORIES` in `incident_commander_env/server/coach.py`. Each trajectory was hand-written as what a senior SRE would do for that scenario.
 
 ### Curriculum (in `training/curriculum.py`)
-- Phase 1 (steps 0–100): warmup, OOM-only at low difficulty
-- Phase 2 (100–200): OOM + DB-pool at medium difficulty
-- Phase 3 (200–400): full mix at full difficulty
+- Stage 1 (steps 0–100): warmup, OOM-only at low difficulty
+- Stage 2 (100–200): OOM + DB-pool at medium difficulty
+- Stage 3 (200–400): full mix at full difficulty
 
 The schedule sampler draws `(family, difficulty)` per training step.
 
@@ -533,18 +577,15 @@ RUNBOOK.md                             # Auto-generated incident ledger (under r
 
 ---
 
-## What we promise but haven't trained yet
+## What's deferred (and why)
 
-Honest scoping for the hackathon submission:
+Honest scoping for the hackathon submission. Three items are explicitly deferred — substrate is in place, just not exercised yet:
 
 | Item | Status | Why deferred |
 |---|---|---|
-| **Discriminated typed action union** (replace `Dict[str, Any]` parameters with per-action typed sub-models) | Substrate ready, refactor not done | Risky against 346 passing tests on the eve of submission. Better as a feature-branch PR after the hackathon. |
-| **RL-train tier-2** (let GRPO learn when to escalate to code vs runtime ops) | Substrate ready (`propose_patch / apply_patch / run_tests / open_pull_request` all callable from a TRL reward fn), training not run | Requires GPU. Just hook these actions into a future Colab cell with a code-aware reward function. |
-| **Eval table real numbers** | Pipeline ready, GPU run pending | The Colab notebook is fully self-contained and ready to run. Fire it once, results land in `results/`. README placeholders are clearly labelled. |
-| **Published video URL** | Script ready in repo, recording pending | The submission video is straightforward to shoot from the script. |
-
-Everything else from the original Phase-2 roadmap (webhook ingestion, code-aware tier-2 capabilities, post-mortem closure, YAML DSL, sandboxed shell) is **shipped today**, not promised for later.
+| **Discriminated typed action union** (replace `Dict[str, Any]` parameters with per-action typed sub-models) | Substrate ready, refactor not done | Risky against 346 passing tests on the eve of submission. Better as a follow-up PR. |
+| **RL-train tier-2** (let GRPO learn when to escalate to code vs runtime ops) | All four primitives (`propose_patch / apply_patch / run_tests / open_pull_request`) are callable from a TRL reward fn — training not run | Requires GPU. Hook these actions into a future Colab cell with a code-aware reward function. |
+| **Eval table real numbers** | Pipeline ready, GPU run pending | The Colab notebook is self-contained and ready. Fire it once, results land in `results/`. README placeholders are clearly labelled. |
 
 ---
 
