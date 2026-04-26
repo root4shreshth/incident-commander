@@ -64,10 +64,16 @@ This notebook trains the **Praetor** incident-response agent end-to-end:
 | Load model | 2–3 min | 3–5 min |
 | SFT (1 epoch) | 30–40 min | 75–90 min |
 | SFT sanity-eval (9 episodes) | ~2 min | ~5 min |
-| GRPO (200 steps) | 2–3 hr | 5–7 hr |
-| Final eval (120 episodes) | 5–7 min | 12–15 min |
+| GRPO (A100 200 steps / T4 30 steps) | 2–3 hr | ~60 min |
+| Final eval (120 episodes) | 5–7 min | 15–20 min |
 | Plots + push | 3–5 min | 3–5 min |
-| **Total** | **~3.5 hr** | **~7–9 hr** |
+| **Total** | **~3.5 hr** | **~2.5–3 hr** |
+
+T4's GRPO budget is intentionally trimmed (30 steps vs A100's 200) to fit a
+~3-hour total wall-clock. 30 steps is enough to see the policy improving
+across the 6 reward components — the trend is visible, the killer per-component
+plot still tells the story — even if the policy hasn't fully converged. If
+you have more time, raise `GRPO_STEPS` in cell 2.
 
 ### Before you run
 
@@ -134,7 +140,7 @@ IS_A100 = "A100" in GPU_NAME
 # Batch size + GRPO step counts scale with GPU memory.
 SFT_BATCH = 4 if IS_A100 else 2
 SFT_GRAD_ACCUM = 4 if IS_A100 else 8        # effective batch = 16 either way
-GRPO_STEPS = 200 if IS_A100 else 120
+GRPO_STEPS = 200 if IS_A100 else 30   # T4 cut from 120 to fit ~3 hr total
 GRPO_NUM_GENERATIONS = 4 if IS_A100 else 2  # rollouts per prompt
 GRPO_BATCH = 2 if IS_A100 else 1
 
@@ -395,7 +401,7 @@ print(f"  family distribution: {dict((f, sum(1 for p in prompts if p['task_id'] 
 cells.append(md(r"""
 ## Cell 8 — GRPO training
 
-**Expected runtime: 2–3 hours on A100, 5–7 hours on T4.** This is the
+**Expected runtime: 2–3 hours on A100 (200 steps), ~60 minutes on T4 (30 steps).** This is the
 longest cell. You'll see per-step reward + KL-divergence in the progress
 output. The 6-component reward breakdown is logged to wandb if `WANDB_API_KEY`
 is set.
