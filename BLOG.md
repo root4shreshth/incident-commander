@@ -140,11 +140,17 @@ That's the autonomy story we wanted to tell in a single sentence: **Praetor goes
 
 ---
 
-## What's next
+## What we'd build next
 
-The Phase 2 capabilities — webhooks, post-mortem auto-generation, tier-2 code escalation, the YAML scenario DSL, the sandboxed shell — all shipped in the submission. The honest deferred items are: the discriminated-typed-action-union refactor (a substantial rewrite that we kept off the eve-of-submission diff), the actual RL-training of the tier-2 code-action policy (substrate is ready; it's a future Colab run), and a few writeup-side artifacts that depend on the GPU run finishing. Those are explicitly called out in the README under "What's deferred (and why)" — we'd rather be precise than promotional.
+This was a 48-hour build. Everything in the submission is what fit in 48 hours; the rest is honest future work. There are three concrete things we'd ship if we kept going:
 
-The scenario library is what we're most excited about long-term. The YAML DSL means anyone can convert a real-world post-mortem into a reproducible RL scenario without writing Python. Two examples shipped already — DNS failure (the AWS Route53 / Cloudflare 2019 / Slack 2022 pattern) and rate-limit exhaustion (the Twitter 2023 launch pattern). We expect the third batch to come from the community.
+**RL-trained code-aware action policy.** Today the agent can clone a repo, grep for the suspect lines, propose a patch on a fresh branch, run the test suite, and open a pull request — all of it shipped, all of it callable from the dashboard. What it can't do yet is *learn* when to escalate to a code fix versus when runtime ops are enough. The four primitives are sitting there waiting to be hooked into a TRL reward function. It's a Colab cell away. We just didn't have the GPU time.
+
+**A discriminated typed-action union.** Right now an action's `parameters` is `Dict[str, Any]` — workable, but compile-time-unsafe. Replacing it with per-action Pydantic sub-models is a meaningful refactor we deliberately kept off the eve-of-submission diff because we had three hundred and forty-six passing tests and didn't want to risk breaking them at hour forty-seven.
+
+**A larger scenario library, contributed by people who have actually been on call.** The YAML DSL is the seed. Anyone can convert a real post-mortem into a reproducible RL scenario without writing Python — two examples shipped already (DNS failure: the AWS Route53 / Cloudflare 2019 / Slack 2022 pattern; rate-limit exhaustion: the Twitter 2023 launch pattern). The third batch should come from the community. We think the right finished form of this project is hundreds of scenarios contributed by SREs who lived through the original outages.
+
+We're not going to pretend any of that is in the box. What's in the box is what fit in two days. We'd rather be precise than promotional, and the README and this blog both reflect that.
 
 ---
 
