@@ -511,40 +511,76 @@
     // Wire export buttons after the DOM has been swapped in.
     if (state.runId) {
       const runId = state.runId;
-      const reportUrl = '/realtime/run/' + encodeURIComponent(runId) + '/report';
+      const pdfUrl = '/realtime/run/' + encodeURIComponent(runId) + '/report.pdf';
+      const htmlUrl = '/realtime/run/' + encodeURIComponent(runId) + '/report?noprint=1';
       const msgEl = body.querySelector('[data-rt-export-msg]');
       const setMsg = (txt, kind) => {
         if (!msgEl) return;
         msgEl.textContent = txt || '';
         msgEl.dataset.kind = kind || '';
       };
-      const openReport = async (preview) => {
-        setMsg('Opening report…', 'pending');
-        const url = reportUrl + (preview ? '?noprint=1' : '');
-        // Probe first so a missing run record fails clearly, not silently.
+
+      // Real PDF download: fetch the .pdf endpoint as a blob, build an
+      // object-URL, and click an invisible <a download> to trigger a real
+      // file download — no browser print dialog, no popup blocker, no
+      // window.open. Falls back informatively on errors.
+      const downloadPdf = async () => {
+        setMsg('Generating PDF…', 'pending');
         try {
-          const head = await fetch(url, { method: 'GET', cache: 'no-store' });
+          const resp = await fetch(pdfUrl, { method: 'GET', cache: 'no-store' });
+          if (!resp.ok) {
+            const txt = await resp.text().catch(() => '');
+            setMsg(
+              `PDF not available (HTTP ${resp.status})${txt ? ': ' + txt.slice(0, 200) : '.'} ` +
+              `Start a new run and try again.`,
+              'error',
+            );
+            return;
+          }
+          const blob = await resp.blob();
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `praetor-incident-${runId}.pdf`;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 2000);
+          const sizeKb = Math.round(blob.size / 1024);
+          setMsg(`PDF downloaded (${sizeKb} KB).`, 'ok');
+        } catch (err) {
+          setMsg('Download failed: ' + err, 'error');
+        }
+      };
+
+      // Preview opens the HTML report in a new tab so the user can read it
+      // on screen without printing. Probes the endpoint first to give a
+      // clear error if the run record was already evicted.
+      const openPreview = async () => {
+        setMsg('Opening preview…', 'pending');
+        try {
+          const head = await fetch(htmlUrl, { method: 'GET', cache: 'no-store' });
           if (!head.ok) {
-            setMsg(`Report not available (HTTP ${head.status}). The run record may have been cleared — start a new run and try again.`, 'error');
+            setMsg(`Preview not available (HTTP ${head.status}). Start a new run and try again.`, 'error');
             return;
           }
         } catch (err) {
           setMsg('Network error: ' + err, 'error');
           return;
         }
-        const win = window.open(url, '_blank', 'noopener');
+        const win = window.open(htmlUrl, '_blank', 'noopener');
         if (!win) {
-          // Popup blocked — fall back to same-tab navigation.
           setMsg('Popup blocked — opening in this tab.', 'warn');
-          window.location.href = url;
+          window.location.href = htmlUrl;
           return;
         }
-        setMsg('Report opened in a new tab.', 'ok');
+        setMsg('Preview opened in a new tab.', 'ok');
       };
+
       const pdfBtn = body.querySelector('[data-rt-export="pdf"]');
       const prevBtn = body.querySelector('[data-rt-export="preview"]');
-      if (pdfBtn) pdfBtn.addEventListener('click', () => openReport(false));
-      if (prevBtn) prevBtn.addEventListener('click', () => openReport(true));
+      if (pdfBtn) pdfBtn.addEventListener('click', downloadPdf);
+      if (prevBtn) prevBtn.addEventListener('click', openPreview);
     }
   }
 

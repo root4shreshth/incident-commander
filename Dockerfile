@@ -14,7 +14,8 @@ RUN pip install --no-cache-dir \
     openai>=1.0.0 \
     requests>=2.31.0 \
     python-multipart>=0.0.9 \
-    PyYAML>=6.0
+    PyYAML>=6.0 \
+    reportlab>=4.0
 
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app

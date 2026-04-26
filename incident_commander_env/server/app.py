@@ -1119,6 +1119,59 @@ def realtime_status(run_id: str) -> Dict[str, Any]:
         return dict(rec)  # shallow copy, fine for read-only API
 
 
+@app.get("/realtime/run/{run_id}/report.pdf")
+def realtime_run_report_pdf(run_id: str):
+    """Render a real-time run as a downloadable PDF (Content-Disposition: attachment).
+
+    The button in the Real-Time tab fetches this endpoint as a blob and triggers
+    a real .pdf download — no print-dialog round-trip required. The PDF is
+    generated server-side via reportlab (pure-Python, no native deps), so this
+    works identically on Windows / Linux / HF Space.
+    """
+    from fastapi.responses import Response
+    safe_id = run_id.replace("..", "").replace("/", "").replace("\\", "")
+    with _REALTIME_LOCK:
+        rec = _REALTIME_RUNS.get(safe_id)
+        if not rec:
+            return Response(
+                content=f"No run record for run_id {safe_id}".encode("utf-8"),
+                status_code=404,
+                media_type="text/plain",
+            )
+        rec = dict(rec)
+        rec["events"] = list(rec.get("events", []))
+
+    try:
+        from incident_commander_env.server.report_pdf import render_run_report_pdf
+        pdf_bytes = render_run_report_pdf(safe_id, rec)
+    except ImportError as exc:
+        return Response(
+            content=(
+                "PDF export requires the 'reportlab' package. "
+                f"Install with: pip install reportlab. ({exc})"
+            ).encode("utf-8"),
+            status_code=500,
+            media_type="text/plain",
+        )
+    except Exception as exc:  # pragma: no cover — defensive
+        return Response(
+            content=f"PDF generation failed: {type(exc).__name__}: {exc}".encode("utf-8"),
+            status_code=500,
+            media_type="text/plain",
+        )
+
+    filename = f"praetor-incident-{safe_id}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Content-Length": str(len(pdf_bytes)),
+            "Cache-Control": "no-store",
+        },
+    )
+
+
 @app.get("/realtime/run/{run_id}/report")
 def realtime_run_report(run_id: str):
     """Render a print-ready HTML page for the given real-time run.
