@@ -102,7 +102,10 @@ _t0 = time.monotonic()
 # is dominated by useful info, not pip noise.
 %pip install -q "unsloth[colab-new] @ git+https://github.com/unslothai/unsloth.git" 2>&1 | tail -1
 %pip install -q --no-deps "trl<0.16" "peft>=0.10" "accelerate>=0.30" "bitsandbytes>=0.43" 2>&1 | tail -1
-%pip install -q "transformers>=4.45" "datasets>=2.14" "huggingface-hub>=0.20" "matplotlib>=3.7" 2>&1 | tail -1
+# transformers pinned <4.50 because newer versions changed the
+# `_get_train_sampler` signature in a way Unsloth's GRPOTrainer override
+# doesn't yet handle (TypeError: takes 1 positional argument but 2 given).
+%pip install -q "transformers>=4.45,<4.50" "datasets>=2.14" "huggingface-hub>=0.20" "matplotlib>=3.7" 2>&1 | tail -1
 %pip install -q "pydantic>=2.0" "fastapi>=0.104" 2>&1 | tail -1
 
 # Clone (or update) the project so imports like `training.eval_runner` resolve.
@@ -319,9 +322,17 @@ GEN_CFG = GenerationConfig(
 def hf_generate(messages, max_new=160):
     text = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
     inputs = tokenizer(text, return_tensors="pt").to("cuda")
+    input_len = inputs["input_ids"].shape[1]
     out = model.generate(**inputs, generation_config=GEN_CFG)
-    full = tokenizer.decode(out[0], skip_special_tokens=True)
-    return full[len(text):] if full.startswith(text) else full
+    # Decode ONLY the newly-generated tokens. Slicing on token IDs avoids
+    # the bug where `full[len(text):]` fails because tokenize=False keeps
+    # special tokens in `text` but skip_special_tokens=True strips them
+    # from `full` — so `full.startswith(text)` is False and the whole
+    # transcript (system prompt + user + assistant) gets returned, which
+    # then makes the JSON parser pick up the EXAMPLE inside the system
+    # prompt instead of the model's actual response.
+    new_tokens = out[0][input_len:]
+    return tokenizer.decode(new_tokens, skip_special_tokens=True)
 
 SANITY_FAMILIES = ["oom_crash", "db_pool_exhaustion", "bad_deployment_cascade"]
 SANITY_SEEDS = [2000, 2001, 2002]
@@ -425,6 +436,21 @@ if os.path.exists(GRPO_DONE) and os.path.exists(GRPO_CHECKPOINT):
 else:
     from trl import GRPOConfig, GRPOTrainer
     from training.grpo_reward import grpo_reward_fn, reset_history
+
+    # Defensive monkeypatch: if the runtime is on transformers >=4.50 (which
+    # calls `sampler_fn(dataset)` with one positional arg) and the running
+    # Unsloth still expects `_get_train_sampler(self)` only, the dataloader
+    # build crashes with a TypeError. We wrap the bound method to swallow
+    # any extra positional/keyword args. No-op if the signatures already match.
+    try:
+        from unsloth_compiled_cache.UnslothGRPOTrainer import _UnslothGRPOTrainer
+        _orig_sampler = _UnslothGRPOTrainer._get_train_sampler
+        def _patched_sampler(self, *args, **kwargs):
+            return _orig_sampler(self)
+        _UnslothGRPOTrainer._get_train_sampler = _patched_sampler
+        print("Applied Unsloth GRPO sampler-signature monkeypatch.")
+    except (ImportError, AttributeError):
+        pass
 
     reset_history()  # clear sidecar between runs
 
