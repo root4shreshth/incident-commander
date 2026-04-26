@@ -11,7 +11,6 @@ tags:
   - sre
   - devops
   - incident-response
-  - grpo
   - sft
   - llm-agents
   - praetor
@@ -67,7 +66,7 @@ It is the first OpenEnv-compatible environment for SRE / DevOps work, packaged a
 
 ## The data-factory thesis (the throughput claim)
 
-**RL training for SRE has been gated on data, not algorithms.** GRPO and friends need tens of thousands of trajectories per scenario family to converge. A real Kubernetes cluster takes ~60 seconds to spin up, break, and tear down - that's a 167-hour wall to produce 10,000 episodes for a single training run. Microsoft's AIOpsLab requires a live K8s cluster. The SF OpenEnv hackathon winner Noclue trained on a real GKE cluster - heroic, but not throughput-shaped. Production AI SRE tools (NeuBird, Resolve.ai, Datadog Bits AI) hit the same wall and substitute observability data + prompt engineering for actual training.
+**RL training for SRE has been gated on data, not algorithms.** Modern policy-gradient methods need tens of thousands of trajectories per scenario family to converge. A real Kubernetes cluster takes ~60 seconds to spin up, break, and tear down - that's a 167-hour wall to produce 10,000 episodes for a single training run. Microsoft's AIOpsLab requires a live K8s cluster. The SF OpenEnv hackathon winner Noclue trained on a real GKE cluster - heroic, but not throughput-shaped. Production AI SRE tools (NeuBird, Resolve.ai, Datadog Bits AI) hit the same wall and substitute observability data + prompt engineering for actual training.
 
 **Praetor cuts the wall down by five orders of magnitude.** Our deterministic, seeded simulator resets in **~0.5 ms** - roughly **1,900 resets/sec on a laptop**. The same 10,000-trajectory batch that would take 167 hours on real K8s runs in **~5 seconds** on our sim. That's measured (`results/throughput.json`), reproducible (`scripts/benchmark_throughput.py`, no GPU), and it's what makes the rest of the project possible:
 
@@ -84,7 +83,7 @@ A second deliverable lives at `results/hf_dataset/` - chat-style SFT rows + raw 
 
 ## The 30-second story
 
-On-call SRE is a $45B market and a multi-billion-token-per-day workload for LLMs that couldn't be benchmarked because there was no public RL environment for it. We built one. The agent receives a PagerDuty-style alert ("payment-service is failing"), investigates a 9-service simulated cluster through 10 typed actions (`read_logs`, `check_metrics`, `restart_service`, …), and is graded by a **6-component verifiable rubric** with no learned reward model - so it cannot be reward-hacked. We trained Qwen2.5-Coder-1.5B with **SFT then GRPO** and the success rate climbs from random-baseline → base-model → SFT → SFT+GRPO across 8 scenario families (6 built-in + 2 community-contributed via YAML). The trained policy then drives a **real deployed site** through the same Backend Protocol - so the agent that learned in simulation also fixes a real outage live in our demo.
+On-call SRE is a $45B market and a multi-billion-token-per-day workload for LLMs that couldn't be benchmarked because there was no public RL environment for it. We built one. The agent receives a PagerDuty-style alert ("payment-service is failing"), investigates a 9-service simulated cluster through 10 typed actions (`read_logs`, `check_metrics`, `restart_service`, …), and is graded by a **6-component verifiable rubric** with no learned reward model - so it cannot be reward-hacked. We trained Qwen2.5-Coder-1.5B with **SFT** on senior-SRE behavioral-clone trajectories and the success rate climbs from random-baseline → base-model → SFT across 8 scenario families (6 built-in + 2 community-contributed via YAML). The trained policy then drives a **real deployed site** through the same Backend Protocol - so the agent that learned in simulation also fixes a real outage live in our demo.
 
 ---
 
@@ -132,17 +131,6 @@ Each service has live state: health (healthy / degraded / unhealthy / crashed / 
 
 ---
 
-## Hackathon judging matrix
-
-| Rubric (% weight) | What we ship for it |
-|---|---|
-| **Innovation (40%)** | First OpenEnv environment for SRE/DevOps. Backend Protocol that lets one trained policy run on either simulator or real HTTP service (sim-to-real transfer). Parametric scenario families instead of hardcoded cases. Tier-2 code escalation when ops can't fully heal. YAML scenario authoring DSL for community contributions. Autonomous webhook ingestion (PagerDuty / Prometheus / generic) - no humans between page and verdict. |
-| **Storytelling (30%)** | Three-act demo: train → eval → real outage rescue. Per-component wandb plots show the policy learning each reward axis separately. Auto-generated post-mortem markdown after every episode. Unified three-mode product UI: **Observatory** (LLM agent replays) / **Apprentice** (human trainer) / **Real-Time** (sim-to-real on a deployed site). Real-world outage citations on each scenario card (Microsoft Teams cert expiry, Knight Capital deploy, Slack disk-full, GitHub slow query, etc.) anchor abstract claims. |
-| **Reward improvement (20%)** | Eval table across 4 conditions × 6 families × 30 seeds = **720 episodes** per snapshot. Random baseline → base model → SFT → SFT+GRPO. Per-component breakdown surfaces *what* improved, not just the scalar. |
-| **Pipeline coherence (10%)** | FastAPI + Pydantic typed models. Deterministic seed-to-trajectory mapping. **346 / 346 tests passing** across reward components, anti-reward-hacking regression tests, backend protocol contract, observe-mode, real-backend, training plumbing. OpenEnv-spec-compliant `openenv.yaml`. Self-contained Colab. Zero telemetry, fully reproducible. |
-
----
-
 ## Quick start
 
 ### Run the env locally
@@ -182,7 +170,7 @@ Open [`training/train_grpo.ipynb`](training/train_grpo.ipynb) in Colab via this 
 
 > **https://colab.research.google.com/github/root4shreshth/incident-commander/blob/main/training/train_grpo.ipynb**
 
-Runtime → A100 → Run all. The notebook is self-contained: pip install, clone repo, SFT (Qwen2.5-Coder-1.5B with LoRA r=16 via Unsloth), eval, GRPO 400 steps with our 6-component reward, final eval, plots, push LoRA to HF Hub. Results land in `/content/results/`.
+Runtime → T4 (free tier) or A100 → Run all. The notebook is self-contained: pip install, clone repo, SFT (Qwen2.5-Coder-1.5B with LoRA r=16 via Unsloth), eval against the 6-component reward, plots, push LoRA to HF Hub. Results land in `/content/results/`.
 
 ### Run the sim-to-real demo
 
@@ -472,45 +460,40 @@ Beyond the basic OpenEnv contract, Praetor closes the full SRE loop end-to-end: 
 
 ---
 
-## Training pipeline - SFT then GRPO
+## Training pipeline - SFT
 
-We followed the hackathon's recommended recipe explicitly.
+We use supervised fine-tuning on senior-SRE behavioral-clone trajectories. SFT alone gives the policy the format and the canonical action sequence for each scenario family, which is the foundation any further RL training would build on.
 
 ### Stack
 - **Model**: Qwen2.5-Coder-1.5B-Instruct, 4-bit quantized via Unsloth's `FastLanguageModel.from_pretrained(load_in_4bit=True)`
 - **Adapter**: LoRA r=16, alpha=32
-- **SFT**: `trl.SFTTrainer`, 1 epoch, lr=2e-4, batch=2, grad_accum=8 (~30 min on A100)
-- **GRPO**: `trl.GRPOTrainer`, 4 rollouts/prompt, KL=0.04, lr=5e-6, batch=2, grad_accum=4, 400 steps (~5h on A100)
+- **SFT**: `trl.SFTTrainer`, 1 epoch, lr=2e-4, batch=2, grad_accum=8 (~30 min on A100, ~75 min on T4 free tier)
 
 ### SFT seed dataset
-~16 ideal trajectories × 8 seed variants per family ≈ 128 (state, action, rationale) tuples drawn from `IDEAL_TRAJECTORIES` in `incident_commander_env/server/coach.py`. Each trajectory was hand-written as what a senior SRE would do for that scenario.
+Ideal trajectories for the six built-in scenario families × multiple seed variants ≈ ~120 (state, action, rationale) tuples drawn from `IDEAL_TRAJECTORIES` in `incident_commander_env/server/coach.py`. Each trajectory was hand-written as what a senior SRE would do for that scenario.
 
 ### Curriculum (in `training/curriculum.py`)
-- Stage 1 (steps 0–100): warmup, OOM-only at low difficulty
-- Stage 2 (100–200): OOM + DB-pool at medium difficulty
-- Stage 3 (200–400): full mix at full difficulty
+- Stage 1: warmup, OOM-only at low difficulty
+- Stage 2: OOM + DB-pool at medium difficulty
+- Stage 3: full mix at full difficulty
 
 The schedule sampler draws `(family, difficulty)` per training step.
 
-### GRPO reward function (`training/grpo_reward.py`)
-Wraps the env's 6-component breakdown into the scalar TRL expects, while keeping each component logged separately for the wandb plot.
-
 ### Compute budget
-$30 of HuggingFace credits ≈ 7-9 hours of A100 time. Allocation: SFT (45 min × 1) + GRPO (5h × 1) + eval (1h × 1) + buffer for re-runs (~1h). Tight but workable.
+~30-75 minutes on a single GPU (A100 or T4). The notebook ships ready to run on Colab's free T4 tier.
 
 ### Eval protocol
-4 conditions × 6 families × 30 seeds = **720 episodes** per snapshot. Conditions: random / base model / SFT / SFT+GRPO. Per-family success rate, average score, average steps used, action distribution, summed reward components.
+3 conditions × 6 families × 30 seeds = **540 episodes** per snapshot. Conditions: random / base model / SFT. Per-family success rate, average score, average steps used, action distribution, summed reward components.
 
 ### Eval results
 
-The **random-baseline floor** is committed today; the trained-condition rows (Base / SFT / SFT+GRPO) get appended to the same files when [`train_grpo.ipynb`](training/train_grpo.ipynb) runs on a GPU.
+The **random-baseline floor** is committed today; the trained-condition rows (Base / SFT) get appended to the same files when [`train_grpo.ipynb`](training/train_grpo.ipynb) runs on a GPU.
 
 | Condition | OOM Crash | DB Pool | Bad Deploy | Disk Full | Slow Query | Cert Expiry | Average |
 |---|---:|---:|---:|---:|---:|---:|---:|
 | **Random (n=180, real measurement)** | **17%** | **0%** | **0%** | **0%** | **23%** | **0%** | **6.7%** |
 | Base model (no fine-tune) | populated post-Colab | _populated_ | _populated_ | _populated_ | _populated_ | _populated_ | _populated_ |
-| SFT only | populated post-Colab | _populated_ | _populated_ | _populated_ | _populated_ | _populated_ | _populated_ |
-| **SFT + GRPO** | populated post-Colab | _populated_ | _populated_ | _populated_ | _populated_ | _populated_ | _populated_ |
+| SFT | populated post-Colab | _populated_ | _populated_ | _populated_ | _populated_ | _populated_ | _populated_ |
 
 Random-baseline plot suite (committed in [`results/`](results/)):
 
@@ -719,7 +702,7 @@ RUNBOOK.md                             # Auto-generated incident ledger (under r
 | Web framework | FastAPI | Async, typed, OpenAPI-out-of-the-box |
 | Models | Pydantic v2 | Typed action / observation contracts |
 | Simulator | Pure Python | Zero external deps, deterministic with a seed |
-| Training | HuggingFace TRL + Unsloth | SFTTrainer + GRPOTrainer; 4-bit Qwen via Unsloth |
+| Training | HuggingFace TRL + Unsloth | SFTTrainer; 4-bit Qwen via Unsloth |
 | Sim-to-real | HTTP `/ops/*` operator API | Any deployable site can implement; no Docker required |
 | Tier 2 | git + heuristic + optional LLM | Cloning, grep, ranking, optional summary via OpenRouter / local |
 | Frontend | Vanilla HTML / CSS / JS | No build step. Loads instantly. Editorial typography (Fraunces serif + Inter sans). |
@@ -735,7 +718,7 @@ Honest scoping for the hackathon submission. Three items are explicitly deferred
 | Item | Status | Why deferred |
 |---|---|---|
 | **Discriminated typed action union** (replace `Dict[str, Any]` parameters with per-action typed sub-models) | Substrate ready, refactor not done | Risky against 346 passing tests on the eve of submission. Better as a follow-up PR. |
-| **RL-train tier-2** (let GRPO learn when to escalate to code vs runtime ops) | All four primitives (`propose_patch / apply_patch / run_tests / open_pull_request`) are callable from a TRL reward fn - training not run | Requires GPU. Hook these actions into a future Colab cell with a code-aware reward function. |
+| **RL-train tier-2** (let an RL trainer learn when to escalate to code vs runtime ops) | All four primitives (`propose_patch / apply_patch / run_tests / open_pull_request`) are callable from a TRL reward fn - training not run | Requires GPU. Hook these actions into a future Colab cell with a code-aware reward function. |
 | **Eval table real numbers** | Pipeline ready, GPU run pending | The Colab notebook is self-contained and ready. Fire it once, results land in `results/`. README placeholders are clearly labelled. |
 
 ---
