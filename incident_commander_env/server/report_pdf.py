@@ -162,6 +162,106 @@ def _status_for(rec: Dict[str, Any], events: list) -> tuple[str, colors.Color]:
     return "UNRESOLVED", BAD
 
 
+# Static taxonomy: scenario name -> {cause tags, fix tags}. Mirror the
+# JS deriveReportTags() in static/realtime.js so the PDF and the on-screen
+# report carry the same vocabulary.
+_TAGS_BY_SCENARIO = {
+    "oom_crash":              {"cause": ["oom", "memory-pressure"],          "fix": ["memory-bump", "restart-curable"]},
+    "db_pool_exhaustion":     {"cause": ["connection-leak", "pool-saturated"], "fix": ["config-tune", "pool-size-bump"]},
+    "bad_deployment_cascade": {"cause": ["bad-deploy", "cascading-failure"],   "fix": ["rollback", "version-revert"]},
+    "disk_full":              {"cause": ["disk-full", "storage-exhausted"],    "fix": ["restart-cycle-volume", "log-rotation"]},
+    "slow_query":             {"cause": ["lock-contention", "query-regression"], "fix": ["rollback", "feature-flag"]},
+    "cert_expiry":            {"cause": ["cert-expired", "tls-handshake-fail"],  "fix": ["restart-renew", "cert-rotation"]},
+    "dns_failure":            {"cause": ["dns-resolution", "resolver-stale"],    "fix": ["cache-flush", "restart-resolver"]},
+    "rate_limit_exhaustion":  {"cause": ["rate-limited", "429-storm"],           "fix": ["scale-out", "key-rotate"]},
+}
+
+
+def _derive_tags(scenario: str, events: list) -> Dict[str, list]:
+    t = _TAGS_BY_SCENARIO.get(scenario, {"cause": [], "fix": []})
+    services: list = []
+    seen = set()
+    for ev in events:
+        if ev.get("type") == "step":
+            tgt = (ev.get("action") or {}).get("target_service")
+            if tgt and tgt not in seen:
+                seen.add(tgt)
+                services.append(tgt)
+    return {"cause": t["cause"], "fix": t["fix"], "services": services}
+
+
+def _summarize_actions(events: list) -> Dict[str, int]:
+    counts: Dict[str, int] = {}
+    for ev in events:
+        if ev.get("type") == "step":
+            a = (ev.get("action") or {}).get("action_type")
+            if a:
+                counts[a] = counts.get(a, 0) + 1
+    return counts
+
+
+def _resolution_path(events: list) -> list:
+    meaningful = {"restart_service", "rollback_deployment", "scale_service",
+                  "update_config", "resolve_incident"}
+    out: list = []
+    for ev in events:
+        if ev.get("type") != "step":
+            continue
+        a = ev.get("action") or {}
+        if a.get("action_type") not in meaningful:
+            continue
+        tgt = a.get("target_service")
+        params = a.get("parameters") or {}
+        try:
+            import json as _json
+            params_str = _json.dumps(params, separators=(",", ":")) if params else ""
+        except Exception:
+            params_str = str(params) if params else ""
+        line = a.get("action_type", "?")
+        if tgt:
+            line += f" on {tgt}"
+        if params_str:
+            line += " " + params_str
+        out.append(line)
+    return out
+
+
+def _praetor_summary(scenario: str, events: list, resolved: bool,
+                     duration_s: float | None, has_tier2: bool) -> str:
+    steps_taken = sum(1 for ev in events if ev.get("type") == "step")
+    counts = _summarize_actions(events)
+    moves = [k for k in counts if any(t in k for t in ("restart", "rollback", "update_config", "scale"))]
+    friendly = (scenario or "unknown").replace("_", " ")
+    if resolved:
+        move_str = (f" Praetor's decisive move was <b>{', '.join(moves)}</b>."
+                    if moves else "")
+        dur = (f" over {duration_s:.1f} seconds" if duration_s else "")
+        return (
+            f"Praetor diagnosed a <b>{friendly}</b> incident in "
+            f"<b>{steps_taken} step{'' if steps_taken == 1 else 's'}</b>"
+            f"{dur}, walked the dependency graph from symptom to root cause, "
+            f"and resolved the incident using only tier-1 runtime operations."
+            f"{move_str} The site is now responding 200 on /ops/health and "
+            f"the fix is durable."
+        )
+    if has_tier2:
+        return (
+            f"Praetor investigated a <b>{friendly}</b> incident, took "
+            f"{steps_taken} runtime ops action"
+            f"{'' if steps_taken == 1 else 's'}, and determined the fault "
+            f"was not fully restorable from runtime ops alone. It escalated "
+            f"to tier-2 code investigation against the linked repository "
+            f"and identified candidate code locations to review."
+        )
+    return (
+        f"Praetor took <b>{steps_taken}</b> runtime ops action"
+        f"{'' if steps_taken == 1 else 's'} against the <b>{friendly}</b> "
+        f"fault but did not fully heal the site. Tier-2 code investigation "
+        f"was not enabled — link a repository to let Praetor inspect the "
+        f"code path next time."
+    )
+
+
 # ---- public API -------------------------------------------------------------
 
 def render_run_report_pdf(run_id: str, rec: Dict[str, Any]) -> bytes:
@@ -289,6 +389,165 @@ def render_run_report_pdf(run_id: str, rec: Dict[str, Any]) -> bytes:
     ]))
     flow.append(meta_tbl)
     flow.append(Spacer(1, 5 * mm))
+
+    # ---- Praetor's summary -------------------------------------------------
+    has_tier2 = bool(tier2_done)
+    summary_text = _praetor_summary(
+        scenario, events, status_label == "RESOLVED", duration_s, has_tier2,
+    )
+    flow.append(Paragraph("PRAETOR'S SUMMARY", styles["h2"]))
+    summary_tbl = Table(
+        [[Paragraph(summary_text, styles["body"])]],
+        colWidths=[None],
+    )
+    summary_tbl.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), LIGHT_BG),
+        ("LINEBEFORE", (0, 0), (0, -1), 2.5, ACCENT),
+        ("LEFTPADDING", (0, 0), (-1, -1), 10),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+        ("TOPPADDING", (0, 0), (-1, -1), 8),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+    ]))
+    flow.append(summary_tbl)
+
+    # ---- Stats grid (2x2) --------------------------------------------------
+    tags = _derive_tags(scenario, events)
+    outcome_color = (
+        GOOD if status_label == "RESOLVED"
+        else (WARN if status_label == "ESCALATED" else BAD)
+    )
+    outcome_label = (
+        "FIXED" if status_label == "RESOLVED"
+        else ("ESCALATED" if status_label == "ESCALATED" else "UNRESOLVED")
+    )
+    services_str = (
+        ", ".join(tags["services"][:3]) if tags["services"] else "none"
+    )
+
+    def _stat_cell(lbl, val, sub, val_color=TEXT):
+        # reportlab's inline <font color="..."> needs a # prefix or a name.
+        # hexval() returns "0xRRGGBB"; strip the leading "0x" and prefix "#".
+        col_hex = "#" + val_color.hexval()[2:]
+        return Table(
+            [[Paragraph(_esc(lbl), styles["meta_label"])],
+             [Paragraph(f'<font color="{col_hex}">'
+                        f'<b>{_esc(val)}</b></font>',
+                        ParagraphStyle(
+                            "stat_val", parent=styles["meta_value"],
+                            fontSize=14, leading=16, fontName="Courier-Bold",
+                        ))],
+             [Paragraph(_esc(sub), ParagraphStyle(
+                 "stat_sub", parent=styles["meta_label"],
+                 fontSize=8, leading=10, textColor=MUTED,
+             ))]],
+            colWidths=[None],
+            style=TableStyle([
+                ("BACKGROUND", (0, 0), (-1, -1), colors.white),
+                ("BOX", (0, 0), (-1, -1), 0.4, BORDER),
+                ("LEFTPADDING", (0, 0), (-1, -1), 8),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+                ("TOPPADDING", (0, 0), (0, 0), 6),
+                ("BOTTOMPADDING", (0, -1), (-1, -1), 6),
+            ]),
+        )
+
+    stats_row = Table(
+        [[
+            _stat_cell("Steps taken", str(len(steps)), "tier-1 ops actions"),
+            _stat_cell("Wall-clock", f"{duration_s:.1f} s" if duration_s else "—", "end-to-end"),
+            _stat_cell("Outcome", outcome_label, services_str if status_label == "RESOLVED" else outcome_label.lower(), outcome_color),
+            _stat_cell("Services", str(len(tags["services"])), services_str),
+        ]],
+        colWidths=[None, None, None, None],
+    )
+    stats_row.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+        ("TOPPADDING", (0, 0), (-1, -1), 0),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+    ]))
+    flow.append(Spacer(1, 6 * mm))
+    flow.append(stats_row)
+
+    # ---- Root-cause / fix / service tags -----------------------------------
+    if tags["cause"] or tags["fix"] or tags["services"]:
+        flow.append(Paragraph("ROOT CAUSE &amp; FIX TAGS", styles["h2"]))
+
+        def _make_chip(text, fill_hex, text_hex):
+            return Table(
+                [[Paragraph(
+                    f'<font color="{text_hex}" face="Courier-Bold">'
+                    f'{_esc(text)}</font>',
+                    ParagraphStyle("chip", fontSize=8.5, leading=10),
+                )]],
+                colWidths=[len(text) * 5.5 + 12],
+                style=TableStyle([
+                    ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor(fill_hex)),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 6),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+                    ("TOPPADDING", (0, 0), (-1, -1), 3),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+                    ("ROUNDEDCORNERS", [4, 4, 4, 4]),
+                ]),
+            )
+
+        # Build a wrapping row of chips. Use a horizontal Table whose cells are
+        # the individual chip tables; let it auto-wrap by chunking by ~6 per row.
+        chips: list = []
+        for c in tags["cause"]:
+            chips.append(_make_chip(c, "#fee2e2", "#991b1b"))
+        for f in tags["fix"]:
+            chips.append(_make_chip(f, "#dcfce7", "#166534"))
+        for s in tags["services"]:
+            chips.append(_make_chip(s, "#f3e8ff", "#6b21a8"))
+
+        # Chunk into rows of 5
+        per_row = 5
+        for i in range(0, len(chips), per_row):
+            row = chips[i:i + per_row]
+            while len(row) < per_row:
+                row.append("")  # blank cell
+            chip_tbl = Table([row], colWidths=[None] * per_row)
+            chip_tbl.setStyle(TableStyle([
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+                ("TOPPADDING", (0, 0), (-1, -1), 2),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+            ]))
+            flow.append(chip_tbl)
+
+    # ---- Resolution path ---------------------------------------------------
+    path = _resolution_path(events)
+    if path:
+        flow.append(Paragraph("RESOLUTION PATH", styles["h2"]))
+        for line in path:
+            flow.append(Paragraph(
+                f"• <font face='Courier'>{_esc(line)}</font>", styles["body"]
+            ))
+
+    # ---- Action breakdown --------------------------------------------------
+    counts = _summarize_actions(events)
+    if counts:
+        flow.append(Paragraph("ACTION BREAKDOWN", styles["h2"]))
+        items = sorted(counts.items(), key=lambda x: -x[1])
+        rows = [
+            [Paragraph(f"<font face='Courier'>{_esc(k)}</font>", styles["body"]),
+             Paragraph(f"<b>×{v}</b>", styles["body"])]
+            for k, v in items
+        ]
+        action_tbl = Table(rows, colWidths=[None, 18 * mm])
+        action_tbl.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), LIGHT_BG),
+            ("LINEBEFORE", (0, 0), (0, -1), 2, ACCENT),
+            ("LEFTPADDING", (0, 0), (-1, -1), 10),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+            ("TOPPADDING", (0, 0), (-1, -1), 4),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ]))
+        flow.append(action_tbl)
 
     # ---- Alert -------------------------------------------------------------
     flow.append(Paragraph("THE PROBLEM WE SAW", styles["h2"]))

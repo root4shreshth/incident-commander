@@ -467,6 +467,77 @@
     $('rt-final-body').innerHTML = '';
   }
 
+  // Map a scenario name + observed actions into a small set of human-readable
+  // tags surfacing the root-cause category, the fix mechanism, and the
+  // operating envelope. These appear as colored chips in the final report.
+  function deriveReportTags(scenario, events) {
+    const tagsByScenario = {
+      oom_crash:               { cause: ['oom', 'memory-pressure'],    fix: ['memory-bump', 'restart-curable'] },
+      db_pool_exhaustion:      { cause: ['connection-leak', 'pool-saturated'], fix: ['config-tune', 'pool-size-bump'] },
+      bad_deployment_cascade:  { cause: ['bad-deploy', 'cascading-failure'],   fix: ['rollback', 'version-revert'] },
+      disk_full:               { cause: ['disk-full', 'storage-exhausted'],    fix: ['restart-cycle-volume', 'log-rotation'] },
+      slow_query:              { cause: ['lock-contention', 'query-regression'], fix: ['rollback', 'feature-flag'] },
+      cert_expiry:             { cause: ['cert-expired', 'tls-handshake-fail'],  fix: ['restart-renew', 'cert-rotation'] },
+      dns_failure:             { cause: ['dns-resolution', 'resolver-stale'],    fix: ['cache-flush', 'restart-resolver'] },
+      rate_limit_exhaustion:   { cause: ['rate-limited', '429-storm'],           fix: ['scale-out', 'key-rotate'] },
+    };
+    const t = tagsByScenario[scenario] || { cause: [], fix: [] };
+    // Affected services derived from step targets
+    const services = new Set();
+    (events || []).forEach(ev => {
+      if (ev.type === 'step' && ev.action && ev.action.target_service) {
+        services.add(ev.action.target_service);
+      }
+    });
+    return {
+      cause: t.cause,
+      fix: t.fix,
+      services: Array.from(services),
+    };
+  }
+
+  function summarizeActions(events) {
+    const counts = {};
+    (events || []).forEach(ev => {
+      if (ev.type === 'step' && ev.action && ev.action.action_type) {
+        counts[ev.action.action_type] = (counts[ev.action.action_type] || 0) + 1;
+      }
+    });
+    return counts; // { read_logs: 2, restart_service: 1, ... }
+  }
+
+  function buildResolutionPath(events) {
+    // Pick the meaningful actions — drop diagnostics, keep the moves
+    const meaningful = new Set([
+      'restart_service', 'rollback_deployment', 'scale_service',
+      'update_config', 'resolve_incident',
+    ]);
+    return (events || [])
+      .filter(ev => ev.type === 'step' && ev.action && meaningful.has(ev.action.action_type))
+      .map(ev => {
+        const a = ev.action;
+        const tgt = a.target_service ? ' on ' + a.target_service : '';
+        const params = a.parameters && Object.keys(a.parameters).length
+          ? ' ' + JSON.stringify(a.parameters) : '';
+        return `${a.action_type}${tgt}${params}`;
+      });
+  }
+
+  function buildPraetorSummary(scenario, events, resolved, durationS, tier2) {
+    const stepsTaken = (events || []).filter(ev => ev.type === 'step').length;
+    const acts = summarizeActions(events);
+    const moves = Object.keys(acts).filter(k => /restart|rollback|update_config|scale/.test(k));
+    const friendly = (scenario || 'unknown').replace(/_/g, ' ');
+    if (resolved) {
+      const moveStr = moves.length ? ` Praetor's decisive move was <strong>${moves.join(', ')}</strong>.` : '';
+      return `Praetor diagnosed a <strong>${friendly}</strong> incident in <strong>${stepsTaken} step${stepsTaken === 1 ? '' : 's'}</strong>${durationS ? ' over ' + durationS.toFixed(1) + ' seconds' : ''}, walked the dependency graph from symptom to root cause, and resolved the incident using only tier-1 runtime operations.${moveStr} The site is now responding 200 on /ops/health and the fix is durable.`;
+    }
+    if (tier2) {
+      return `Praetor investigated a <strong>${friendly}</strong> incident, took ${stepsTaken} runtime ops action${stepsTaken === 1 ? '' : 's'}, and determined the fault was not fully restorable from runtime ops alone. It escalated to tier-2 code investigation against the linked repository and identified candidate code locations to review (see below).`;
+    }
+    return `Praetor took <strong>${stepsTaken}</strong> runtime ops action${stepsTaken === 1 ? '' : 's'} against the <strong>${friendly}</strong> fault but did not fully heal the site. Tier-2 code investigation was not enabled — link a repository in step 3 to let Praetor inspect the code path next time.`;
+  }
+
   function finalizeRun(data) {
     setStep(4, 'done');
     $('rt-heal').disabled = false;
@@ -474,16 +545,85 @@
     const card = $('rt-final-report');
     const body = $('rt-final-body');
     card.style.display = 'block';
+    card.scrollIntoView({behavior: 'smooth', block: 'start'});
+
+    const events = data.events || [];
+    const stepEvents = events.filter(ev => ev.type === 'step');
+    const startEv = events.find(ev => ev.type === 'start') || {};
+    const tier2Done = events.find(ev => ev.type === 'tier2_done');
+    const scenario = data.scenario || startEv.scenario || 'unknown';
+    const siteUrl = data.site_url || startEv.site_url || '(in-process simulator)';
+    const alert = data.alert_title || data.alert_summary || '';
+    const durationS = (data.started_at && data.finished_at)
+      ? (data.finished_at - data.started_at) : null;
+
+    const resolved = !!data.tier1_resolved;
+    const escalated = !resolved && !!data.tier2_report;
+    let statusClass, statusLabel;
+    if (resolved)       { statusClass = 'good';  statusLabel = 'RESOLVED in tier 1'; }
+    else if (escalated) { statusClass = 'warn';  statusLabel = 'ESCALATED — tier 1 did not fully heal'; }
+    else                { statusClass = 'bad';   statusLabel = 'UNRESOLVED'; }
+
+    const tags = deriveReportTags(scenario, events);
+    const acts = summarizeActions(events);
+    const path = buildResolutionPath(events);
+    const summary = buildPraetorSummary(scenario, events, resolved, durationS, tier2Done);
+
     let html = '';
-    if (data.tier1_resolved) {
-      html += `<div class="obs-pill good" style="margin-bottom:10px">RESOLVED in tier 1</div>`;
-      html += `<p style="font-size:13px;color:var(--text-secondary);line-height:1.5">Praetor's runtime ops actions brought the site back to healthy without needing code investigation. Site is now responding 200 on /ops/health.</p>`;
-    } else if (data.tier2_report) {
-      html += `<div class="obs-pill warn" style="margin-bottom:10px">ESCALATED — tier 1 ops did not fully heal</div>`;
-      html += renderTier2Report(data.tier2_report);
-    } else {
-      html += `<div class="obs-pill bad" style="margin-bottom:10px">UNRESOLVED</div>`;
-      html += `<p style="font-size:13px;color:var(--text-secondary)">Tier 1 ops actions did not fully heal the site, and tier 2 was not enabled (no codebase linked).</p>`;
+    // Status row
+    html += `<div class="fr-status-row">
+      <div class="obs-pill ${statusClass}">${escapeHtml(statusLabel)}</div>
+      <div style="font-size:11.5px;color:var(--text-muted)">scenario: <code>${escapeHtml(scenario)}</code></div>
+    </div>`;
+
+    // Praetor's summary
+    html += `<div class="fr-summary">${summary}</div>`;
+
+    // Stats grid
+    html += `<div class="fr-stats">
+      <div class="fr-stat"><div class="lbl">Steps taken</div><div class="val">${stepEvents.length}</div><div class="sub">tier-1 ops actions</div></div>
+      <div class="fr-stat"><div class="lbl">Wall-clock</div><div class="val">${durationS ? durationS.toFixed(1) + 's' : '—'}</div><div class="sub">end-to-end</div></div>
+      <div class="fr-stat"><div class="lbl">Outcome</div><div class="val" style="color:var(--accent-${resolved ? 'green' : (escalated ? 'orange' : 'red')})">${resolved ? '✓ FIXED' : (escalated ? '↗ ESCALATED' : '✗ UNRESOLVED')}</div><div class="sub">${resolved ? '/ops/health = ok' : (escalated ? 'tier-2 surfaced fixes' : 'no tier-2 link')}</div></div>
+      <div class="fr-stat"><div class="lbl">Services touched</div><div class="val">${tags.services.length || 0}</div><div class="sub">${tags.services.length ? tags.services.slice(0,3).join(', ') : 'none'}</div></div>
+    </div>`;
+
+    // Original alert
+    if (alert) {
+      html += `<div class="fr-section">
+        <div class="fr-section-h">⚠ The problem we saw</div>
+        <div class="fr-alert-box">${escapeHtml(alert)}</div>
+      </div>`;
+    }
+
+    // Root cause tags
+    if (tags.cause.length || tags.fix.length || tags.services.length) {
+      html += `<div class="fr-section"><div class="fr-section-h">🏷 Root cause &amp; fix tags</div><div class="fr-tags">`;
+      tags.cause.forEach(t => { html += `<span class="fr-tag tag-cause" title="root cause">${escapeHtml(t)}</span>`; });
+      tags.fix.forEach(t   => { html += `<span class="fr-tag tag-fix"   title="fix mechanism">${escapeHtml(t)}</span>`; });
+      tags.services.forEach(s => { html += `<span class="fr-tag tag-svc" title="affected service">${escapeHtml(s)}</span>`; });
+      html += `</div></div>`;
+    }
+
+    // Resolution path
+    if (path.length) {
+      html += `<div class="fr-section"><div class="fr-section-h">⚙ Resolution path</div><ul class="fr-resolution-list">`;
+      path.forEach(p => { html += `<li><code>${escapeHtml(p)}</code></li>`; });
+      html += `</ul></div>`;
+    }
+
+    // Action breakdown
+    const actEntries = Object.entries(acts).sort((a, b) => b[1] - a[1]);
+    if (actEntries.length) {
+      html += `<div class="fr-section"><div class="fr-section-h">📊 Action breakdown</div><div class="fr-actions-list">`;
+      actEntries.forEach(([k, v]) => {
+        html += `<div class="fr-action-row"><span class="fr-action-name">${escapeHtml(k)}</span><span class="fr-action-count">×${v}</span></div>`;
+      });
+      html += `</div></div>`;
+    }
+
+    // Tier-2 report (if escalated)
+    if (escalated && data.tier2_report) {
+      html += `<div class="fr-section">${renderTier2Report(data.tier2_report)}</div>`;
     }
     // Export-as-PDF button (opens a print-ready report in a new tab).
     // We render real <button>s rather than <a target=_blank> so we can
