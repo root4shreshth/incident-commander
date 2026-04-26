@@ -92,7 +92,14 @@
     const data = await api('POST', '/realtime/connect', { site_url: url });
     $('rt-connect').disabled = false;
     if (!data.connected) {
-      setStatus(`Connection failed — ${data.error || 'unknown error'}`, 'bad');
+      const err = data.error || 'unknown error';
+      let detail = `Connection failed — ${err}`;
+      // If the site doesn't implement /ops/health, suggest the built-in demo target
+      if (/404|not found|failed/i.test(err)) {
+        detail += '. The site needs to expose /ops/health (operator contract). ' +
+                  'Try the "Use built-in demo target" link below — it points at this server\'s own /ops/* endpoints.';
+      }
+      setStatus(detail, 'bad');
       state.connected = false;
       return;
     }
@@ -485,6 +492,16 @@
     document.querySelectorAll('.rt-chaos-btn').forEach(btn => {
       btn.addEventListener('click', () => onInject(btn.dataset.scenario, btn));
     });
+    // "Use built-in demo target" — points at this server's own /ops/* endpoints
+    // so the user can demo Real-Time without deploying a separate site.
+    const builtinLink = $('rt-use-builtin');
+    if (builtinLink) {
+      builtinLink.addEventListener('click', (ev) => {
+        ev.preventDefault();
+        $('rt-site-url').value = window.location.origin;
+        onConnect();
+      });
+    }
     wireCodebaseTabs();
     setStep(1, 'active');
     api('GET', '/realtime/config').then(cfg => {

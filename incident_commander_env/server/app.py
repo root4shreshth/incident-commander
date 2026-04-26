@@ -5,12 +5,40 @@ Exposes POST /reset, POST /step, GET /state endpoints as required by OpenEnv spe
 
 from __future__ import annotations
 
+import json
 import os
 import threading
 import time
 import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+# ---------------------------------------------------------------------------
+# Load .env so optional config (GITHUB_CLIENT_ID, GOOGLE_CLIENT_ID, ...) is
+# picked up without requiring uvicorn to be launched through a wrapper. We
+# only set vars that aren't already in the environment so deployment-time
+# overrides win.
+# ---------------------------------------------------------------------------
+
+def _load_dotenv_if_present() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    env_path = repo_root / ".env"
+    if not env_path.exists():
+        return
+    try:
+        for line in env_path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, value = line.partition("=")
+            key, value = key.strip(), value.strip()
+            if key and not os.getenv(key):
+                os.environ[key] = value
+    except Exception:
+        pass
+
+
+_load_dotenv_if_present()
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -36,6 +64,8 @@ from incident_commander_env.server.incidents import (
     normalize_prometheus,
     webhook_token_check,
 )
+from incident_commander_env.server.ops_endpoints import make_ops_router
+from incident_commander_env.server.integrations import make_integrations_router
 
 STATIC_DIR = Path(__file__).parent / "static"
 
@@ -65,6 +95,19 @@ app.add_middleware(
 # BACKEND env var picks the substrate: "sim" (default), "real", or "code_aware".
 # Same OpenEnv API regardless; only the execution path differs.
 env = IncidentCommanderEnv(backend=get_backend())
+
+# Self-target demo environment — completely separate from `env` above so the
+# Real-Time tab can drive this one through the operator-contract endpoints
+# without trampling the user's interactive Apprentice/Observatory state.
+# This is what makes "point Real-Time at http://127.0.0.1:8000" work without
+# the user having to deploy a separate site that implements /ops/*.
+ops_demo_env = IncidentCommanderEnv(backend=get_backend())
+app.include_router(make_ops_router(ops_demo_env))
+
+# Integrations — GitHub OAuth (real, via device flow), cloud-provider stubs
+# (demo mode — never store credentials server-side), and the adapter generator
+# that produces a praetor_adapter.py the user drops into their own deployment.
+app.include_router(make_integrations_router())
 
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
@@ -339,6 +382,56 @@ def observe_page():
     if page.exists():
         return FileResponse(page)
     return {"error": "observe.html missing — copy it under static/."}
+
+
+@app.get("/dataset/export")
+def dataset_export(format: str = "jsonl"):
+    """Stream every recorded run as a single JSONL feed.
+
+    Lets judges + researchers pull the trajectory dataset directly from the
+    live Space without leaving the page. One JSON object per event from every
+    run under `runs/`, in chronological order. Use with the data-factory
+    pitch: "the env is also the dataset endpoint."
+
+    Query string:
+        format=jsonl (default) — one JSON object per line, newline-separated.
+        format=summary         — one JSON object per *run* (no per-step events).
+    """
+    from fastapi.responses import StreamingResponse
+    try:
+        from training.episode_logger import iter_runs, read_episode
+    except Exception as exc:  # pragma: no cover — defensive
+        def _err():
+            yield json.dumps({"error": f"training extras not installed: {exc}"}) + "\n"
+        return StreamingResponse(_err(), media_type="application/x-ndjson")
+
+    if not RUNS_ROOT.exists():
+        def _empty():
+            yield json.dumps({"error": "runs/ is empty — visit /runs to populate."}) + "\n"
+        return StreamingResponse(_empty(), media_type="application/x-ndjson")
+
+    fmt = (format or "jsonl").lower()
+
+    def _stream():
+        for run_meta in iter_runs(RUNS_ROOT):
+            if fmt == "summary":
+                yield json.dumps({"run_id": run_meta["run_id"], **{
+                    k: run_meta.get(k) for k in ("task_id", "seed", "model", "n_events",
+                                                   "resolved", "score", "steps_used")
+                }}) + "\n"
+                continue
+            target = RUNS_ROOT / run_meta["run_id"] / "episode.jsonl"
+            if not target.exists():
+                continue
+            for event in read_episode(target):
+                event["run_id"] = run_meta["run_id"]
+                yield json.dumps(event, ensure_ascii=False) + "\n"
+
+    headers = {
+        "Content-Disposition": f'attachment; filename="praetor-trajectories-{fmt}.jsonl"',
+        "X-Praetor-Source": "GET /dataset/export",
+    }
+    return StreamingResponse(_stream(), media_type="application/x-ndjson", headers=headers)
 
 
 # ---------------------------------------------------------------------------

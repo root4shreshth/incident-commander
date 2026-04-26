@@ -1,0 +1,17 @@
+{
+  "version": "0.1.0",
+  "n_episodes": 30,
+  "n_raw_rows": 712,
+  "n_sft_rows": 760,
+  "policy": "random_policy(rng_seed=42)",
+  "families": [
+    "oom_crash",
+    "db_pool_exhaustion",
+    "bad_deployment_cascade"
+  ],
+  "seeds_per_family": 10,
+  "difficulty": 0.5,
+  "include_expert": true,
+  "generation_seconds": 0.2594628999941051,
+  "load_snippet": "from datasets import load_dataset\nds = load_dataset('json', data_files={'sft': 'sft.jsonl', 'raw': 'raw.jsonl'})"
+}

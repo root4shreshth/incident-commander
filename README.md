@@ -64,6 +64,23 @@ It is the first OpenEnv-compatible environment for SRE / DevOps work, packaged a
 
 ---
 
+## The data-factory thesis (the throughput claim)
+
+**RL training for SRE has been gated on data, not algorithms.** GRPO and friends need tens of thousands of trajectories per scenario family to converge. A real Kubernetes cluster takes ~60 seconds to spin up, break, and tear down — that's a 167-hour wall to produce 10,000 episodes for a single training run. Microsoft's AIOpsLab requires a live K8s cluster. The SF OpenEnv hackathon winner Noclue trained on a real GKE cluster — heroic, but not throughput-shaped. Production AI SRE tools (NeuBird, Resolve.ai, Datadog Bits AI) hit the same wall and substitute observability data + prompt engineering for actual training.
+
+**Praetor cuts the wall down by five orders of magnitude.** Our deterministic, seeded simulator resets in **~0.5 ms** — roughly **1,900 resets/sec on a laptop**. The same 10,000-trajectory batch that would take 167 hours on real K8s runs in **~5 seconds** on our sim. That's measured (`results/throughput.json`), reproducible (`scripts/benchmark_throughput.py`, no GPU), and it's what makes the rest of the project possible:
+
+| | Real K8s | Praetor sim |
+|---|---|---|
+| Reset time | ~60 s | **0.52 ms** |
+| Resets per second | ~0.017 | **~1,900** |
+| 10,000-trajectory batch | ~167 hours | **~5 seconds** |
+| Step latency | network-bound | **0.16 ms** (~6,400 steps/sec) |
+
+A second deliverable lives at `results/hf_dataset/` — chat-style SFT rows + raw step-level trajectories from 30 random-policy episodes plus the senior-SRE behavioral-clone trajectories, ready to push to a HuggingFace Dataset (`scripts/export_trajectories.py --push-to-hub <repo>`). That's the substrate other researchers can train against without re-running the simulator. We're not competing with NeuBird or Datadog Bits AI on production deployment, and we're not competing with Noclue on real-cluster training. We're **the throughput-optimized substrate underneath them** — the reproducible benchmark that makes those policies trainable at scale.
+
+---
+
 ## The 30-second story
 
 On-call SRE is a $45B market and a multi-billion-token-per-day workload for LLMs that couldn't be benchmarked because there was no public RL environment for it. We built one. The agent receives a PagerDuty-style alert ("payment-service is failing"), investigates a 9-service simulated cluster through 10 typed actions (`read_logs`, `check_metrics`, `restart_service`, …), and is graded by a **6-component verifiable rubric** with no learned reward model — so it cannot be reward-hacked. We trained Qwen2.5-Coder-1.5B with **SFT then GRPO** and the success rate climbs from random-baseline → base-model → SFT → SFT+GRPO across 8 scenario families (6 built-in + 2 community-contributed via YAML). The trained policy then drives a **real deployed site** through the same Backend Protocol — so the agent that learned in simulation also fixes a real outage live in our demo.

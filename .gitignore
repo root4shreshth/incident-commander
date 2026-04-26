@@ -34,3 +34,13 @@ docs/
 PRODUCT_DOCUMENT.md
 coreideation.md
 
+# Intermediate JSONL outputs from scripts/export_trajectories.py (regenerable;
+# the curated parquet/jsonl artifacts in results/hf_dataset/ ARE committed)
+results/dataset_runs/
+
+# Local screenshots and the hackathon's external instruction PDFs (we keep
+# them locally for reference but they're not part of the submission).
+127.0.0.1_*.png
+*.png
+"[External] *.pdf"
+
