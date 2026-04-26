@@ -102,10 +102,13 @@ _t0 = time.monotonic()
 # is dominated by useful info, not pip noise.
 %pip install -q "unsloth[colab-new] @ git+https://github.com/unslothai/unsloth.git" 2>&1 | tail -1
 %pip install -q --no-deps "trl<0.16" "peft>=0.10" "accelerate>=0.30" "bitsandbytes>=0.43" 2>&1 | tail -1
-# transformers pinned <4.50 because newer versions changed the
-# `_get_train_sampler` signature in a way Unsloth's GRPOTrainer override
-# doesn't yet handle (TypeError: takes 1 positional argument but 2 given).
-%pip install -q "transformers>=4.45,<4.50" "datasets>=2.14" "huggingface-hub>=0.20" "matplotlib>=3.7" 2>&1 | tail -1
+# transformers >=4.50.3 because the latest Unsloth (which we install
+# from git below) imports `transformers.models.qwen3` at module load
+# time and refuses to import on older transformers. The version skew
+# this creates with Unsloth's GRPOTrainer (`_get_train_sampler` takes
+# 1 positional arg but 2 are given) is patched at runtime by the
+# defensive monkeypatch in cell 8. Belt was broken; suspenders carry the load.
+%pip install -q "transformers>=4.50.3" "datasets>=2.14" "huggingface-hub>=0.20" "matplotlib>=3.7" 2>&1 | tail -1
 %pip install -q "pydantic>=2.0" "fastapi>=0.104" 2>&1 | tail -1
 
 # Clone (or update) the project so imports like `training.eval_runner` resolve.
@@ -437,20 +440,38 @@ else:
     from trl import GRPOConfig, GRPOTrainer
     from training.grpo_reward import grpo_reward_fn, reset_history
 
-    # Defensive monkeypatch: if the runtime is on transformers >=4.50 (which
-    # calls `sampler_fn(dataset)` with one positional arg) and the running
-    # Unsloth still expects `_get_train_sampler(self)` only, the dataloader
-    # build crashes with a TypeError. We wrap the bound method to swallow
-    # any extra positional/keyword args. No-op if the signatures already match.
-    try:
-        from unsloth_compiled_cache.UnslothGRPOTrainer import _UnslothGRPOTrainer
-        _orig_sampler = _UnslothGRPOTrainer._get_train_sampler
-        def _patched_sampler(self, *args, **kwargs):
-            return _orig_sampler(self)
-        _UnslothGRPOTrainer._get_train_sampler = _patched_sampler
-        print("Applied Unsloth GRPO sampler-signature monkeypatch.")
-    except (ImportError, AttributeError):
-        pass
+    # Defensive monkeypatch: transformers >=4.50 calls `sampler_fn(dataset)`
+    # with one positional arg, but Unsloth's GRPOTrainer override expects
+    # `_get_train_sampler(self)` only — the dataloader build crashes with
+    # `TypeError: takes 1 positional argument but 2 were given`. We wrap
+    # the bound method to swallow any extra positional/keyword args. The
+    # patched class might live in a few different module paths depending on
+    # the Unsloth build, so we try several. No-op if signatures already match.
+    _patched = False
+    for _mod_name in (
+        "unsloth_compiled_cache.UnslothGRPOTrainer",
+        "unsloth.models.rl.UnslothGRPOTrainer",
+        "trl.trainer.grpo_trainer",
+    ):
+        try:
+            import importlib
+            _mod = importlib.import_module(_mod_name)
+            for _attr in ("_UnslothGRPOTrainer", "GRPOTrainer"):
+                _cls = getattr(_mod, _attr, None)
+                if _cls is None or not hasattr(_cls, "_get_train_sampler"):
+                    continue
+                _orig = _cls._get_train_sampler
+                def _wrap(orig=_orig):
+                    def _patched_sampler(self, *args, **kwargs):
+                        return orig(self)
+                    return _patched_sampler
+                _cls._get_train_sampler = _wrap()
+                print(f"Applied GRPO sampler-signature monkeypatch on {_mod_name}.{_attr}")
+                _patched = True
+        except (ImportError, AttributeError):
+            continue
+    if not _patched:
+        print("(GRPO sampler monkeypatch: no matching class found — proceeding without patch)")
 
     reset_history()  # clear sidecar between runs
 
