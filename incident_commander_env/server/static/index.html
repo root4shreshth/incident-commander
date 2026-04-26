@@ -29,15 +29,21 @@
          * Toggled by setting data-theme="light" on <html>. Accent colors stay
          * the same; everything else inverts. */
         :root[data-theme="light"]{
-            --bg-primary:#ffffff;--bg-secondary:#f8fafc;--bg-card:#ffffff;--bg-elevated:#f1f5f9;
-            --border:rgba(15,23,42,0.12);--border-active:rgba(59,130,246,0.45);
-            --text-primary:#0f172a;--text-secondary:#475569;--text-muted:#64748b;
+            /* Backgrounds */
+            --bg-primary:#ffffff;--bg-secondary:#f1f5f9;--bg-card:#ffffff;--bg-elevated:#e2e8f0;
+            /* Borders - darker so cards have a visible edge on white */
+            --border:rgba(15,23,42,0.20);--border-active:rgba(59,130,246,0.55);
+            /* Text - darker greys for proper contrast on white */
+            --text-primary:#0f172a;
+            --text-secondary:#334155;
+            --text-muted:#475569;
+            /* Glows */
             --glow-blue:rgba(59,130,246,0.10);--glow-red:rgba(239,68,68,0.10);--glow-green:rgba(34,197,94,0.10);
-            --nav-bg:rgba(255,255,255,0.88);
-            --hover-overlay:rgba(15,23,42,.04);
-            --hover-overlay-strong:rgba(15,23,42,.07);
-            --hover-border:rgba(15,23,42,.18);
-            --shadow-card:0 1px 3px rgba(15,23,42,.08);
+            --nav-bg:rgba(255,255,255,0.92);
+            --hover-overlay:rgba(15,23,42,.06);
+            --hover-overlay-strong:rgba(15,23,42,.10);
+            --hover-border:rgba(15,23,42,.28);
+            --shadow-card:0 1px 3px rgba(15,23,42,.10);
             color-scheme: light;
         }
         :root[data-theme="light"] body{background:var(--bg-primary)}
@@ -628,9 +634,10 @@
         .hidden{display:none !important}
 
         /* Scenario picker */
-        .picker-head{padding:48px 32px 24px;text-align:center}
-        .picker-head h1{font-size:36px;font-weight:800;letter-spacing:-.5px;margin-bottom:8px}
-        .picker-head p{color:var(--text-secondary);max-width:540px;margin:0 auto;font-size:15px;line-height:1.6}
+        .picker-head{padding:48px 32px 24px;text-align:center;position:relative}
+        .picker-head-row{position:absolute;top:18px;right:32px;display:flex;align-items:center;gap:10px}
+        .picker-head h1{font-family:'Fraunces',Georgia,serif;font-weight:300;font-size:clamp(40px,5vw,56px);letter-spacing:-0.022em;line-height:1.1;margin-bottom:14px;color:var(--text-primary)}
+        .picker-head p{color:var(--text-secondary);max-width:540px;margin:0 auto;font-size:15px;line-height:1.65}
         .picker-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:20px;padding:24px 32px 64px;max-width:1280px;margin:0 auto}
         .picker-reset{margin-top:16px;opacity:.75;font-size:11px}
         .picker-reset:hover{opacity:1;border-color:var(--accent-orange);color:var(--accent-orange)}
@@ -997,12 +1004,6 @@
             <span class="theme-icon-moon" aria-hidden="true">☾</span>
             <span class="theme-icon-sun"  aria-hidden="true">☀</span>
         </button>
-        <button id="tutorial-restart" class="btn btn-outline btn-xs icon-btn" title="Restart tutorial" aria-label="Restart tutorial"></button>
-        <div class="mode-toggle" id="mode-toggle" title="Toggle between Junior (coach on) and Pro (coach off)">
-            <span class="mode-dot"></span>
-            <span>Mode:</span>
-            <span id="mode-label">Junior</span>
-        </div>
         <div id="user-slot"></div>
         <div class="live-badge"><div class="live-dot"></div> Environment Live</div>
     </div>
@@ -1869,6 +1870,13 @@
     <!-- Scenario picker -->
     <div id="scenario-picker">
         <div class="picker-head">
+            <div class="picker-head-row">
+                <div class="mode-toggle" title="Junior shows the AI coach. Pro turns it off.">
+                    <span class="mode-dot"></span>
+                    <span>Mode:</span>
+                    <span class="mode-label">Junior</span>
+                </div>
+            </div>
             <h1>Pick your incident</h1>
             <p>Start with "Your first page" if you're new. Each scenario unlocks the next. Your progress is saved in this browser.</p>
             <button class="btn btn-outline btn-xs picker-reset" id="reset-progress"><span class="inline-ic" id="reset-progress-ic"></span> Reset progress</button>
@@ -1898,6 +1906,11 @@
                         <circle class="ring-fill" id="score-ring-fill" cx="30" cy="30" r="26" stroke-dasharray="163" stroke-dashoffset="163"></circle>
                     </svg>
                     <div class="ring-num"><span id="score-num">0</span><span class="ring-pct">%</span></div>
+                </div>
+                <div class="mode-toggle" title="Junior shows the AI coach. Pro turns it off.">
+                    <span class="mode-dot"></span>
+                    <span>Mode:</span>
+                    <span class="mode-label">Junior</span>
                 </div>
             </div>
 
@@ -2166,7 +2179,7 @@ window.Home = {
 <script src="/static/auth.js?v=4"></script>
 <script src="/static/coach.js?v=4"></script>
 <script src="/static/map.js?v=4"></script>
-<script src="/static/demo.js?v=5"></script>
+<script src="/static/demo.js?v=6"></script>
 <script src="/static/observatory.js?v=3"></script>
 <script src="/static/realtime.js?v=7"></script>
 <script src="/static/integrations.js?v=1"></script>

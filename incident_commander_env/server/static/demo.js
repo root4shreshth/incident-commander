@@ -837,17 +837,20 @@
   // ---------- Global bindings ----------
   function bindGlobal() {
     document.addEventListener('click', (e) => {
-      if (e.target.matches('#mode-toggle') || e.target.closest('#mode-toggle')) {
+      if (e.target.matches('.mode-toggle') || e.target.closest('.mode-toggle')) {
         state.mode = state.mode === 'junior' ? 'pro' : 'junior';
         localStorage.setItem('ic_mode', state.mode);
         document.body.setAttribute('data-mode', state.mode);
-        const lbl = $('#mode-label'); if (lbl) lbl.textContent = state.mode === 'junior' ? 'Junior' : 'Pro';
+        // There may be multiple mode-toggle widgets (e.g. picker-head and
+        // inc-top); update all their labels in one pass.
+        document.querySelectorAll('.mode-label').forEach((el) => {
+          el.textContent = state.mode === 'junior' ? 'Junior' : 'Pro';
+        });
       }
     });
     const backBtn = $('#back-to-picker');
     if (backBtn) backBtn.addEventListener('click', backToPicker);
-    const restartBtn = $('#tutorial-restart');
-    if (restartBtn) restartBtn.addEventListener('click', () => { localStorage.removeItem('ic_tutorial_done'); showTutorial(); });
+    // (tutorial-restart button removed from nav; tutorial replays on first visit only)
     const resetBtn = $('#reset-progress');
     if (resetBtn) resetBtn.addEventListener('click', () => {
       if (!confirm('Reset your training progress? All scenarios will be re-locked.')) return;
