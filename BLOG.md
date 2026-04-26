@@ -59,13 +59,13 @@ Every scenario is parametric. Each `(seed, difficulty)` pair produces a fresh in
 
 ## The bottleneck nobody talks about: data, not algorithms
 
-Other hackathon teams have trained SRE-shaped agents on *real* Kubernetes clusters. That's the right idea - it's the most realistic possible substrate. But there's a catch the published numbers don't dwell on: a real `kubectl rollout undo` plus pod-recreation plus health-stabilization cycle takes roughly **60 seconds**. That's the floor on how fast you can generate one new training trajectory. RL training wants hundreds of thousands of trajectories, sampled across many seeds, with the curriculum visiting each scenario shape repeatedly. The math doesn't work.
+Other hackathon teams have trained SRE-shaped agents on *real* Kubernetes clusters. That's the realistic substrate - but there's a catch the published numbers don't dwell on. A real `kubectl rollout undo` plus pod-recreation plus health-stabilization cycle takes roughly **60 seconds**. RL training wants hundreds of thousands of trajectories. The math doesn't work.
 
-We measured Praetor's simulator on a stock laptop: **1,905 resets per second, 6,425 environment steps per second.** That's a **~114,000× speedup** over real Kubernetes for the inner loop of RL training. Same scenario surface, same reward function, same actions - just deterministic, seeded, and parametric so any `(family, seed, difficulty)` triple regenerates byte-identically. The numbers are committed to `results/throughput.json` and reproducible by running `python scripts/benchmark_throughput.py`.
+Praetor's simulator measured on a stock laptop: **1,905 resets/second, 6,425 environment steps/second** - a **~114,000× speedup** over real Kubernetes for the inner loop of RL. Same scenario surface, same reward function, same actions, just deterministic and seeded so any `(family, seed, difficulty)` triple regenerates byte-identically. Numbers committed to `results/throughput.json`, reproducible via `python scripts/benchmark_throughput.py`.
 
-That speedup is the entire data-factory thesis. *Of course* you should eventually train on real clusters - the Backend Protocol is exactly the seam to do that, and our `WebsiteBackend` already runs the trained policy unchanged against a real Render-deployed FastAPI site. But the hot loop where the agent is figuring out the *shape* of incident response - the part where you need a million reset-step-evaluate cycles - is the part that the simulator makes possible. Anyone who wants to train an SRE agent at the scale RL actually needs is going to need a substrate like this. We're publishing ours.
+That speedup is the entire data-factory thesis. *Of course* you should eventually train on real clusters - the Backend Protocol is exactly the seam to do that, and `WebsiteBackend` already runs the trained policy unchanged against a real deployed site (more on that below). But the hot loop where the agent figures out the *shape* of incident response - the part where you need millions of reset-step-evaluate cycles - is the part the simulator makes possible. We're publishing ours so the next team doesn't have to rebuild it.
 
-The curated trajectory dataset that fell out of this run is on the Hub as `praetor-sre-trajectories` - 760 senior-SRE behavioral-clone rows plus 712 raw step-level rows with full reward breakdowns, ready to drop into TRL or any chat-format SFT loop. Anyone can `pip install datasets && load_dataset(...)` and start training their own policy without ever spinning up a cluster.
+The trajectory dataset that fell out of this run is committed under `results/hf_dataset/` - 760 senior-SRE behavioral-clone rows plus 712 raw step-level rows with full reward breakdowns, ready to drop into TRL or any chat-format SFT loop without ever spinning up a cluster.
 
 ---
 
@@ -96,13 +96,11 @@ These aren't promises. They're tests in `tests/test_reward_hacks.py` that break 
 
 We followed the hackathon's recommended pipeline almost to the letter.
 
-**SFT (supervised fine-tuning) first.** We hand-wrote sixteen ideal trajectories - what a senior SRE actually does when they get paged for each scenario family - and turned them into ~120 chat-format (state, action, rationale) tuples by sampling under multiple seeds. Single-epoch SFT on Qwen2.5-Coder-1.5B, 4-bit quantized via Unsloth, LoRA r=16. About thirty minutes on an A100.
+**SFT (supervised fine-tuning) first.** We hand-wrote senior-SRE ideal trajectories for the six built-in scenario families - what an experienced engineer actually does when they get paged - and turned them into ~120 chat-format (state, action, rationale) tuples by replaying under multiple seeds. Single-epoch SFT on Qwen2.5-Coder-1.5B, 4-bit quantized via Unsloth, LoRA r=16. Roughly thirty minutes on an A100.
 
-**GRPO (Group Relative Policy Optimization) second.** This is the newer of the two trainers in TRL, originally from DeepSeek's R1 work. The trick: instead of asking "is this completion good in absolute terms?" (hard, requires a precise reward function for everything), GRPO compares the rewards within a small group of completions for the same prompt and uses the *relative ranking* as the gradient signal. Less to tune, more stable, cheaper to run. We used four rollouts per prompt, KL=0.04, lr=5e-6, 60 training steps. About forty minutes on an A100.
+**GRPO (Group Relative Policy Optimization) second.** The newer trainer in TRL, originally from DeepSeek's R1 work. Instead of scoring completions in absolute terms, GRPO compares rewards within a small group of completions for the same prompt and uses the *relative ranking* as the gradient signal. Less to tune, more stable, cheaper to run. Four rollouts per prompt, KL=0.04, lr=5e-6, 60 steps. About forty minutes on an A100.
 
-The curriculum ramps difficulty across training. The first third of training is OOM crashes at low difficulty - easy wins to seed the policy with formatting fluency. The middle third introduces DB pool exhaustion at medium difficulty. The final third is the full mix at full difficulty, including the harder bad-deployment cascade where action *ordering* matters and the trap is restarting dependents before rolling back the upstream cause.
-
-The eval protocol is held-out seeds - 10 per family, no overlap with the training distribution - across two conditions: random baseline and SFT+GRPO. That's 60 episodes per condition, 120 total. The full SFT-then-GRPO run, including evaluation and plot generation, fits in roughly 80 minutes on an A100.
+The curriculum ramps difficulty across training - OOM crashes first (easy wins to seed formatting fluency), then DB pool exhaustion, then the full mix including the bad-deployment cascade where action *ordering* matters as much as action choice. The held-out eval is 10 fresh seeds per family with no overlap with training. The full SFT-then-GRPO run, including evaluation and plots, fits in roughly 80 minutes on an A100.
 
 ---
 
@@ -127,37 +125,23 @@ That's our favorite scenario, by the way. Cert expiry is the most embarrassing c
 
 ## What the ceiling looks like (after training)
 
-We trained on the three families with hand-written senior-SRE trajectories - OOM crash, DB pool exhaustion, and bad-deployment cascade - leaving the rest of the family library as out-of-distribution generalization tests for future work. The held-out eval is 10 fresh seeds per family per condition, no overlap with the training distribution. Random vs SFT+GRPO:
+The Colab run is in flight as of submission. The headline numbers populate `results/eval_summary.json` and the three plots below drop into `results/` once it finishes - the public ones are committed to the repo and visible from the Observatory tab as soon as they exist.
 
-| Family | Random | SFT + GRPO | Δ |
-|---|---:|---:|---:|
-| OOM Crash | _filled in after Colab run_ | _filled in after Colab run_ | _filled in after Colab run_ |
-| DB Pool Exhaustion | _filled in after Colab run_ | _filled in after Colab run_ | _filled in after Colab run_ |
-| Bad Deployment Cascade | _filled in after Colab run_ | _filled in after Colab run_ | _filled in after Colab run_ |
-| **Average** | _filled in after Colab run_ | _filled in after Colab run_ | _filled in after Colab run_ |
+The interesting plot to watch is `results/grpo_reward_components.png` - the per-component breakdown across all six reward axes. The signal we expect (and saw on shorter trial runs) is `r_correct_op` rising while `r_penalty` stays flat: the agent doing *more right things*, not *more things in general*. That divergence is the difference between a policy that learned and a policy that just got busier.
 
-The two plots that tell the rest of the story:
-
-- **`results/sft_loss_curve.png`** - SFT loss falling smoothly across ~80 logging points of the supervised epoch. The "behavioral clone learns the format and the canonical action sequence" plot.
-- **`results/grpo_reward_curve.png`** - GRPO mean reward rising across 60 steps. The "policy starts to *prefer* the actions that actually solve the incident over the actions that merely look like they should" plot.
-- **`results/grpo_reward_components.png`** - the per-component breakdown across all six axes of the verifiable reward. The interesting one is `r_correct_op` rising while `r_penalty` stays flat: the agent is doing more right things, not more things in general.
+Until then, the random-baseline floor table above is the honest comparison anchor - 0% success on cert-expiry, 0% on disk-full, 17% on OOM crash by accidental restart. Anything the trained policy beats that floor on, it earned.
 
 ---
 
 ## Sim-to-real, almost for free
 
-Here's the part we're most pleased about. Praetor's env orchestrator never touches the simulated cluster directly. It talks to a `Backend` Protocol with two implementations:
+Praetor's env orchestrator never touches the simulated cluster directly. It talks to a `Backend` Protocol with two implementations - `SimulatedBackend` (in-memory, deterministic, parallelizable for training) and `WebsiteBackend` (HTTP to any deployed site that implements a small operator API). Both produce the same typed `BackendSnapshot`. The trained policy can't tell which one it's running against, which is what makes sim-to-real cheap.
 
-- `SimulatedBackend` - wraps the in-memory Python cluster (fast, deterministic, parallelizable for training)
-- `WebsiteBackend` - talks HTTP to any deployed site that implements a small operator API (`/ops/health`, `/ops/restart`, `/ops/config`, `/ops/break` to inject a deliberate fault, `/ops/heal` to reset)
+To prove this we built a second HuggingFace Space called **SwiftPay** ([shreshthn8n-swiftpay-target.hf.space](https://shreshthn8n-swiftpay-target.hf.space)) - a real deployed payments site that implements the operator contract and exposes three deliberate fault routes. Praetor's third dashboard tab, *Real-Time*, asks for a target URL. You paste SwiftPay's, Praetor probes its `/ops/health` and `/ops/metrics`, **auto-classifies** the active fault from log signatures (no manual scenario picking - that would defeat the demo), and runs the policy. The same trained model fixes a real outage on a real container, with each typed action translated into an actual `POST /ops/restart` or `POST /ops/configure` call.
 
-Both produce the same typed `BackendSnapshot`. The trained policy can't tell which one it's running against - same observation shape, same ten actions, same six-component reward. That decoupling is what makes sim-to-real cheap. We trained on the simulator. The same model then runs unchanged against a real Render-deployed FastAPI site that we vibecoded in twenty minutes. The agent fixes a real outage on a real container, with the agent's actions translated into actual `POST /ops/restart` calls.
+Three things we built to make the result legible to a human operator. First, every step in the live timeline has a **Why this step?** expander that surfaces the policy's reasoning trace - this is an explainable agent, not a black box. Second, when the run completes, a **Final Report** card renders with the status pill, a one-paragraph Praetor narrative summary, a stats grid, color-coded root-cause / fix / service tags, the resolution path, and a per-action-type breakdown. Third, a **📄 Export as PDF** button hits a server-side reportlab pipeline and downloads the whole report as a real `.pdf` - cover page with status, every step with its rationale, footer with run ID on every page. Compliance teams have asked for that artifact for years. Now they get it on every incident.
 
-The dashboard's third tab - Real-Time - is built around this. You paste the URL of a deployed site, Praetor probes its `/ops/health` and `/ops/metrics` and `/ops/logs`, **auto-classifies** the active fault from log signatures (no manual scenario picking - that would defeat the demo), and runs the trained policy. If runtime ops aren't enough, the same dashboard accepts a GitHub repo, an Azure DevOps repo, or a ZIP upload, and the tier-2 escalation module clones the code, greps for the suspect lines, and writes a structured *Code Escalation Report* with a suggested fix.
-
-We also wired up the autonomous monitoring side. There are three webhook endpoints - `/incidents/webhook/pagerduty`, `/incidents/webhook/prometheus`, `/incidents/webhook/generic` - that accept real alert payloads, classify them into our scenario taxonomy using a keyword heuristic, and kick off a run in a background thread. Token-gated via an env var. Once paged, no humans in the loop. The agent investigates, decides, acts, verifies recovery, and writes a structured post-mortem markdown next to the trace.
-
-That's the autonomy story we wanted to tell in a single sentence: **Praetor goes from PagerDuty to verdict without anyone touching a keyboard.**
+The autonomous side is wired to the same machinery. Three webhook endpoints - PagerDuty, Prometheus, and a generic minimal contract - accept real alert payloads, classify them, and kick off a run in a background thread. Token-gated. Once paged, no humans in the loop. **Praetor goes from PagerDuty to verdict without anyone touching a keyboard**, and the verdict is a downloadable PDF next to a JSONL trace next to a markdown post-mortem.
 
 ---
 
@@ -173,30 +157,24 @@ That's the autonomy story we wanted to tell in a single sentence: **Praetor goes
 
 ## What we'd build next
 
-Six concrete capabilities sit just past the current build, each a specific extension rather than a rewrite. Two of them are about substrate - where the agent runs. Two are about what the agent perceives. Two are about how the action surface and the scenario library grow.
+Six concrete extensions, none a rewrite. Two are about *substrate*, two about *perception*, two about *the action surface and curriculum*.
 
-**Kubernetes and cloud adapters.** Today's substrates are `SimulatedBackend` (in-memory Python), `WebsiteBackend` (HTTP `/ops/*`), and `RealBackend` (docker compose). What's missing for production deployment is a `KubernetesBackend` that maps the typed actions to `kubectl rollout restart`, `kubectl scale`, `kubectl patch`, and equivalents - plus an `AWSBackend` (or `GCPBackend`) wrapping ECS / Cloud Run / Lambda. The Backend Protocol was designed exactly for this: each new substrate is a self-contained adapter that doesn't touch the agent or the reward function. This is the path from "demo on a laptop" to "actual production deployment."
+**Substrate.** A `KubernetesBackend` mapping the typed actions to `kubectl rollout restart` / `scale` / `patch`, and an `AWSBackend` wrapping ECS / Cloud Run / Lambda. The Backend Protocol was designed for exactly this - each new substrate is a self-contained adapter that doesn't touch the agent or the reward. Plus a watch-mode that polls `/ops/health` across a fleet and triggers proactive investigations when metrics drift, turning Praetor from incident commander into always-on duty officer.
 
-**Continuous fleet monitoring.** Today Praetor reacts - a webhook fires, the agent runs. A watch-mode that polls `/ops/health` across a fleet on a schedule and proactively triggers an investigation when metrics drift past a baseline would be the difference between responding to incidents and preventing them. Same agent, same actions, same reward function, just a different invocation pattern at the front. Bolt this on the front and Praetor goes from "incident commander" to "always-on duty officer."
+**Perception.** A learned fault classifier replacing today's keyword heuristics, trained on the `(logs, metrics) → scenario_family` rows already exported under `results/hf_dataset/`. And multi-cluster / multi-region topologies for the curriculum - region-eviction, BGP-flap, cross-region database-split - the shapes that took down Facebook in 2021 and Cloudflare in 2022.
 
-**Multi-cluster, multi-region topologies.** The current simulator is a single 9-service cluster. Production at scale runs multi-region, with DNS routing, cross-cluster dependencies, and regional failover. A topology generator that synthesizes multi-region setups, plus a class of region-eviction / BGP-flap / multi-region database-split scenarios, would extend the curriculum into the kind of incidents that take down companies for a day instead of an hour. The 2021 Facebook BGP outage and the 2022 Cloudflare regional incident are the patterns we have in mind.
-
-**A learned fault classifier.** Right now the auto-classifier in the Real-Time tab is keyword heuristics - `"oom" in text`, `"pool exhausted" in text`, and so on. Training a small classifier head on `(logs, metrics) → scenario_family` from the trajectory dataset would be more robust to log-format drift, and would generalize to scenarios whose exact wording the heuristics haven't seen. The dataset to train it on is already exported under `results/hf_dataset/`.
-
-**A discriminated typed-action union.** Today an action's `parameters` field is `Dict[str, Any]`. It's flexible but compile-time-unsafe - a typo in a key name surfaces only at runtime, and the spec in `openenv.yaml` has to carry the schema redundantly. Replacing it with per-action Pydantic sub-models would give every action a strict signature, surface bad parameter names at validation time, and let the OpenEnv YAML be auto-generated from the type annotations. It's a meaningful refactor that touches the action handlers, the scenarios' `is_correct_op` checks, and a slice of the test suite - but it's the right shape for a project this size to grow into.
-
-**A larger scenario library, contributed by people who have actually been on call.** The YAML DSL is the seed. Anyone can convert a real post-mortem into a reproducible RL scenario without writing Python - two examples already ship (DNS failure: the AWS Route53 / Cloudflare 2019 / Slack 2022 pattern; rate-limit exhaustion: the Twitter 2023 launch pattern). The right finished form of this project is hundreds of scenarios contributed by SREs who lived through the original outages, each one a precise reproduction of a category of failure that's bitten enough teams to be worth training against.
+**Action surface and curriculum.** Replacing `parameters: Dict[str, Any]` with per-action Pydantic sub-models so the OpenEnv YAML auto-generates from type annotations and bad keys surface at validation time. And a hundred more scenarios contributed via the YAML DSL by people who have actually been on call - the right finished form of this project is a library of precise reproductions of every category of failure that's bitten enough teams to be worth training against.
 
 ---
 
 ## If you want to try it
 
-- **Run the env locally:** `git clone` the repo and `uv run uvicorn incident_commander_env.server.app:app --port 8000`. Open the dashboard. Click **Apprentice** and try solving an OOM crash with the AI coach watching over your shoulder.
-- **Watch a recorded trained-agent run:** Click **Observatory**. Pick a run. Hit Replay.
-- **Connect a real deployed site:** Click **Real-Time**. Paste the URL. Let Praetor classify the fault and fix it.
-- **Read the code:** [github.com/root4shreshth/incident-commander](https://github.com/root4shreshth/incident-commander)
-- **Reproduce the training:** [Open `train_grpo.ipynb` in Colab](https://colab.research.google.com/github/root4shreshth/incident-commander/blob/main/training/train_grpo.ipynb) - runtime A100, Run All, walk away for ~80 minutes.
-- **Pull the trajectory dataset:** `load_dataset("json", data_files="https://huggingface.co/datasets/<your-user>/praetor-sre-trajectories/resolve/main/sft.jsonl")` - 760 senior-SRE behavioral-clone rows + 712 raw step-level rows from the simulator.
+- **Live demo, no setup:** open [hype4raj-incident-commander-env.hf.space](https://hype4raj-incident-commander-env.hf.space) → tab **3 Real-Time** → paste `https://shreshthn8n-swiftpay-target.hf.space` → Connect → Run agent. Watch the timeline, read the Final Report, click 📄 Export as PDF.
+- **Try a scenario yourself:** same Space, tab **2 Apprentice**. Pick "Your first page," solve an OOM crash with the AI coach watching over your shoulder.
+- **Replay a trained-agent run:** same Space, tab **1 Observatory**. Pick a run from the dropdown, hit Replay.
+- **Read the code:** [github.com/root4shreshth/incident-commander](https://github.com/root4shreshth/incident-commander) - the [End-to-end workflow](https://github.com/root4shreshth/incident-commander#end-to-end-workflow---the-path-a-judge-actually-walks) section in the README is the full step-by-step.
+- **Reproduce the training:** [Open `train_grpo.ipynb` in Colab](https://colab.research.google.com/github/root4shreshth/incident-commander/blob/main/training/train_grpo.ipynb), A100 runtime, Run All, walk away for ~80 minutes.
+- **Pull the trajectory dataset:** 760 senior-SRE behavioral-clone rows + 712 raw step-level rows under `results/hf_dataset/` - drop into TRL or any chat-format SFT loop.
 
 ---
 
