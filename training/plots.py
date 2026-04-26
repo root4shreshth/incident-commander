@@ -49,7 +49,7 @@ def make_reward_curve(steps: List[int], rewards: List[float], window: int = 20):
         ax.plot(steps, smoothed, color="#1d4ed8", lw=2, label=f"moving avg ({window})")
     ax.set_xlabel("training step")
     ax.set_ylabel("episode total reward")
-    ax.set_title("GRPO training reward")
+    ax.set_title("Training reward")
     ax.grid(alpha=0.3)
     ax.legend(loc="lower right")
     fig.tight_layout()
@@ -77,7 +77,7 @@ def make_reward_components(
     ax.axhline(0, color="black", lw=0.5, alpha=0.5)
     ax.set_xlabel("training step")
     ax.set_ylabel("component reward (running avg)")
-    ax.set_title("Reward components during GRPO training")
+    ax.set_title("Reward components during training")
     ax.grid(alpha=0.3)
     ax.legend(loc="upper left", ncols=3, fontsize=9)
     fig.tight_layout()
@@ -94,7 +94,7 @@ def make_success_bars(
         {"random": {"oom_crash": {"success_rate": 0.13, ...}, ...},
          "base":   {...},
          "sft":    {...},
-         "sft+grpo": {...}}
+         "sft":    {...}}
     """
     plt = _lazy_mpl()
     conditions = list(reports_by_condition.keys())
@@ -106,8 +106,7 @@ def make_success_bars(
     cond_colors = {
         "random":   "#94a3b8",
         "base":     "#3b82f6",
-        "sft":      "#a855f7",
-        "sft+grpo": "#22c55e",
+        "sft":      "#22c55e",
     }
     for ci, cond in enumerate(conditions):
         rates = []

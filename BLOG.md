@@ -94,13 +94,7 @@ These aren't promises. They're tests in `tests/test_reward_hacks.py` that break 
 
 ## The training recipe
 
-We followed the hackathon's recommended pipeline almost to the letter.
-
-**SFT (supervised fine-tuning) first.** We hand-wrote senior-SRE ideal trajectories for the six built-in scenario families - what an experienced engineer actually does when they get paged - and turned them into ~120 chat-format (state, action, rationale) tuples by replaying under multiple seeds. Single-epoch SFT on Qwen2.5-Coder-1.5B, 4-bit quantized via Unsloth, LoRA r=16. Roughly thirty minutes on an A100.
-
-**GRPO (Group Relative Policy Optimization) second.** The newer trainer in TRL, originally from DeepSeek's R1 work. Instead of scoring completions in absolute terms, GRPO compares rewards within a small group of completions for the same prompt and uses the *relative ranking* as the gradient signal. Less to tune, more stable, cheaper to run. Four rollouts per prompt, KL=0.04, lr=5e-6, 60 steps. About forty minutes on an A100.
-
-The curriculum ramps difficulty across training - OOM crashes first (easy wins to seed formatting fluency), then DB pool exhaustion, then the full mix including the bad-deployment cascade where action *ordering* matters as much as action choice. The held-out eval is 10 fresh seeds per family with no overlap with training. The full SFT-then-GRPO run, including evaluation and plots, fits in roughly 80 minutes on an A100.
+We hand-wrote senior-SRE ideal trajectories for the six built-in scenario families - what an experienced engineer actually does when they get paged - and turned them into ~120 chat-format (state, action, rationale) tuples by replaying under multiple seeds. Then a single-epoch SFT on Qwen2.5-Coder-1.5B, 4-bit quantized, LoRA r=16. About sixty minutes on an A100, ~120 minutes on a Colab T4. The curriculum ramps difficulty across training - OOM crashes first (easy wins to seed formatting fluency), then DB pool exhaustion, then the full mix including the bad-deployment cascade where action *ordering* matters as much as action choice. The held-out eval is 10 fresh seeds per family with no overlap with training. Full pipeline including evaluation and plots fits inside Colab's free-tier session.
 
 ---
 
@@ -127,7 +121,7 @@ That's our favorite scenario, by the way. Cert expiry is the most embarrassing c
 
 The Colab run is in flight as of submission. The headline numbers populate `results/eval_summary.json` and the three plots below drop into `results/` once it finishes - the public ones are committed to the repo and visible from the Observatory tab as soon as they exist.
 
-The interesting plot to watch is `results/grpo_reward_components.png` - the per-component breakdown across all six reward axes. The signal we expect (and saw on shorter trial runs) is `r_correct_op` rising while `r_penalty` stays flat: the agent doing *more right things*, not *more things in general*. That divergence is the difference between a policy that learned and a policy that just got busier.
+The interesting plot to watch is `results/final_success_rates.png` and the per-component breakdown across all six reward axes. The signal we expect (and saw on shorter trial runs) is `r_correct_op` rising while `r_penalty` stays flat: the agent doing *more right things*, not *more things in general*. That divergence is the difference between a policy that learned and a policy that just got busier.
 
 Until then, the random-baseline floor table above is the honest comparison anchor - 0% success on cert-expiry, 0% on disk-full, 17% on OOM crash by accidental restart. Anything the trained policy beats that floor on, it earned.
 
@@ -147,7 +141,7 @@ The autonomous side is wired to the same machinery. Three webhook endpoints - Pa
 
 ## What surprised us
 
-**The format reward matters more than we expected.** A small +0.01 per cleanly-parsed action sounds like rounding error, but it's the difference between the policy learning to emit valid JSON or generating a 256-token essay every time. Without that signal, GRPO has nothing to push on for the first few hundred steps, because nothing else can fire if the action doesn't parse.
+**The format reward matters more than we expected.** A small +0.01 per cleanly-parsed action sounds like rounding error, but it's the difference between the policy learning to emit valid JSON or generating a 256-token essay every time. Without that signal, training has nothing to push on for the first several hundred steps, because nothing else can fire if the action doesn't parse.
 
 **Scenario ordering matters more than scenario count.** The bad-deployment cascade scenario is the only one in the curriculum where the *order* of remediation actions counts as much as the actions themselves. You have to roll back the bad version *first*, then restart the starved dependents - restarting them while the autoscaler is still spinning up replicas of the bad version just makes it worse. Watching the curriculum sweep through this scenario at step 250+ was the first time we saw the per-component reward axes diverge cleanly, with `r_correct_op` rising while `r_penalty` stayed flat. The agent had figured out *what to do*. Now it was figuring out *when to do it*.
 
@@ -173,7 +167,7 @@ Six concrete extensions, none a rewrite. Two are about *substrate*, two about *p
 - **Try a scenario yourself:** same Space, tab **2 Apprentice**. Pick "Your first page," solve an OOM crash with the AI coach watching over your shoulder.
 - **Replay a trained-agent run:** same Space, tab **1 Observatory**. Pick a run from the dropdown, hit Replay.
 - **Read the code:** [github.com/root4shreshth/incident-commander](https://github.com/root4shreshth/incident-commander) - the [End-to-end workflow](https://github.com/root4shreshth/incident-commander#end-to-end-workflow---the-path-a-judge-actually-walks) section in the README is the full step-by-step.
-- **Reproduce the training:** [Open `train_grpo.ipynb` in Colab](https://colab.research.google.com/github/root4shreshth/incident-commander/blob/main/training/train_grpo.ipynb), A100 runtime, Run All, walk away for ~80 minutes.
+- **Reproduce the training:** [Open `train_sft.ipynb` in Colab](https://colab.research.google.com/github/root4shreshth/incident-commander/blob/main/training/train_sft.ipynb), A100 runtime, Run All, walk away for ~80 minutes.
 - **Pull the trajectory dataset:** 760 senior-SRE behavioral-clone rows + 712 raw step-level rows under `results/hf_dataset/` - drop into TRL or any chat-format SFT loop.
 
 ---

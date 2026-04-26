@@ -24,11 +24,6 @@ from training.eval_runner import (
     random_policy,
     run_episode,
 )
-from training.grpo_reward import (
-    get_recent_breakdowns,
-    grpo_reward_fn,
-    reset_history,
-)
 
 
 # ---------------------------------------------------------------------------
@@ -174,72 +169,6 @@ class TestCurriculum:
         cur = Curriculum()
         s = cur.schedule_summary()
         assert len(s) == len(DEFAULT_SCHEDULE)
-
-
-# ---------------------------------------------------------------------------
-# grpo_reward.py
-# ---------------------------------------------------------------------------
-
-class TestGRPOReward:
-    def setup_method(self, _method):
-        reset_history()
-
-    def test_correct_completion_scores_higher_than_garbage(self):
-        # OOM scenario at seed=2 picks payment-service as the target (parametric).
-        # The correct fix is restart_service payment-service with memory > 256.
-        good = json.dumps({
-            "action_type": "restart_service",
-            "target_service": "payment-service",
-            "parameters": {"memory_limit": "1024Mi"},
-        })
-        bad = "this is not json"
-
-        rewards = grpo_reward_fn(
-            prompts=[None, None],
-            completions=[good, bad],
-            task_id=["oom_crash", "oom_crash"],
-            seed=[2, 2],   # seed=2 -> target=payment-service
-            difficulty=[0.5, 0.5],
-        )
-        assert len(rewards) == 2
-        # The correct fix gets a meaningfully higher reward than the fallback
-        assert rewards[0] > rewards[1]
-
-    def test_breakdowns_recorded_for_each_completion(self):
-        completions = [
-            json.dumps({"action_type": "list_services", "target_service": None, "parameters": {}}),
-            json.dumps({"action_type": "read_logs", "target_service": "payment-service", "parameters": {}}),
-        ]
-        grpo_reward_fn(
-            prompts=[None] * 2,
-            completions=completions,
-            task_id=["oom_crash"] * 2,
-            seed=[1] * 2,
-            difficulty=[0.5] * 2,
-        )
-        bds = get_recent_breakdowns()
-        assert len(bds) == 2
-
-    def test_handles_chat_message_completion_format(self):
-        # GRPOTrainer can hand list-of-message-dicts; we should extract the assistant content
-        completion = [
-            {"role": "system", "content": "..."},
-            {"role": "user", "content": "..."},
-            {"role": "assistant", "content": json.dumps({
-                "action_type": "list_services",
-                "target_service": None,
-                "parameters": {},
-            })},
-        ]
-        rewards = grpo_reward_fn(
-            prompts=[None],
-            completions=[completion],
-            task_id=["oom_crash"],
-            seed=[1],
-            difficulty=[0.5],
-        )
-        assert len(rewards) == 1
-        assert rewards[0] != 0.0  # at least r_format should fire
 
 
 # ---------------------------------------------------------------------------

@@ -35,5 +35,5 @@
       "avg_steps_used": 16.0
     }
   },
-  "note": "Random-policy floor across all 6 scenario families. The trained conditions (SFT, SFT+GRPO) are produced by running training/train_grpo.ipynb on Colab \u2014 those numbers replace this file's contents post-run."
+  "note": "Random-policy floor across all 6 scenario families. The trained-condition (SFT) numbers are produced by running training/train_sft.ipynb on Colab and replace this file's contents post-run."
 }

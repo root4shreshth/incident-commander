@@ -1089,7 +1089,7 @@
                 <div class="col">
                     <h3>What Praetor is</h3>
                     <p>An autonomous incident commander. Once paged, Praetor investigates with a typed action vocabulary (10 SRE-shaped actions), decides what to fix using the trained policy, executes via the same Backend Protocol that the simulator uses, verifies recovery, and escalates to <em>code investigation</em> if runtime ops aren't enough.</p>
-                    <p>Trained with the hackathon's recommended recipe: SFT warm-start from senior-SRE behavioral-clone trajectories, then GRPO fine-tuning over a six-axis verifiable reward. Same policy runs against the simulator, against a real deployed site, and against the codebase.</p>
+                    <p>Trained with SFT on senior-SRE behavioral-clone trajectories and graded by a six-axis verifiable reward function. The same policy runs against the simulator, against a real deployed site, and against the codebase.</p>
                 </div>
             </div>
         </div>
@@ -1113,9 +1113,9 @@
                 </div>
                 <div class="ft-col">
                     <h5>Reproduce</h5>
-                    <a href="https://colab.research.google.com/github/root4shreshth/incident-commander/blob/main/training/train_grpo.ipynb" target="_blank" rel="noopener">Open Colab ↗</a>
+                    <a href="https://colab.research.google.com/github/root4shreshth/incident-commander/blob/main/training/train_sft.ipynb" target="_blank" rel="noopener">Open Colab ↗</a>
                     <a href="https://github.com/root4shreshth/incident-commander/blob/main/README.md" target="_blank" rel="noopener">Full write-up ↗</a>
-                    <a href="https://github.com/root4shreshth/incident-commander/blob/main/training/train_grpo.ipynb" target="_blank" rel="noopener">Notebook source ↗</a>
+                    <a href="https://github.com/root4shreshth/incident-commander/blob/main/training/train_sft.ipynb" target="_blank" rel="noopener">Notebook source ↗</a>
                     <a href="#" onclick="switchTab('observatory');return false;">Recorded runs</a>
                 </div>
                 <div class="ft-col">
@@ -1577,7 +1577,7 @@
     <div class="offer-wrap">
         <div class="offer-hero">
             <h1 class="offer-h1">An <span class="em">end-to-end</span><br>SRE training system,<br>not just an environment.</h1>
-            <p class="offer-h1-sub">A full RL substrate, a behavioral-clone seed dataset, an SFT+GRPO training notebook, an interactive observability dashboard, a sim-to-real bridge, and a tier-2 code escalation module - packaged as one product.</p>
+            <p class="offer-h1-sub">A full RL substrate, a behavioral-clone seed dataset, an SFT training notebook, an interactive observability dashboard, a sim-to-real bridge, and a tier-2 code escalation module - packaged as one product.</p>
         </div>
 
         <div class="home-section-h">Built for three audiences</div>
@@ -1590,7 +1590,7 @@
                     <li>OpenEnv-compatible spec with full <code>action_space</code> / <code>observation_space</code> declarations</li>
                     <li>Six independent reward components - RLVR with no learned reward model to game</li>
                     <li>Parametric scenario families with seed-deterministic trajectories</li>
-                    <li>Out-of-the-box SFT + GRPO Colab notebook (Qwen2.5-Coder-1.5B, 4-bit LoRA via Unsloth)</li>
+                    <li>Out-of-the-box SFT Colab notebook (Qwen2.5-Coder-1.5B, 4-bit LoRA, runs on Colab T4 free tier)</li>
                     <li>Anti-reward-hacking regression tests pinning the four common exploits</li>
                 </ul>
             </div>
@@ -1667,9 +1667,9 @@
                         <td>9 tests in <code>test_observe_mode.py</code></td>
                     </tr>
                     <tr>
-                        <td>Training pipeline (SFT → GRPO)</td>
-                        <td><code>training/train_grpo.ipynb</code></td>
-                        <td>20 plumbing tests in <code>test_training_modules.py</code></td>
+                        <td>Training pipeline (SFT)</td>
+                        <td><code>training/train_sft.ipynb</code></td>
+                        <td>17 plumbing tests in <code>test_training_modules.py</code></td>
                     </tr>
                 </tbody>
             </table>
@@ -1691,8 +1691,8 @@
                 </div>
                 <div class="stack-card">
                     <div class="layer">Training</div>
-                    <h4>HuggingFace TRL · Unsloth</h4>
-                    <p>SFTTrainer + GRPOTrainer, 4-bit Qwen2.5-Coder-1.5B with LoRA r=16. Self-contained Colab.</p>
+                    <h4>HuggingFace TRL · PEFT · bitsandbytes</h4>
+                    <p>SFTTrainer, 4-bit Qwen2.5-Coder-1.5B with LoRA r=16. Self-contained Colab notebook runs on free T4.</p>
                 </div>
                 <div class="stack-card">
                     <div class="layer">Sim-to-real</div>

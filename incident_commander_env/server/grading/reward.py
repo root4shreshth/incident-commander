@@ -104,7 +104,7 @@ def compute_step_breakdown_scaled(
     """Compute the per-step `RewardBreakdown`.
 
     Public API for callers that want the per-component breakdown (env,
-    GRPOTrainer reward function, dashboard observability). Legacy callers
+    training reward function, dashboard observability). Legacy callers
     use `compute_step_reward` and get a flat float.
     """
     ctx = EpisodeContext(

@@ -5,10 +5,10 @@ functions, not just one"* to defeat reward hacking. Each component below is a
 pure function `(ActionRecord, EpisodeContext) -> float`, isolated from the
 others, and unit-testable in three lines.
 
-The aggregate signal is `RewardBreakdown.total()`. TRL's GRPOTrainer logs each
-component to wandb separately - that's how you get the "reward components
-diverging during training" plot which is the strongest visual evidence of
-non-trivial learning.
+The aggregate signal is `RewardBreakdown.total()`. The training loop logs each
+component separately - that's how you get the "reward components diverging
+during training" plot which is the strongest visual evidence of non-trivial
+learning.
 
 Component table:
 

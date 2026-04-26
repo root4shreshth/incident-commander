@@ -33,7 +33,7 @@ tags:
 | **GitHub repository** | https://github.com/root4shreshth/incident-commander |
 | **Live HuggingFace Space (Praetor)** | https://hype4raj-incident-commander-env.hf.space |
 | **Live target site for the Real-Time demo (SwiftPay)** | https://shreshthn8n-swiftpay-target.hf.space |
-| **Training notebook (Colab)** | [Open in Colab ↗](https://colab.research.google.com/github/root4shreshth/incident-commander/blob/main/training/train_grpo.ipynb) · source: [`training/train_grpo.ipynb`](training/train_grpo.ipynb) |
+| **Training notebook (Colab)** | [Open in Colab ↗](https://colab.research.google.com/github/root4shreshth/incident-commander/blob/main/training/train_sft.ipynb) · source: [`training/train_sft.ipynb`](training/train_sft.ipynb) |
 | **Trained LoRA adapter** | populated after training run completes |
 | **90-second video walkthrough** | populated after recording |
 | **Blog post** | source: [`BLOG.md`](BLOG.md) · live URL added on HF: `https://huggingface.co/blog/<USERNAME>/praetor-incident-commander` |
@@ -166,9 +166,9 @@ Produces `runs/<run_id>/episode.jsonl` traces (replayable in Observatory) and an
 
 ### Train (Colab - 1 GPU, ~6 hours wall on A100)
 
-Open [`training/train_grpo.ipynb`](training/train_grpo.ipynb) in Colab via this URL pattern:
+Open [`training/train_sft.ipynb`](training/train_sft.ipynb) in Colab via this URL pattern:
 
-> **https://colab.research.google.com/github/root4shreshth/incident-commander/blob/main/training/train_grpo.ipynb**
+> **https://colab.research.google.com/github/root4shreshth/incident-commander/blob/main/training/train_sft.ipynb**
 
 Runtime → T4 (free tier) or A100 → Run all. The notebook is self-contained: pip install, clone repo, SFT (Qwen2.5-Coder-1.5B with LoRA r=16 via Unsloth), eval against the 6-component reward, plots, push LoRA to HF Hub. Results land in `/content/results/`.
 
@@ -487,7 +487,7 @@ The schedule sampler draws `(family, difficulty)` per training step.
 
 ### Eval results
 
-The **random-baseline floor** is committed today; the trained-condition rows (Base / SFT) get appended to the same files when [`train_grpo.ipynb`](training/train_grpo.ipynb) runs on a GPU.
+The **random-baseline floor** is committed today; the trained-condition rows (Base / SFT) get appended to the same files when [`train_sft.ipynb`](training/train_sft.ipynb) runs on a GPU.
 
 | Condition | OOM Crash | DB Pool | Bad Deploy | Disk Full | Slow Query | Cert Expiry | Average |
 |---|---:|---:|---:|---:|---:|---:|---:|
@@ -665,11 +665,10 @@ training/
   episode_logger.py                    # JSONL writer / reader for /watch
   postmortem_writer.py                 # auto-generates postmortem.md
   curriculum.py                        # 3-phase difficulty schedule
-  grpo_reward.py                       # TRL reward fn wrapping 6-component breakdown
   code_investigator.py                 # tier-2: clone, grep, propose_patch,
                                        # apply_patch, run_tests, open_pull_request
   plots.py                             # matplotlib helpers (lazy-imported)
-  train_grpo.ipynb                     # Self-contained Colab notebook
+  train_sft.ipynb                      # Self-contained Colab notebook
 tests/
   test_reward_components.py            # 29 per-component tests
   test_reward_hacks.py                 # 15 regression tests for the 4 exploits
@@ -785,7 +784,7 @@ Built for the **Meta OpenEnv Hackathon · April 2026** by **Team MetaMorphs**.
 | See the live target site (SwiftPay) | https://shreshthn8n-swiftpay-target.hf.space |
 | Read the code | https://github.com/root4shreshth/incident-commander |
 | Read the blog post | source: [`BLOG.md`](BLOG.md) · live URL added on HF: `https://huggingface.co/blog/<USERNAME>/praetor-incident-commander` |
-| Run the training | [Open `train_grpo.ipynb` in Colab](https://colab.research.google.com/github/root4shreshth/incident-commander/blob/main/training/train_grpo.ipynb) |
+| Run the training | [Open `train_sft.ipynb` in Colab](https://colab.research.google.com/github/root4shreshth/incident-commander/blob/main/training/train_sft.ipynb) |
 | **Follow the end-to-end demo** | [§ End-to-end workflow](#end-to-end-workflow---the-path-a-judge-actually-walks) |
 | Watch a recorded trained-agent run | Live env → tab **1 Observatory** |
 | Try solving an incident yourself | Live env → tab **2 Apprentice** |

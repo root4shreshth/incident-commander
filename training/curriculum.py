@@ -1,4 +1,4 @@
-"""Curriculum scheduler for GRPO training.
+"""Curriculum scheduler for staged training.
 
 The hackathon docs explicitly recommend "easy tasks with short horizons,
 medium with branching, harder only after the model gets non-zero reward".

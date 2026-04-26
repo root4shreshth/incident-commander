@@ -1,7 +1,7 @@
 """Generate the baseline plot suite for the README + blog.
 
 We don't have GPU access here, so the *trained* condition curves can only be
-produced by running `training/train_grpo.ipynb` on Colab. What we CAN produce
+produced by running `training/train_sft.ipynb` on Colab. What we CAN produce
 right now - and what's worth committing - is a real measurement of the
 random-policy floor across all 6 scenario families × 30 seeds.
 
@@ -16,8 +16,8 @@ That gives the README + blog four useful artifacts:
   results/baseline_summary.json             - machine-readable numbers
 
 Honest framing: these are the FLOOR every trained condition has to beat.
-When `train_grpo.ipynb` runs on A100, the same plot files get re-rendered
-with the SFT and SFT+GRPO conditions appended.
+When `train_sft.ipynb` runs on A100, the same plot files get re-rendered
+with the SFT condition appended.
 
 Usage:
   uv run python scripts/generate_baseline_plots.py
@@ -151,9 +151,9 @@ def main() -> None:
         },
         "note": (
             "Random-policy floor across all 6 scenario families. "
-            "The trained conditions (SFT, SFT+GRPO) are produced by running "
-            "training/train_grpo.ipynb on Colab - those numbers replace this "
-            "file's contents post-run."
+            "The trained-condition (SFT) numbers are produced by running "
+            "training/train_sft.ipynb on Colab and replace this file's "
+            "contents post-run."
         ),
     }
     with (out_dir / "baseline_summary.json").open("w", encoding="utf-8") as f:

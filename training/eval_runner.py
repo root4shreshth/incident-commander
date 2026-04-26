@@ -1,8 +1,8 @@
 """Eval runner for IncidentCommanderEnv.
 
-Runs N episodes against a configurable policy (random, base model, SFT,
-SFT+GRPO) and returns a structured `EvalReport` with the numbers that go
-into the README's results table:
+Runs N episodes against a configurable policy (random, base model, SFT)
+and returns a structured `EvalReport` with the numbers that go into the
+README's results table:
 
   - success_rate (per scenario family)
   - avg_score (per family)
@@ -49,7 +49,7 @@ class EpisodeRecord:
 @dataclass
 class EvalReport:
     """Aggregated metrics across N episodes per scenario family."""
-    condition_name: str  # "random" | "base" | "sft" | "sft+grpo"
+    condition_name: str  # "random" | "base" | "sft"
     n_episodes: int
     by_family: Dict[str, Dict[str, Any]] = field(default_factory=dict)
     episodes: List[EpisodeRecord] = field(default_factory=list)
