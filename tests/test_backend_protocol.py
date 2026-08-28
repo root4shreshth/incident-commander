@@ -28,6 +28,10 @@ from incident_commander_env.server.backends import (
 )
 from incident_commander_env.server.environment import IncidentCommanderEnv
 from incident_commander_env.server.scenarios.scenario_oom_crash import OOMCrashScenario
+from incident_commander_env.server.simulation.cluster import DEFAULT_SERVICES
+
+
+N_DEFAULT_SERVICES = len(DEFAULT_SERVICES)
 
 
 # ---------------------------------------------------------------------------
@@ -50,8 +54,8 @@ class TestSimulatedBackendContract:
         be.reset(scenario, seed=42)
         snap = be.snapshot()
         assert isinstance(snap, BackendSnapshot)
-        # 9 default services in the simulated cluster
-        assert len(snap.services) == 9
+        # All default services present in the simulated cluster
+        assert len(snap.services) == N_DEFAULT_SERVICES
         # Every service is a typed ServiceSnapshot
         for name, svc in snap.services.items():
             assert isinstance(svc, ServiceSnapshot)
@@ -74,7 +78,7 @@ class TestSimulatedBackendContract:
         obs = be.execute(action, scenario)
         assert obs.error is None
         assert obs.services_summary is not None
-        assert len(obs.services_summary) == 9
+        assert len(obs.services_summary) == N_DEFAULT_SERVICES
 
     def test_execute_with_unknown_action_returns_typed_error(self):
         be = SimulatedBackend()

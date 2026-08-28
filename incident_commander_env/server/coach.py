@@ -111,6 +111,71 @@ LEARNING_CONTEXT: Dict[str, Dict[str, Any]] = {
         "est_minutes": 8,
         "prerequisite": "oom_crash",
     },
+    # --- Payments-industry scenarios (Razorpay-shaped) ---
+    "payment_gateway_timeout": {
+        "skill_tag": "Payments partner is flapping",
+        "backstory": (
+            "Peak sale window. Checkout latency has climbed from 180ms to 8s. "
+            "payment-gateway is still alive but the upstream processor is timing "
+            "out - connections to it are piling up in the gateway's outbound pool. "
+            "Every dropped checkout is a real rupee. What do you touch first?"
+        ),
+        "learning_goals": [
+            "Reading upstream-pool metrics under partner degradation",
+            "When to scale out (spread the budget) vs restart (clear stuck state)",
+            "Recognising 'our service is fine, our partner isn't' as a distinct pattern",
+        ],
+        "est_minutes": 10,
+        "prerequisite": "oom_crash",
+    },
+    "webhook_delivery_backlog": {
+        "skill_tag": "Merchants are angry",
+        "backstory": (
+            "webhook-consumer queue depth has jumped from 40 to 8400. Payments "
+            "are captured but merchant callbacks are lagging 12 minutes - and "
+            "downstream order-fulfilment SLAs are breaking. The consumer is "
+            "alive but stuck: workers all blocked on slow merchant endpoints."
+        ),
+        "learning_goals": [
+            "Recognising queue-depth as a leading indicator of consumer stall",
+            "When restart-to-drain is the right primitive",
+            "Why 'the process is alive' is not the same as 'it's making progress'",
+        ],
+        "est_minutes": 6,
+        "prerequisite": "oom_crash",
+    },
+    "fraud_check_memory_blowup": {
+        "skill_tag": "Fix it before it OOMs",
+        "backstory": (
+            "fraud-check memory is at 78% and growing 6 MiB/min. Model scoring "
+            "latency has climbed 6x. It hasn't crashed yet - which means you have "
+            "a small window to restart with headroom before it takes down the "
+            "authorization path for every payment. Preemptive fix, not reactive."
+        ),
+        "learning_goals": [
+            "Spotting heap-growth trajectories before OOM triggers",
+            "Preemptive restart with adjusted memory ceiling",
+            "Distinguishing SRE stopgaps from ML-team follow-ups",
+        ],
+        "est_minutes": 8,
+        "prerequisite": "oom_crash",
+    },
+    "refund_race_deadlock": {
+        "skill_tag": "Ordering under fire",
+        "backstory": (
+            "refund-service v3.2.1 shipped 12 minutes ago. Now refund-service and "
+            "ledger-service are both showing lock-wait timeouts, 220 customer refunds "
+            "are hanging past SLO, and every new refund attempt widens the deadlock. "
+            "You have to fix this in the right order - restart-first will just re-wedge."
+        ),
+        "learning_goals": [
+            "Reading deployment history to tie an incident to a recent change",
+            "Rollback-then-restart sequencing under mutual deadlock",
+            "Recognising when restart alone will NOT clear the fault",
+        ],
+        "est_minutes": 22,
+        "prerequisite": "bad_deployment_cascade",
+    },
 }
 
 
@@ -276,6 +341,76 @@ IDEAL_TRAJECTORIES: Dict[str, List[Dict[str, Any]]] = {
              "resolution": "Restarted frontend-bff to trigger cert renewal; will add 30-day expiry alert",
          },
          "why": "Honest postmortem: the bigger lesson is the missing alert."},
+    ],
+    # --- Payments-industry scenarios (Razorpay-shaped) ---
+    "payment_gateway_timeout": [
+        {"action": "list_services", "target": None,
+         "why": "Cluster overview - payment-gateway showing degraded, others normal. Localise fast."},
+        {"action": "check_metrics", "target": "payment-gateway",
+         "why": "p99 latency 8.2s (baseline 180ms), outbound-connection pool at 92%. Classic upstream-drag pattern."},
+        {"action": "read_logs", "target": "payment-gateway",
+         "why": "Logs confirm: '5000ms timeout to upstream processor', 'pool at 46/50'. The gateway is the victim, not the origin."},
+        {"action": "scale_service", "target": "payment-gateway",
+         "params": {"replicas": 6},
+         "why": "Scale out - each new pod adds outbound-connection headroom. Restart alone would clear stuck sockets but the pool would refill immediately from a still-degraded upstream."},
+        {"action": "resolve_incident", "target": None,
+         "params": {
+             "root_cause": "Upstream processor timeout starved payment-gateway outbound connection pool",
+             "resolution": "Scaled payment-gateway to 6 replicas to spread the outbound pool; follow-up: enable circuit-breaker at 80% pool utilization",
+         },
+         "why": "Honest postmortem: SRE stopgap is the scale-out; the durable fix is a circuit breaker."},
+    ],
+    "webhook_delivery_backlog": [
+        {"action": "list_services", "target": None,
+         "why": "Overview - webhook-consumer degraded, everything else healthy. Small blast radius, localised."},
+        {"action": "read_logs", "target": "webhook-consumer",
+         "why": "Logs are clear: 'Queue depth 8412', 'delivery worker 3/8 blocked on merchant xyz-corp for 340s'. Workers stuck on slow merchant endpoints."},
+        {"action": "restart_service", "target": "webhook-consumer",
+         "why": "Restart drains the stuck outbound connections. Workers rebuild the pool, backlog drains once. Historical fix: 3/5 previous incidents resolved this way."},
+        {"action": "resolve_incident", "target": None,
+         "params": {
+             "root_cause": "webhook-consumer delivery workers blocked on stuck outbound connections; queue backed up",
+             "resolution": "Restarted webhook-consumer to drain stuck connections; follow-up: add per-merchant delivery timeout of 10s",
+         },
+         "why": "Postmortem names the workaround (restart) and the durable fix (bounded per-merchant timeout)."},
+    ],
+    "fraud_check_memory_blowup": [
+        {"action": "list_services", "target": None,
+         "why": "Cluster overview - fraud-check flagged degraded, still alive. Preemptive-fix window is open."},
+        {"action": "check_metrics", "target": "fraud-check",
+         "why": "Heap 78% and growing 6 MiB/min, p99 scoring latency 240ms (baseline 40ms). Trajectory suggests OOM in ~30 min if we don't act."},
+        {"action": "read_logs", "target": "fraud-check",
+         "why": "Logs confirm: 'Feature cache size 42811 entries (baseline 8000)', 'Full GC pause 380ms'. Traffic profile shift caused unbounded cache growth."},
+        {"action": "restart_service", "target": "fraud-check",
+         "params": {"memory_limit": "2048Mi"},
+         "why": "Restart with headroom (1024Mi -> 2048Mi) buys runway. Preemptive - the service hasn't crashed yet, so we avoid the auth-path outage."},
+        {"action": "resolve_incident", "target": None,
+         "params": {
+             "root_cause": "fraud-check feature cache heap growth under abnormal traffic distribution",
+             "resolution": "Restarted with 2048Mi memory ceiling to prevent OOM; ML team owns the eviction-policy hotfix",
+         },
+         "why": "Clean postmortem: SRE bought runway, ML owns the durable fix. Right division of labour."},
+    ],
+    "refund_race_deadlock": [
+        {"action": "list_services", "target": None,
+         "why": "Overview: refund-service AND ledger-service both degraded. Cascade pattern - suspect an upstream code change."},
+        {"action": "read_logs", "target": "refund-service",
+         "why": "Logs surface it: 'Deadlock detected acquiring ledger lock while holding refund lock', 'Deploy v3.2.1 promoted 14:23:00Z (12 min ago)'. Deploy correlation."},
+        {"action": "read_logs", "target": "ledger-service",
+         "why": "Ledger view: 'Transaction wedged on refund-service lock 58s', 'Restart clears local wedge but does NOT fix upstream'. Confirms cascade direction."},
+        {"action": "describe_service", "target": "refund-service",
+         "why": "Deployment history: v3.2.1 active since 14:23:00Z, previous stable v3.2.0. Suspect confirmed."},
+        {"action": "rollback_deployment", "target": "refund-service",
+         "params": {"to_version": "v3.2.0"},
+         "why": "Rollback FIRST. This removes the lock-ordering bug. Restarting ledger-service before this would just re-deadlock on the next refund attempt."},
+        {"action": "restart_service", "target": "ledger-service",
+         "why": "NOW restart ledger-service to clear its wedged transactions. Order matters: rollback THEN restart."},
+        {"action": "resolve_incident", "target": None,
+         "params": {
+             "root_cause": "refund-service v3.2.1 introduced a lock-acquisition-order bug that deadlocked with ledger-service",
+             "resolution": "Rolled back refund-service to v3.2.0 then restarted ledger-service to clear wedged transactions",
+         },
+         "why": "Postmortem cleanly names the origin (deploy), the mechanism (lock order), and the fix (rollback then restart)."},
     ],
 }
 

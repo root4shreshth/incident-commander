@@ -1,0 +1,45 @@
+# Payment gateway timeout scenario - fintech-shaped incident.
+#
+# Real outages of this shape: Stripe upstream degradation (multiple 2023
+# incidents), Adyen processor timeouts, Razorpay upstream bank/processor
+# outages during peak sale traffic. The classic "our service is fine but
+# the payments partner isn't answering" symptom that racks up abandoned
+# checkouts every minute.
+
+task_id: payment_gateway_timeout
+difficulty: medium
+description: "payment-gateway upstream processor 5xx spike - checkout latency climbing, connections piling up"
+target_service: payment-gateway
+anomaly: connection_leak
+max_steps: 20
+
+alert: "CRITICAL: payment-gateway p99 latency at 8200ms (baseline 180ms). Outbound connections to upstream processor at 92% of pool. Error rate 41%. Started 3 min ago."
+
+root_cause: "Upstream payment processor is timing out under peak load; the gateway is not shedding load fast enough and connections to the processor are piling up, starving new checkout attempts"
+root_cause_keywords: [gateway, processor, upstream, timeout, connection, pool, capacity, scale, 5xx]
+
+correct_action:
+  action_type: scale_service
+  target_service: payment-gateway
+
+log_lines:
+  - "[ERROR] payment-gateway - Upstream processor timeout after 5000ms on POST /v1/charges"
+  - "[ERROR] payment-gateway - Upstream returned HTTP 503 Service Unavailable (attempt 3/3)"
+  - "[WARN]  payment-gateway - Outbound connection pool at 92% (46/50) - new checkouts queuing"
+  - "[WARN]  payment-gateway - Circuit breaker threshold approaching for upstream.processor.v2"
+  - "[INFO]  payment-gateway - 214 checkout requests parked in queue awaiting free connection"
+  - "[INFO]  payment-gateway - Scaling out (more replicas) spreads the outbound pool budget across pods"
+
+rubric:
+  - description: "Investigated the payment-gateway"
+    weight: 0.25
+    required_action: read_logs
+    required_target: payment-gateway
+  - description: "Checked the connection-pool + latency metrics"
+    weight: 0.20
+    required_action: check_metrics
+    required_target: payment-gateway
+  - description: "Scaled payment-gateway to spread the outbound connection budget"
+    weight: 0.55
+    required_action: scale_service
+    required_target: payment-gateway

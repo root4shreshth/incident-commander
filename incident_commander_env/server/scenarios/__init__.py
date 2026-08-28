@@ -6,6 +6,7 @@ from incident_commander_env.server.scenarios.scenario_bad_deploy import BadDeplo
 from incident_commander_env.server.scenarios.scenario_disk_full import DiskFullScenario
 from incident_commander_env.server.scenarios.scenario_slow_query import SlowQueryScenario
 from incident_commander_env.server.scenarios.scenario_cert_expiry import CertExpiryScenario
+from incident_commander_env.server.scenarios.scenario_refund_race import RefundRaceScenario
 from incident_commander_env.server.scenarios.yaml_loader import load_yaml_scenarios
 
 
@@ -17,6 +18,7 @@ SCENARIO_REGISTRY = {
     "disk_full": DiskFullScenario,
     "slow_query": SlowQueryScenario,
     "cert_expiry": CertExpiryScenario,
+    "refund_race_deadlock": RefundRaceScenario,
 }
 
 # Phase 2 - load community / YAML-authored scenarios from scenarios/yaml/
@@ -42,4 +44,5 @@ __all__ = [
     "DiskFullScenario",
     "SlowQueryScenario",
     "CertExpiryScenario",
+    "RefundRaceScenario",
 ]

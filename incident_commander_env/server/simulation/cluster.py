@@ -28,6 +28,13 @@ DEFAULT_SERVICES = [
     ServiceConfig(name="order-service", version="v2.3.1", replicas=2, memory_limit="512Mi", cpu_limit="500m", port=8086),
     ServiceConfig(name="api-gateway", version="v1.8.0", replicas=3, memory_limit="512Mi", cpu_limit="500m", port=8080),
     ServiceConfig(name="frontend-bff", version="v1.3.0", replicas=2, memory_limit="256Mi", cpu_limit="250m", port=3000),
+    # Payments-industry services (added for the Razorpay-shaped scenario library).
+    # Kept small (2 replicas, modest memory) so tests don't tank throughput.
+    ServiceConfig(name="payment-gateway", version="v2.1.0", replicas=3, memory_limit="512Mi", cpu_limit="500m", port=8087),
+    ServiceConfig(name="webhook-consumer", version="v1.4.0", replicas=2, memory_limit="512Mi", cpu_limit="500m", port=8088),
+    ServiceConfig(name="fraud-check", version="v1.0.2", replicas=2, memory_limit="1024Mi", cpu_limit="750m", port=8089),
+    ServiceConfig(name="refund-service", version="v3.2.1", replicas=2, memory_limit="512Mi", cpu_limit="500m", port=8090),
+    ServiceConfig(name="ledger-service", version="v2.0.0", replicas=2, memory_limit="512Mi", cpu_limit="500m", port=8091),
 ]
 
 

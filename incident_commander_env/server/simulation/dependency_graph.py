@@ -50,9 +50,9 @@ class DependencyGraph:
 
 
 def create_default_graph() -> DependencyGraph:
-    """Create the 8-service production topology.
+    """Create the production topology.
 
-    Topology:
+    Base 9-service e-commerce topology:
         api-gateway -> order-service -> payment-service
                                      -> inventory-service
                     -> user-service  -> auth-service
@@ -60,16 +60,34 @@ def create_default_graph() -> DependencyGraph:
                     -> frontend-bff
 
         order-service, user-service, payment-service, inventory-service -> postgres-db
+
+    Plus the 5 payments-industry services (payment-gateway, webhook-consumer,
+    fraud-check, refund-service, ledger-service) that back the Razorpay-shaped
+    scenarios. The extended topology:
+        payment-service   -> fraud-check      (auth check before capture)
+                          -> payment-gateway  (outbound to processor)
+        payment-gateway   -> postgres-db      (idempotency + audit rows)
+        webhook-consumer  -> postgres-db      (queue rows, delivery log)
+        webhook-consumer  -> payment-gateway  (delivery to merchant callback proxied via gateway)
+        fraud-check       -> postgres-db      (feature store + score cache)
+        refund-service    -> ledger-service   (must credit before customer-visible refund)
+                          -> postgres-db
+        ledger-service    -> postgres-db      (double-entry rows)
     """
     g = DependencyGraph()
 
     g.add_service("postgres-db", depends_on=[])
     g.add_service("auth-service", depends_on=[])
-    g.add_service("payment-service", depends_on=["postgres-db"])
+    g.add_service("payment-gateway", depends_on=["postgres-db"])
+    g.add_service("fraud-check", depends_on=["postgres-db"])
+    g.add_service("payment-service", depends_on=["postgres-db", "fraud-check", "payment-gateway"])
     g.add_service("inventory-service", depends_on=["postgres-db"])
     g.add_service("notification-service", depends_on=[])
     g.add_service("user-service", depends_on=["auth-service", "postgres-db"])
     g.add_service("order-service", depends_on=["payment-service", "inventory-service", "postgres-db"])
+    g.add_service("ledger-service", depends_on=["postgres-db"])
+    g.add_service("refund-service", depends_on=["ledger-service", "postgres-db"])
+    g.add_service("webhook-consumer", depends_on=["payment-gateway", "postgres-db"])
     g.add_service("api-gateway", depends_on=["order-service", "user-service", "notification-service"])
     g.add_service("frontend-bff", depends_on=["api-gateway"])
 

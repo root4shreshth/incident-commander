@@ -1,0 +1,40 @@
+# Webhook delivery backlog scenario - fintech-shaped incident.
+#
+# Real outages of this shape: PayPal webhook delays (2022), Stripe events
+# lag during high-volume Black-Friday windows, Razorpay merchant callback
+# backlogs. Payment success is captured internally but merchants aren't
+# notified in time, which breaks downstream order-fulfillment SLAs.
+
+task_id: webhook_delivery_backlog
+difficulty: easy
+description: "webhook-consumer stalled - merchant callbacks backing up in the delivery queue"
+target_service: webhook-consumer
+anomaly: connection_leak
+max_steps: 18
+
+alert: "WARNING: webhook-consumer queue depth at 8400 events (baseline 40). Merchant callback delivery lagging 12 minutes. Process alive but stuck. Started ~10 min ago."
+
+root_cause: "webhook-consumer holding onto stale outbound HTTP connections to slow merchant endpoints; new events queue up because delivery workers are all blocked. Restart drains the stuck connections and lets workers pick up backlog."
+root_cause_keywords: [webhook, consumer, delivery, queue, backlog, stuck, connection, restart]
+
+correct_action:
+  action_type: restart_service
+  target_service: webhook-consumer
+
+log_lines:
+  - "[WARN]  webhook-consumer - Delivery worker 3/8 blocked on POST to merchant xyz-corp for 340s"
+  - "[WARN]  webhook-consumer - Queue depth 8412 (last minute: +680)"
+  - "[ERROR] webhook-consumer - Outbound HTTP client pool exhausted: all 32 connections in-use"
+  - "[WARN]  webhook-consumer - No new events dequeued in the last 90s"
+  - "[INFO]  webhook-consumer - Restart clears stuck connections; workers rebuild the pool cleanly"
+  - "[INFO]  webhook-consumer - Historical fix: 3 out of last 5 backlog incidents resolved via restart"
+
+rubric:
+  - description: "Read logs on the stalled consumer"
+    weight: 0.35
+    required_action: read_logs
+    required_target: webhook-consumer
+  - description: "Restarted webhook-consumer to drain stuck connections + backlog"
+    weight: 0.65
+    required_action: restart_service
+    required_target: webhook-consumer

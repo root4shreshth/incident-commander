@@ -1,0 +1,50 @@
+# Fraud-check memory blowup scenario - fintech-shaped incident.
+#
+# Real outages of this shape: fraud/ML scoring services accumulating
+# feature-cache heap growth under abnormal traffic, e.g. sudden shift in
+# transaction distribution causing model input tensors to balloon. Preemptive
+# fix - restart with higher memory ceiling - is the SRE move; retraining
+# the model is the ML-engineering follow-up.
+#
+# This scenario is deliberately shaped like `oom_crash` but PROACTIVE: the
+# service is still alive at 75%+ memory and hasn't crashed yet, so the
+# correct move is to fix it before customers notice. Razorpay reviewers
+# care about this preventive posture.
+
+task_id: fraud_check_memory_blowup
+difficulty: medium
+description: "fraud-check memory climbing (78% and growing) - approaching OOM under abnormal traffic mix"
+target_service: fraud-check
+anomaly: memory_leak
+max_steps: 20
+
+alert: "WARNING: fraud-check memory at 799 MiB (78% of 1024 MiB limit) and growing 6 MiB/min. No crashes yet. Model scoring latency 240ms (baseline 40ms). Started 8 min ago."
+
+root_cause: "Feature cache heap growth in fraud-check under abnormal traffic distribution - the fraud model is accumulating oversized input tensors that never get evicted. Restarting with a higher memory ceiling gives runway while the ML team investigates the traffic shift."
+root_cause_keywords: [fraud, memory, leak, cache, heap, limit, restart, ceiling, preemptive]
+
+correct_action:
+  action_type: restart_service
+  target_service: fraud-check
+
+log_lines:
+  - "[WARN]  fraud-check - JVM heap after GC: 799 MiB / 1024 MiB (78%)"
+  - "[WARN]  fraud-check - Feature cache size 42811 entries (baseline: 8000) - eviction not keeping up"
+  - "[INFO]  fraud-check - p99 scoring latency 240ms (baseline 40ms) - correlated with heap pressure"
+  - "[WARN]  fraud-check - Full GC pause 380ms detected"
+  - "[INFO]  fraud-check - Traffic profile shift detected: mean feature-vector size up 3.4x"
+  - "[INFO]  fraud-check - Restart with 2048Mi memory_limit buys runway; ML team can hotfix eviction after"
+
+rubric:
+  - description: "Read the fraud-check logs to see the heap-pressure signal"
+    weight: 0.25
+    required_action: read_logs
+    required_target: fraud-check
+  - description: "Checked memory metrics to confirm the growth trajectory"
+    weight: 0.25
+    required_action: check_metrics
+    required_target: fraud-check
+  - description: "Restarted fraud-check (with headroom) before it OOM'd"
+    weight: 0.50
+    required_action: restart_service
+    required_target: fraud-check
