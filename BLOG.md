@@ -32,7 +32,7 @@ That last sentence is the gap Praetor fills.
 
 ## What Praetor actually is
 
-A FastAPI server that exposes the **OpenEnv** contract — the same `POST /reset`, `POST /step`, `GET /state` surface used by RL environments across the Meta + Hugging Face ecosystem. Behind that contract is a simulated 9-service microservices cluster. Each service has health, live metrics (CPU, memory, latency, error rate), structured logs with realistic patterns, deployment history, and explicit dependencies. When one service fails, its dependents start cascading.
+A FastAPI server that exposes the **OpenEnv** contract — the same `POST /reset`, `POST /step`, `GET /state` surface used by RL environments across the Meta + Hugging Face ecosystem. Behind that contract is a simulated 14-service microservices cluster: 9 core e-commerce services (frontend, api-gateway, order-service, payment-service, inventory-service, notification-service, user-service, auth-service, postgres-db) plus 5 payments-industry services (payment-gateway, webhook-consumer, fraud-check, refund-service, ledger-service) added for the Razorpay-shaped scenario library. Each service has health, live metrics (CPU, memory, latency, error rate), structured logs with realistic patterns, deployment history, and explicit dependencies. When one service fails, its dependents start cascading.
 
 The agent's interface is **ten typed actions**:
 
@@ -77,6 +77,19 @@ The trajectory dataset that fell out of this run is committed under `results/hf_
 
 ---
 
+## The payments-industry angle
+
+The hackathon submission shipped the 8 generic-SRE families. What sits on top now — post-hackathon, aimed at the fintech-infrastructure crowd — is a **payments-shaped scenario library** covering four incidents that anyone who has been on-call at a payments company will immediately recognise:
+
+- **`payment_gateway_timeout`** — the upstream processor (Stripe / Adyen / bank rail) starts 5xx'ing under peak sale traffic, our gateway's outbound connection pool climbs to 92%, checkout latency goes from 180ms to 8s. Correct fix: `scale_service payment-gateway` to spread the outbound-pool budget across more pods. Restart alone would clear the stuck sockets but the pool refills immediately from a still-degraded upstream.
+- **`webhook_delivery_backlog`** — a merchant callback endpoint is responding slowly; our webhook-consumer's delivery workers all block on it; queue depth climbs from 40 to 8400 in ten minutes. The process is alive but stuck. Correct fix: `restart_service webhook-consumer` to drain the stuck connections and let workers rebuild the pool. Historical fix - 3 of the last 5 backlog incidents in the sim's log preamble resolved this way.
+- **`fraud_check_memory_blowup`** — the fraud-scoring service's feature-cache is growing unbounded under a traffic-profile shift; heap at 78% and climbing 6 MiB/min but hasn't OOM'd yet. Correct fix: preemptive `restart_service fraud-check` with a 2048Mi ceiling before it takes down the auth path. The instructive thing here is the *preemptive* framing — a Razorpay reviewer immediately clocks a candidate who fixes things before customers notice.
+- **`refund_race_deadlock`** — refund-service v3.2.1 deploys a lock-acquisition-order bug that deadlocks with ledger-service; 220 customer refunds hanging past SLO. This is the ordering-sensitive one: the correct fix is `rollback_deployment refund-service v3.2.0` **first**, then `restart_service ledger-service`. Bare restart of refund-service leaves the bug in place — the sim penalises this -0.10 per attempt. Restart of ledger-service before rollback re-deadlocks on the next refund attempt. Same shape as `bad_deployment_cascade` but in the payments domain, and the canonical war story every payments engineer has lived through (Stripe subscription proration 2017, Adyen double-entry 2020, and every weekend-hotfix that has ever paged out a payments team).
+
+Three of these ship as YAML files under `scenarios/yaml/` (payment_gateway_timeout, webhook_delivery_backlog, fraud_check_memory_blowup); the fourth is a Python subclass (`scenarios/scenario_refund_race.py`) because `is_correct_op` needs ordering logic that YAML can't express. All four plug into the existing 6-component reward with zero trainer / reward / eval-runner changes — the Backend Protocol and RLVR reward were designed for this kind of extension.
+
+---
+
 ## The reward function we didn't learn
 
 This is where most LLM-based RL projects break, and we didn't want to break here. The standard move is to train a **learned reward model** that says "yes this looks like a good fix, no this looks bad." That works until the agent figures out how to game whatever the reward model thinks "good" means — which it always does, because reward hacking is what RL is *supposed* to do.
@@ -107,15 +120,15 @@ These aren't promises. They're tests in `tests/test_reward_hacks.py` that break 
 
 ## The training recipe
 
-We followed the hackathon's recommended pipeline almost to the letter.
+Two Colab notebooks: `train_sft.ipynb` (SFT-only) and `train_grpo.ipynb` (SFT + GRPO). Both use the vanilla `transformers>=4.46,<4.50` + `trl==0.15.2` + `peft>=0.13` + `bitsandbytes>=0.43` stack. No Unsloth (the hackathon session hit compiled-cache version-skew bugs there; vanilla TRL's `GRPOTrainer` has been stable since 0.14).
 
-**SFT (supervised fine-tuning).** We hand-wrote senior-SRE ideal trajectories for the built-in scenario families — what an experienced engineer actually does when they get paged — and turned them into ~120 chat-format `(state, action, rationale)` tuples by replaying under multiple seeds. Single-epoch SFT on **Qwen2.5-Coder-1.5B**, 4-bit quantized, **LoRA r=16**. Roughly 30–60 minutes on an A100 / L40S.
+**SFT (supervised fine-tuning).** We hand-wrote senior-SRE ideal trajectories for the ten scenario families that have hand-written trajectories (six original + four payments-industry) — what an experienced engineer actually does when they get paged — and turned them into ~200 chat-format `(state, action, rationale)` tuples by replaying under multiple seeds. Single-epoch SFT on **Qwen2.5-Coder-1.5B**, 4-bit quantized, **LoRA r=16**. Roughly 30–60 minutes on an A100 / L40S. Pushed as `praetor-incident-commander-sft`.
 
-**GRPO (Group Relative Policy Optimization)** was the planned second stage — the newer trainer in TRL, originally from DeepSeek's R1 work. Instead of scoring completions in absolute terms, GRPO compares rewards within a small group of completions for the same prompt and uses the relative ranking as the gradient signal. Less to tune, more stable, cheaper to run.
+**GRPO (Group Relative Policy Optimization).** The newer trainer in TRL, originally from DeepSeek's R1 work. Instead of scoring completions in absolute terms, GRPO compares rewards within a small group of completions for the same prompt and uses the relative ranking as the gradient signal. Less to tune, more stable, cheaper to run. The reward function is `training/grpo_reward.py`: for each completion, spin up a fresh `IncidentCommanderEnv` seeded by the prompt's `(task_id, seed, difficulty)`, step it once with the parsed action, and return the 6-component `RewardBreakdown.total()`. Each breakdown is also appended to a sidecar list so the notebook's plot cell can render per-component curves — that's the "reward components diverging during training" plot, the strongest visual for the RLVR story.
 
-In practice, across multiple Colab + HF Spaces sessions, we hit a sequence of upstream version-skew bugs in Unsloth's compiled GRPO trainer (`None` ref-logprobs, `grpo_accumulated_loss` tuple-unpacking mismatch, missing `GRPOTrainer` in older TRL pins, datasets module shadowing on HF Spaces). To make the deadline reliably we shipped **SFT-only**. The GRPOConfig is preserved in the notebook as documentation; re-enable when the upstream stack stabilises.
+Prompt scheduling comes from `training/curriculum.py` — a three-phase schedule that warms up on easy `oom_crash` scenarios (steps 0-100), mixes in `db_pool_exhaustion` (100-200), then the full family mix (200+). 60 GRPO steps × 4 generations per prompt fits in ~90-120 minutes on an A100/L40S. Pushed as `praetor-incident-commander-grpo`.
 
-The held-out eval is 10 fresh seeds per trained family with no overlap with training data. The full SFT run, including evaluation and plots, fits in roughly 90 minutes on an A100/L40S.
+The held-out eval is 10 fresh seeds per trained family with no overlap with training data.
 
 ---
 

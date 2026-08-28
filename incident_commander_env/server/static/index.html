@@ -1138,7 +1138,7 @@
     <div class="obs-hero">
         <div class="hero-label"><span class="dot"></span> Phase 1 · Watch Praetor work</div>
         <h1>Every page becomes a <em>recorded run.</em></h1>
-        <p class="subtitle">Each row is Praetor - the autonomous incident commander - attempting one of the eight scenario families. Pick a run to see the action timeline, the 6-component reward decomposition, and the per-step service map evolve from red to green.</p>
+        <p class="subtitle">Each row is Praetor - the autonomous incident commander - attempting one of the twelve scenario families (including four payments-industry incidents). Pick a run to see the action timeline, the 6-component reward decomposition, and the per-step service map evolve from red to green.</p>
         <div class="stats-row">
             <div class="stat"><div class="stat-value blue" id="obs-stat-runs">-</div><div class="stat-label">Recorded Runs</div></div>
             <div class="stat"><div class="stat-value green" id="obs-stat-resolved">-</div><div class="stat-label">Resolved</div></div>
@@ -1183,6 +1183,10 @@
             <span class="obs-chip" data-filter="cert_expiry">Cert Expiry</span>
             <span class="obs-chip" data-filter="dns_failure">DNS</span>
             <span class="obs-chip" data-filter="rate_limit_exhaustion">Rate Limit</span>
+            <span class="obs-chip" data-filter="payment_gateway_timeout">Gateway Timeout</span>
+            <span class="obs-chip" data-filter="webhook_delivery_backlog">Webhook Backlog</span>
+            <span class="obs-chip" data-filter="fraud_check_memory_blowup">Fraud OOM</span>
+            <span class="obs-chip" data-filter="refund_race_deadlock">Refund Race</span>
             <span class="obs-chip" data-filter="resolved">✓ Resolved</span>
         </div>
     </div>

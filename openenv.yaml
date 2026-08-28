@@ -1,12 +1,14 @@
 name: incident_commander_env
-version: "0.2.0"
+version: "0.3.0"
 description: >-
-  SRE/DevOps Cloud Incident Response & Diagnostics - an OpenEnv environment
-  for training LLM agents to diagnose and remediate cascading production
-  incidents across a simulated 9-service microservices cluster. Theme #3.1
-  Professional Tasks. Six-component verifiable reward, deterministic
-  rubric-based grading, parametric scenario families with seeded
-  reproducibility.
+  Praetor - an OpenEnv environment for training LLM agents on SRE/DevOps
+  incident response with a payments-industry scenario library. Simulated
+  14-service microservices cluster (9 core e-commerce + 5 payments-specific:
+  payment-gateway, webhook-consumer, fraud-check, refund-service, ledger-service).
+  12 incident families including payment_gateway_timeout, webhook_delivery_backlog,
+  fraud_check_memory_blowup, and refund_race_deadlock (ordering-sensitive).
+  Six-component verifiable reward, deterministic rubric-based grading, parametric
+  scenario families with seeded reproducibility. Theme #3.1 Professional Tasks.
 
 # OpenEnv environment metadata for HuggingFace Hub rendering
 sdk: docker
@@ -22,6 +24,8 @@ tags:
   - rl
   - llm
   - agentic
+  - payments
+  - fintech
   - theme-professional-tasks
 
 # Action space - discriminated by action_type. Each action carries optional
@@ -109,7 +113,8 @@ reward:
   time_decay: 0.995
   validator_clamp: [0.01, 0.99]
 
-# Scenario families (parametric - seeded reset draws from the family distribution)
+# Scenario families (parametric - seeded reset draws from the family distribution).
+# 7 built-in Python scenarios + 5 YAML-authored (auto-loaded from scenarios/yaml/).
 scenarios:
   oom_crash:
     skill_tag: "Your first page"
@@ -126,6 +131,52 @@ scenarios:
     difficulty: hard
     max_steps: 35
     description: "Bad deploy + autoscaler exhausts cluster quota. Rollback before restarting starved dependents."
+  disk_full:
+    skill_tag: "Out of space"
+    difficulty: easy
+    max_steps: 20
+    description: "notification-service returning ENOSPC. Restart cycles the volume."
+  slow_query:
+    skill_tag: "Quick fix vs real fix"
+    difficulty: medium
+    max_steps: 25
+    description: "Lock-contention slow query in a recent deploy. Rollback beats restart."
+  cert_expiry:
+    skill_tag: "The embarrassing one"
+    difficulty: easy
+    max_steps: 15
+    description: "TLS cert expired. Metrics look normal; only the logs tell you."
+  refund_race_deadlock:
+    skill_tag: "Ordering under fire"
+    difficulty: hard
+    max_steps: 30
+    description: "refund-service v3.2.1 lock-order bug deadlocks with ledger-service. Rollback refund-service FIRST, then restart ledger-service."
+  # YAML-authored scenarios below (auto-loaded from incident_commander_env/server/scenarios/yaml/)
+  dns_failure:
+    skill_tag: "It's always DNS"
+    difficulty: medium
+    max_steps: 18
+    description: "api-gateway DNS resolver misconfigured. Restart refreshes the resolver + /etc/resolv.conf."
+  rate_limit_exhaustion:
+    skill_tag: "Traffic spike"
+    difficulty: medium
+    max_steps: 18
+    description: "api-gateway rate-limit tripping; scale replicas to spread the budget."
+  payment_gateway_timeout:
+    skill_tag: "Payments partner is flapping"
+    difficulty: medium
+    max_steps: 20
+    description: "Upstream payment processor timing out; payment-gateway outbound pool at 92%. Scale to spread the pool."
+  webhook_delivery_backlog:
+    skill_tag: "Merchants are angry"
+    difficulty: easy
+    max_steps: 18
+    description: "webhook-consumer delivery workers stuck; queue depth 8400. Restart to drain."
+  fraud_check_memory_blowup:
+    skill_tag: "Fix it before it OOMs"
+    difficulty: medium
+    max_steps: 20
+    description: "fraud-check heap at 78% and climbing; preemptive restart with 2048Mi ceiling."
 
 # Reproducibility contract
 metadata:
