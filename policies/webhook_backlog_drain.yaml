@@ -1,0 +1,43 @@
+# Webhook-delivery-backlog automation.
+#
+# When the webhook-consumer queue depth crosses the threshold and delivery
+# workers are stuck on slow merchant endpoints, restart to drain the stuck
+# outbound connections. This is a WARNING-severity alert (payments captured
+# internally, merchant callbacks lagged) so we filter on that to avoid
+# double-firing with the OOM policy above.
+
+name: webhook_backlog_drain
+version: 1.0.0
+owner: payments-platform@example.com
+description: |
+  Restart webhook-consumer when queue depth alerts fire; drains stuck
+  merchant-endpoint connections so workers can resume delivery.
+
+scenarios_claimed:
+  - webhook_delivery_backlog
+
+trigger:
+  event: alert
+  match:
+    alert_severity: WARNING
+    service_pattern: "webhook-consumer"
+    message_contains:
+      - "queue depth"
+      - "backlog"
+      - "consumer stalled"
+      - "delivery lagging"
+      - "webhook-consumer"
+
+actions:
+  - action_type: read_logs
+    target_service: webhook-consumer
+    parameters: {lines: 60, severity: WARN}
+  - action_type: restart_service
+    target_service: webhook-consumer
+  - action_type: resolve_incident
+    parameters:
+      root_cause: "webhook-consumer delivery workers blocked on stuck merchant HTTP connections; queue backed up"
+      resolution: "Restarted to drain stuck connections; follow-up ticket for per-merchant delivery timeout"
+
+safeguards:
+  max_actions_per_hour: 6

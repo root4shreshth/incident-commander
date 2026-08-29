@@ -15,7 +15,12 @@ task_id: fraud_check_memory_blowup
 difficulty: medium
 description: "fraud-check memory climbing (78% and growing) - approaching OOM under abnormal traffic mix"
 target_service: fraud-check
-anomaly: memory_leak
+# Semantically the fault is a memory leak, but we tag it as `oom` because
+# the scenario's correct fix is a preemptive restart (with a bigger memory
+# ceiling), and the sim's `oom` anomaly is restart-curable. `memory_leak`
+# is rollback-only, which would contradict the restart-fix claim.
+# The Playbook Verifier caught this inconsistency in the original design.
+anomaly: oom
 max_steps: 20
 
 alert: "WARNING: fraud-check memory at 799 MiB (78% of 1024 MiB limit) and growing 6 MiB/min. No crashes yet. Model scoring latency 240ms (baseline 40ms). Started 8 min ago."

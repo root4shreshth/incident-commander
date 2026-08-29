@@ -1,0 +1,52 @@
+# Fraud-check preemptive-memory-guardrail.
+#
+# When fraud-check's heap climbs past ~75%, restart with a larger memory
+# ceiling BEFORE it OOMs and takes down the auth path. This is the shape
+# a Razorpay-scale team wants: don't wait for the outage, guardrail the
+# growth.
+#
+# scenarios_claimed = [fraud_check_memory_blowup] so we get FAIL if the
+# policy doesn't actually resolve that scenario in the verifier.
+
+name: fraud_check_preemptive_restart
+version: 1.0.0
+owner: fraud-platform@example.com
+description: |
+  Restart fraud-check with a 2048Mi ceiling when the heap-growth alert
+  fires, before OOM triggers. Preemptive rather than reactive.
+
+scenarios_claimed:
+  - fraud_check_memory_blowup
+
+trigger:
+  event: alert
+  match:
+    alert_severity: WARNING
+    service_pattern: "fraud-check"
+    message_contains:
+      - "memory at"
+      - "heap"
+      - "growing"
+      - "fraud-check"
+
+actions:
+  - action_type: check_metrics
+    target_service: fraud-check
+  - action_type: read_logs
+    target_service: fraud-check
+    parameters: {lines: 40, severity: WARN}
+  - action_type: restart_service
+    target_service: fraud-check
+    parameters:
+      memory_limit: 2048Mi
+  - action_type: resolve_incident
+    parameters:
+      root_cause: "fraud-check feature-cache heap growth under abnormal traffic distribution"
+      resolution: "Restarted with 2048Mi ceiling; ML team owns the cache-eviction hotfix"
+
+safeguards:
+  max_actions_per_hour: 4
+  require_confirmation_if:
+    # Deliberately require human review before touching postgres-db
+    # (data-plane services shouldn't be auto-restarted).
+    service_matches: ["postgres-db", "*-db"]

@@ -1,0 +1,45 @@
+# Auto-restart on OOM crash.
+#
+# The classic runbook automation: any CRITICAL alert mentioning a DOWN or
+# CRASHED service gets the target service restarted with a doubled memory
+# ceiling. Scopes strictly to the oom_crash family via alert-severity +
+# a broad message match so it doesn't trigger on unrelated DEGRADED states.
+#
+# Owner should be an on-call rotation, not an individual.
+
+name: oom_auto_restart
+version: 1.0.0
+owner: sre-team@example.com
+description: |
+  Auto-restart any service that reports DOWN + CRITICAL in the alert,
+  with the memory ceiling doubled to 2048 MiB. Follows up with a
+  resolve_incident annotation for the audit log.
+
+scenarios_claimed:
+  - oom_crash
+
+trigger:
+  event: alert
+  match:
+    alert_severity: CRITICAL
+    message_contains:
+      - "is DOWN"
+      - "CRASHED"
+      - OutOfMemoryError
+
+actions:
+  - action_type: read_logs
+    target_service: "{trigger.service}"
+    parameters: {lines: 50, severity: ERROR}
+  - action_type: restart_service
+    target_service: "{trigger.service}"
+    parameters:
+      memory_limit: 2048Mi
+  - action_type: resolve_incident
+    parameters:
+      root_cause: "Service crashed with OutOfMemoryError; likely memory limit was undersized for current workload"
+      resolution: "Restarted with 2048Mi ceiling; ticket filed for capacity-planning review"
+
+safeguards:
+  # Prevent restart storms if a service keeps crashing every few minutes.
+  max_actions_per_hour: 3

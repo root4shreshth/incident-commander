@@ -110,10 +110,14 @@ class RefundRaceScenario(BaseScenario):
                 f"[INFO]  refund-service - Previous stable deploy: {STABLE_VERSION}",
             ])
 
-        # ledger-service: cascade-degraded because refund-service is holding its locks
+        # ledger-service: cascade-degraded because refund-service is holding its locks.
+        # We use `connection_leak` (restart-curable) rather than `lock_contention`
+        # (rollback-only) because, once refund-service is rolled back, the wedged
+        # ledger transactions look like leaked connections from ledger's own
+        # perspective - a restart cycles the DB pool and clears them.
         ledger = cluster.get_service("ledger-service")
         if ledger:
-            ledger.set_anomaly("lock_contention")
+            ledger.set_anomaly("connection_leak")
             ledger.add_logs(lock_contention_logs("ledger-service"))
             ledger.add_logs([
                 "[ERROR] ledger-service - Transaction ledger_credit_882741 waiting on refund-service lock 58s",

@@ -1,0 +1,59 @@
+# Refund-deploy rollback gate.
+#
+# When refund-service and ledger-service both alert with lock-wait
+# timeouts within minutes of a refund-service deploy, automation
+# rolls back the refund-service deploy and restarts ledger-service.
+#
+# CRITICAL SAFEGUARD: this policy REQUIRES human confirmation before
+# `rollback_deployment` fires. Rolling back a payments service is a
+# high-consequence action - the compliance team wants a human in the
+# loop for anything that touches ledger integrity. The verifier still
+# reports what the policy WOULD do so you can review the coverage
+# before shipping.
+
+name: refund_deploy_rollback_gate
+version: 1.0.0
+owner: payments-oncall@example.com
+description: |
+  When refund-service + ledger-service both alert with lock-contention
+  after a recent refund-service deploy, the policy proposes rolling back
+  refund-service to v3.2.0 and restarting ledger-service - but requires
+  a human to approve the rollback before it fires.
+
+scenarios_claimed:
+  - refund_race_deadlock
+
+trigger:
+  event: alert
+  match:
+    alert_severity: CRITICAL
+    message_contains:
+      - refund-service
+      - ledger-service
+      - lock
+      - deadlock
+      - Deploy of refund-service
+
+actions:
+  - action_type: read_logs
+    target_service: refund-service
+    parameters: {lines: 40, severity: ERROR}
+  - action_type: describe_service
+    target_service: refund-service
+  - action_type: rollback_deployment
+    target_service: refund-service
+    parameters:
+      to_version: v3.2.0
+  - action_type: restart_service
+    target_service: ledger-service
+  - action_type: resolve_incident
+    parameters:
+      root_cause: "refund-service v3.2.1 introduced lock-order bug that deadlocked with ledger-service"
+      resolution: "Rolled back refund-service to v3.2.0 then restarted ledger-service to clear wedged transactions"
+
+safeguards:
+  max_actions_per_hour: 2
+  require_confirmation_if:
+    # Rollbacks + any action on the ledger require human review.
+    action_types: [rollback_deployment]
+    service_matches: [ledger-service, postgres-db, "*-db"]

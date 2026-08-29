@@ -1,132 +1,184 @@
-# Praetor - Project Overview
+# Praetor Playbook Verifier
 
-*A clean, 5-minute read for someone new to the project. For the deep-dive tech reference see [`README.md`](README.md); for the narrative build story see [`BLOG.md`](BLOG.md).*
+*A pre-production QA layer for SRE auto-remediation policies. Catch a bad policy before it reaches production, in ~8 seconds of CI.*
+
+*For the deep-dive tech reference see [`README.md`](README.md); for the narrative build story see [`BLOG.md`](BLOG.md).*
 
 ---
 
 ## In one sentence
 
-**Praetor is an OpenEnv-compatible reinforcement-learning environment that trains LLM agents to run payments-industry SRE incident response** — investigate a simulated microservices cluster, identify the fault, remediate under time pressure, verify recovery — and the same trained policy runs unchanged against a real deployed payments service for sim-to-real validation.
+**Praetor is a Playbook Verifier for SRE auto-remediation policies.** You write a new `restart-on-OOM` or `rollback-on-deadlock` policy in YAML, run `praetor verify`, and get back a per-scenario pass/fail report telling you whether the policy actually fixes what it claims to fix, whether it misfires on unrelated incidents, and whether it produces net-negative reward (breaks things). Backed by a 12-scenario incident library covering both generic-SRE and payments-industry faults, plus a deterministic simulator that reproduces each incident byte-for-byte.
 
 ---
 
 ## The problem
 
-Every fintech company runs an on-call rotation. When something breaks in production, an engineer gets woken up and has ten minutes to figure out what's wrong before the outage turns into real money. The problem is that this job is:
+Every payments-scale engineering team eventually builds runbook automation - "if X alert fires, take Y remediation action, page a human only if it fails." The classic examples: auto-restart on OOM, auto-scale on latency spike, auto-rollback on error-rate breach. These policies live in PagerDuty/Rundeck/StackStorm YAML, or in Kubernetes operator code, or in a `runbooks/` folder in the platform-eng repo.
 
-- **Expensive.** Production outages cost enterprises **$1M–$5M per hour**. For a payments company where every minute of downtime is transactions that never happen, the number is higher.
-- **Slow.** Mean-time-to-resolution averages **~8.85 hours** globally. Level-1 orgs regularly exceed 72 hours.
-- **Burnout-inducing.** 65% of engineers report burnout. 70% of SRE teams cite alert fatigue as a top-three concern.
-- **Untrained.** There has been no safe, realistic environment for engineers to practice incident response. They learn by making mistakes in production.
+**And they're almost never tested before rollout.**
 
-And it's **exactly the shape of task that RL-trained LLM agents should be great at** — methodical reasoning under uncertainty, small typed action vocabulary, verifiable outcomes. There just hasn't been a public benchmark to train and evaluate against. Existing academic environments (Microsoft's AIOpsLab) require live Kubernetes clusters, which caps training throughput at roughly one trajectory every 60 seconds. That's a **167-hour wall to produce 10,000 training episodes** — before you even start tuning hyperparameters. Production AI SRE tools (NeuBird, Datadog Bits AI, Resolve.ai) hit the same wall and substitute observability data + prompt engineering for actual RL training.
+- A policy that restarts on any CRITICAL alert also restarts `postgres-db` when the DB throws a slow-query warning. Nobody noticed until 3 AM on a Saturday.
+- A policy that auto-rolls-back a service when its error rate exceeds 5% rolled back a `refund-service` deploy that was fixing a data-integrity bug. The rollback re-introduced the bug for two hours.
+- A policy that scales up `payment-gateway` when the outbound-pool alert fires kept scaling during a partial upstream outage, blowing through the AWS ECS task budget in 12 minutes.
 
----
+Every one of these is a real shape. The industry answer today is either **manual review by a senior SRE** (bottleneck, doesn't scale) or **ship and hope** (works until it doesn't). There's no `pytest` for ops policies.
 
-## What we built
-
-Praetor is four things stacked on top of each other:
-
-### 1. A deterministic, high-throughput simulator
-
-A 14-service simulated microservices cluster (9 core e-commerce services + 5 payments-industry services: `payment-gateway`, `webhook-consumer`, `fraud-check`, `refund-service`, `ledger-service`) with real dependency edges, live metrics, structured logs with realistic error patterns, deployment history, and config. **Resets in ~0.5 ms** — roughly **1,900 resets/sec on a laptop** — versus real Kubernetes at ~60 seconds. That's a **~114,000× speedup**, which is what makes RL training on this substrate actually possible.
-
-Every scenario is parametric and seeded: `(family, seed, difficulty)` reproduces the same incident byte-for-byte, which is required for stable RL training and for the OpenEnv/Gymnasium contract.
-
-### 2. 12 incident scenario families
-
-**7 built-in Python scenarios** + **5 community-contributable YAML scenarios**. The library covers:
-
-- **Generic SRE incidents (8):** OOM crash, DB pool exhaustion, bad deployment cascade, disk full, slow-query lock contention, TLS cert expiry, DNS failure, rate-limit exhaustion
-- **Payments-industry incidents (4):**
-  - `payment_gateway_timeout` — upstream processor 5xx spike; correct fix is `scale_service` to spread the outbound connection pool
-  - `webhook_delivery_backlog` — merchant callback delivery stalled; correct fix is `restart` to drain stuck connections
-  - `fraud_check_memory_blowup` — feature-cache heap growth; correct fix is preemptive restart with more memory
-  - `refund_race_deadlock` — **ordering-sensitive** lock-acquisition-order bug that deadlocks refund-service with ledger-service. Correct fix is `rollback refund-service to v3.2.0` THEN `restart ledger-service`. Bare restart of either service leaves the bug in place and gets penalised.
-
-### 3. A 6-component verifiable reward
-
-No learned reward model. No LLM-as-judge. Six pure functions over `(action, snapshot, scenario)`:
-
-| Component | Fires when… |
-|---|---|
-| `r_diagnostic` | First read on a relevant or adjacent service |
-| `r_correct_op` | Scenario-defined right move (delegated to `scenario.is_correct_op()`) |
-| `r_resolution` | Terminal — fix matches scenario rubric AND root-cause keywords match |
-| `r_format` | Action parsed cleanly (no JSON fallback) |
-| `r_efficiency` | Terminal — solved in ≤50% of step budget |
-| `r_penalty` | Redundancy, harmful actions, handler errors |
-
-Every component is logged separately, so the training plot shows *which* axis the policy is improving on. Four classic reward-hacking exploits are closed and pinned by regression tests in [`tests/test_reward_hacks.py`](tests/test_reward_hacks.py).
-
-### 4. A training pipeline that actually produces a trained model
-
-Two Colab notebooks against the vanilla `transformers>=4.46 + trl==0.15.2 + peft + bitsandbytes` stack:
-
-- **`train_sft.ipynb`** — supervised fine-tuning on **Qwen2.5-Coder-1.5B**, 4-bit quantised, LoRA r=16, using ~200 hand-written senior-SRE trajectories replayed under multiple seeds. ~30–60 min on a Colab A100/L40S. Pushes to `<HF_USER>/praetor-incident-commander-sft`.
-- **`train_grpo.ipynb`** — Group Relative Policy Optimization on top of the SFT adapter, using [`training/grpo_reward.py`](training/grpo_reward.py) that spins up a fresh env per completion and returns the 6-component reward total. Curriculum-scheduled prompt distribution via [`training/curriculum.py`](training/curriculum.py). 60 steps × 4 rollouts/prompt, ~90–120 min on A100/L40S. Pushes to `<HF_USER>/praetor-incident-commander-grpo`.
-
-Full training pipeline: **367 tests pass locally**, both notebooks are one-click "Run all" from Colab.
-
-### 5. Sim-to-real bridge (the demo that actually lands)
-
-Praetor's environment doesn't talk to the simulator directly. It talks to a **`Backend` Protocol** with three implementations: `SimulatedBackend` (training), `WebsiteBackend` (HTTP to any deployed site implementing a small operator API), and `RealBackend` (Docker Compose). The trained policy can't tell which one it's running against — same observation shape, same 10 actions, same 6-component reward.
-
-To prove this we built **SwiftPay** — a second HuggingFace Space, a real deployed payments-target site that implements the operator contract. In the Praetor dashboard's Real-Time tab, you paste `https://shreshthn8n-swiftpay-target.hf.space`, Praetor probes it, auto-classifies the active fault from log signatures, and runs the trained policy. The same model that learned in the simulator fixes a real outage on a real container, translating each typed action into a real `POST /ops/restart` call.
+The industry also lacks a shared benchmark to test against. Chaos-engineering tools (Chaos Mesh, Litmus, Gremlin) let you inject faults, but they're for QA'ing your **infrastructure**, not your **remediation policies**. You still write the tests yourself, per company, from scratch.
 
 ---
 
-## How it works — one end-to-end run
+## What Praetor is
 
-1. **Alert.** PagerDuty (or a webhook, or a demo button) sends a JSON alert to Praetor: `"payment-gateway p99 at 8200ms, outbound pool at 92%, error rate 41%"`.
+Praetor closes both gaps in one product.
 
-2. **Classify.** Praetor auto-classifies the fault into one of 12 scenario families using log-pattern heuristics on the target's `/ops/logs`. For this alert: `payment_gateway_timeout`.
+### The Playbook Verifier
 
-3. **Reset.** The Praetor env orchestrator calls `SimulatedBackend.reset()` (or `WebsiteBackend.reset()` for the sim-to-real demo). The scenario's `setup()` runs, injecting the fault. The agent gets the alert text as its first observation.
+A CLI + GitHub Actions plugin that runs any auto-remediation policy against a canonical 12-scenario incident library, and produces a per-scenario verdict. Sample output:
 
-4. **Loop.** For each of up to 20 steps:
-   - The agent picks one of 10 typed actions: `list_services`, `describe_service`, `read_logs`, `check_metrics`, `restart_service`, `scale_service`, `rollback_deployment`, `update_config`, `run_diagnostic`, `resolve_incident`.
-   - The env executes it via the current backend (mutating the sim's Python objects, or issuing `POST /ops/restart` to the real target).
-   - The env computes the 6-component reward for this step and stashes it as `env._last_breakdown`.
-   - The agent gets back a typed observation, picks the next action.
+```
+Praetor Playbook Verifier | oom_auto_restart v1.0.0
+Claims to fix: oom_crash
 
-5. **Resolve.** When the scenario's `check_resolved()` returns true (service healthy + correct fix applied + root-cause keywords match), the episode terminates. A structured Markdown post-mortem is auto-written to `runs/<run_id>/postmortem.md`, and a one-line summary appended to `RUNBOOK.md`.
+  [PASS]  oom_crash                     C trig res   steps=2   R=+0.32
+  [PASS]  bad_deployment_cascade        - ---- ----  steps=0   R=+0.00
+  [PASS]  webhook_delivery_backlog      - ---- ----  steps=0   R=+0.00
+  ... (12 total)
 
-6. **Verdict.** The dashboard's Final Report card renders with the status pill, the per-step reasoning trace ("Why this step?" expanders on every action), and a **📄 Export as PDF** button that produces a compliance-friendly artifact — cover page with status, every step with rationale, run ID in every footer. Compliance teams have asked for this on every incident for years.
+Overall: PASS   pass=12  warn=0  fail=0   (100% pass rate on 12 scenarios)
+```
 
-Nowhere in that loop does a human touch anything after the initial alert.
+Each scenario answers three questions the operator needs to know before shipping:
+
+1. **Does the policy trigger on incidents it claims to fix?** If not: `FAIL claimed_but_not_triggered`.
+2. **Does the policy trigger on incidents it doesn't claim?** If yes and it did no harm: `WARN false_positive`. If yes and it produced net-negative reward: `FAIL false_positive_negative_reward`.
+3. **When triggered, does the policy actually resolve the incident?** If not: `FAIL triggered_but_no_resolve`.
+
+The reward metric is the sim's 6-component `RewardBreakdown` (r_diagnostic, r_correct_op, r_resolution, r_format, r_efficiency, r_penalty) - a fully verifiable rubric, no learned reward model, so nothing to game.
+
+### The substrate that makes it possible
+
+- **A deterministic, seeded simulator** of a 14-service microservices cluster (9 core e-commerce + 5 payments-industry: payment-gateway, webhook-consumer, fraud-check, refund-service, ledger-service). Resets in ~0.5 ms per scenario, so verifying a policy against all 12 scenarios takes ~8 seconds on a laptop.
+- **12 incident scenario families** covering generic SRE (OOM, DB pool exhaustion, bad-deploy cascade, disk full, slow query, cert expiry, DNS failure, rate-limit exhaustion) and payments-specific (`payment_gateway_timeout`, `webhook_delivery_backlog`, `fraud_check_memory_blowup`, `refund_race_deadlock` - the ordering-sensitive lock-order-bug one).
+- **A YAML DSL for policy authoring** with trigger matching (alert content, service pattern, severity), templated action sequences (`{trigger.service}`), and safeguards (rate limits, require-human-confirmation-if).
+- **A trained LLM agent** (Qwen2.5-Coder-1.5B, SFT + GRPO on the 6-component reward) that can serve as a baseline "what a competent operator would do here" for policy comparison.
+- **Sim-to-real bridge** via the `Backend` Protocol - the same policy can be verified against the sim, then executed against a real deployed payments service (SwiftPay - a second HuggingFace Space that implements the operator contract) for staged rollout.
+
+### The GitHub Actions integration
+
+Every PR that touches `policies/*.yaml` triggers `praetor verify`. The workflow posts a Markdown report as a PR comment (per-scenario table) and blocks merge if any policy in the diff produces a FAIL verdict.
+
+---
+
+## How it works - one end-to-end flow
+
+You're a platform engineer at a payments company. You want to add an auto-remediation policy for the webhook-backlog case: whenever `webhook-consumer` queue depth alerts, restart to drain stuck connections. You write:
+
+```yaml
+# policies/webhook_backlog_drain.yaml
+name: webhook_backlog_drain
+version: 1.0.0
+owner: payments-platform@example.com
+scenarios_claimed: [webhook_delivery_backlog]
+
+trigger:
+  event: alert
+  match:
+    alert_severity: WARNING
+    service_pattern: "webhook-consumer"
+    message_contains: [queue depth, backlog, delivery lagging]
+
+actions:
+  - action_type: read_logs
+    target_service: webhook-consumer
+    parameters: {lines: 60, severity: WARN}
+  - action_type: restart_service
+    target_service: webhook-consumer
+  - action_type: resolve_incident
+    parameters:
+      root_cause: "webhook-consumer delivery workers blocked on stuck merchant HTTP connections"
+      resolution: "Restarted to drain stuck connections"
+
+safeguards:
+  max_actions_per_hour: 6
+```
+
+You open a PR. GitHub Actions kicks off `praetor verify policies/webhook_backlog_drain.yaml` and posts this back as a comment within ~10 seconds:
+
+> ## Praetor Playbook Verifier — `webhook_backlog_drain` v1.0.0
+>
+> **Verdict:** `PASS` — 12 pass / 0 warn / 0 fail across 12 scenarios (100% pass rate).
+>
+> **Claims to handle:** `webhook_delivery_backlog`
+>
+> | Scenario | Verdict | Claimed | Triggered | Resolved | Steps | Reward |
+> |---|:-:|:-:|:-:|:-:|---:|---:|
+> | `oom_crash` | **PASS** | - | - | - | 0 | +0.00 |
+> | `webhook_delivery_backlog` | **PASS** | yes | yes | yes | 2 | +0.32 |
+> | *(10 more rows)* | | | | | | |
+>
+> Generated by `praetor verify`.
+
+Merge is unblocked. The policy ships.
+
+Now imagine your co-worker later submits a *different* policy that also matches on "WARNING" alerts but restarts `payment-gateway`. The verifier catches the collision - both trigger on `webhook_delivery_backlog`, but the second one is a false positive that restarts an unrelated service. FAIL. PR blocked. Bug never reaches production.
+
+That's the whole product.
+
+---
+
+## Why this is the right shape for Razorpay
+
+Payments infrastructure teams have three concerns that the verifier speaks to directly:
+
+1. **Reliability.** Policies are code; code without tests will break in production. Praetor is `pytest` for policies.
+2. **Auditability.** Every verdict is a structured JSON report you can attach to a compliance ticket. "Before we deployed this rule, we verified it passed against the 12 canonical incident families" is a defensible answer to an auditor.
+3. **Correctness under money-flow stakes.** The `refund_race_deadlock` scenario is deliberately ordering-sensitive: the policy has to rollback THEN restart, not the other way around. If the verifier catches a rollback-before-restart bug in your policy before it hits your ledger, you just avoided a two-hour reconciliation nightmare.
+
+The payments-industry scenarios were designed against real war stories: Stripe subscription proration 2017, Adyen double-entry 2020, PayPal webhook lag, Razorpay upstream-processor timeouts during peak sale windows. A policy that passes all 12 of these has been stress-tested against 12 patterns that have actually put payments teams on-call.
 
 ---
 
 ## Try it
 
-- **Live demo, no setup:** [hype4raj-incident-commander-env.hf.space](https://hype4raj-incident-commander-env.hf.space) — Real-Time tab, paste `https://shreshthn8n-swiftpay-target.hf.space`, Connect, Run agent.
-- **Try a scenario yourself:** same Space, Apprentice tab. Pick "Your first page," solve an OOM crash with the AI coach explaining each step.
-- **Watch a trained-agent run:** same Space, Observatory tab. Pick a run from the dropdown, hit Replay.
-- **Read the code:** [github.com/root4shreshth/incident-commander](https://github.com/root4shreshth/incident-commander)
-- **Reproduce the training:** `training/train_grpo.ipynb` in Colab, A100/L40S runtime, Run All, ~90 min.
-- **Pull the trajectory dataset:** committed under [`results/hf_dataset/`](results/hf_dataset/) — 760 senior-SRE behavioral-clone rows + 712 raw step-level rows.
+- **Verify a shipped example policy:**
+  ```bash
+  git clone https://github.com/root4shreshth/incident-commander
+  cd incident-commander
+  uv sync
+  uv run python scripts/verify_policy.py policies/oom_auto_restart.yaml
+  ```
+- **Author your own policy:** copy any file in [`policies/`](policies/) and edit. See the schema in [`praetor_verify/policy.py`](praetor_verify/policy.py) or the four commented examples in that folder.
+- **Wire it into CI:** the workflow at [`.github/workflows/policy-verify.yml`](.github/workflows/policy-verify.yml) is copy-paste-ready for any repo that stores policies as YAML.
+- **See what a FAIL looks like:** [`policies/_bad_example_trigger_happy.yaml`](policies/_bad_example_trigger_happy.yaml) is an intentionally over-broad policy kept in the repo as a regression test. Run `praetor verify` on it and watch every scenario FAIL.
+- **Play with the sim directly:** the live demo at [hype4raj-incident-commander-env.hf.space](https://hype4raj-incident-commander-env.hf.space) lets you replay recorded runs (Observatory tab), solve scenarios by hand with an AI coach (Apprentice), or point a trained agent at a real deployed payments target (Real-Time, with [SwiftPay](https://shreshthn8n-swiftpay-target.hf.space) as the built-in target).
+
+---
+
+## What's under the hood
+
+- **Simulator + 12 scenarios** — deterministic, seeded, ~1,900 resets/sec on a laptop. The verifier's speed comes from this: one policy against 12 scenarios × 1 seed each = ~8 seconds wall-clock.
+- **6-component verifiable reward** — the metric the verifier uses to detect "policy did nothing wrong but net-negatively reward'd because it restarted a healthy service" (harmful-restart penalty).
+- **Trained baseline agent** — Qwen2.5-Coder-1.5B, SFT + GRPO, LoRA r=16. Useful as a "what a competent operator would do" reference; not part of the verifier itself but shipped alongside as a peer artifact.
+- **Sim-to-real bridge** — the `Backend` Protocol lets the same policy that passed verification also be executed against a real deployed target site (SwiftPay). Staged rollout: verify in sim, canary against SwiftPay, then production.
+- **367+ tests** across the sim, the scenario library, the reward pipeline, the policy DSL, and the verifier runner. `pytest` in ~10 seconds.
 
 ---
 
 ## Why this project exists
 
-Originally built for the **Meta OpenEnv Hackathon (April 2026, Theme #3.1: Professional Tasks)**. Post-hackathon it was extended into a portfolio release with:
+Originally built for the **Meta OpenEnv Hackathon (April 2026, Theme #3.1: Professional Tasks)** as a generic-SRE RL environment. Extended in August 2026 with the payments-industry scenario library and working GRPO training pipeline. Then pivoted from "portfolio piece" to "industrial-perspective solution" by wrapping the sim + scenarios + reward pipeline in the Playbook Verifier - the product a real platform team would actually deploy.
 
-- The payments-industry scenario library (4 new fintech-shaped incidents)
-- Working GRPO training pipeline against the RLVR reward
-- Cleaner README + BLOG framing that leads with the payments angle
-
-The design philosophy is that a fintech infrastructure company (like Razorpay) cares about three things a candidate can plausibly build in their own time: **reliability** (things must work), **observability** (you can't debug what you can't see), and **correctness** (money is involved). Praetor is a project that lets a candidate demonstrate they've thought about all three — the deterministic simulator + verifiable reward is reliability, the per-step reasoning trace + PDF export is observability, the anti-reward-hacking test suite + ordering-sensitive `refund_race_deadlock` scenario is correctness.
+The design philosophy is that fintech infrastructure teams don't need another dashboard or another AI agent. They need **the CI system for their ops policies** - a way to catch a bad automation before it fires on real traffic at 3 AM. The verifier is that.
 
 ---
 
 ## What's next
 
-The single largest remaining piece is a **`KubernetesBackend` implementation** — a fourth Backend Protocol adapter that runs against a real local `kind` cluster with a proper manifests directory and per-scenario chaos overlays. When that ships, Praetor goes from "cool RL demo" to "you could actually deploy this in the environment we're hiring you to work in." The scoping doc for that lives in [`~/.claude/plans/gentle-doodling-bee.md`](../.claude/plans/gentle-doodling-bee.md); it's roughly a week of work and needs Docker Desktop + `kind` installed locally.
+The single largest remaining piece is a **`KubernetesBackend`** implementation so the verifier can also execute policies against a real local `kind` cluster (not just the sim). The scoping doc lives at [`~/.claude/plans/gentle-doodling-bee.md`](../.claude/plans/gentle-doodling-bee.md); it's roughly a week of work and needs Docker + `kind` installed. When that ships, `praetor verify` becomes "run the policy against the sim first, then against a real cluster, then decide."
 
-Beyond that, the roadmap in [`BLOG.md`](BLOG.md) ("What we'd build next") lists five more extensions: multi-region topologies, a learned fault classifier, a typed-action-union refactor, an AWS/Cloud Run adapter alongside the Kubernetes one, and a continuous fleet-monitoring watch mode that turns Praetor from incident commander into always-on duty officer.
+Beyond that: a **learned fault classifier** to replace the keyword-heuristic in the verifier's trigger-matching (would use the trajectory dataset at `results/hf_dataset/` to train), **multi-cluster / multi-region topologies** in the scenario library (to model BGP-flap and region-eviction outages), and **integration with a real policy engine** (StackStorm sensors, Rundeck jobs, or Kubernetes operator controllers) so the same YAML that passes verification is what the runtime executes.
 
 ---
 
-*Built by [Shreshth](https://github.com/root4shreshth) and [Yasin](https://github.com/hype4raj) · Team MetaMorphs · April 2026 hackathon origin, August 2026 payments-industry extension.*
+*Built by [Shreshth](https://github.com/root4shreshth) and [Yasin](https://github.com/hype4raj) · Team MetaMorphs · April 2026 hackathon origin, August 2026 payments-industry + Playbook Verifier extension.*

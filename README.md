@@ -16,9 +16,11 @@ tags:
   - praetor
 ---
 
-# Praetor - Incident Commander for SREs
+# Praetor - Playbook Verifier for SRE auto-remediation
 
-> **An OpenEnv-compatible RL environment for training LLM agents to run payments-industry SRE incident response.** Praetor takes the on-call page: investigates a simulated microservices cluster of 14 services, identifies root cause across 12 incident families (including a payments-specific library covering gateway timeouts, webhook backlogs, refund-race deadlocks, and fraud-check memory blowups), remediates via a typed 10-action vocabulary, verifies recovery, and escalates to code investigation when runtime ops aren't enough. The same trained policy runs unchanged against a real deployed site (**SwiftPay**, a Render-hosted payments target) for sim-to-real validation.
+> **A pre-production QA layer for SRE auto-remediation policies, backed by a 12-scenario payments-industry incident simulator.** You write a runbook automation in YAML; the Praetor Playbook Verifier runs it against 12 canonical incident families (OOM crash, DB pool exhaustion, bad-deploy cascade, cert expiry, refund-race deadlock, webhook backlog, fraud-check memory blowup, payment-gateway timeout, and more) and produces a per-scenario pass/fail report in ~8 seconds. Bad policies get caught in CI, not at 3 AM on Saturday.
+>
+> Underneath, Praetor is a full OpenEnv-compatible RL environment for training LLM agents on SRE incident response - deterministic 14-service simulator, 6-component verifiable reward, SFT+GRPO trainer, sim-to-real bridge against a real deployed payments target ([SwiftPay](https://shreshthn8n-swiftpay-target.hf.space)). The trained agent doubles as a "what a competent operator would do" baseline for the verifier.
 >
 > Codebase package name stays `incident_commander_env` for stability; product display name is **Praetor**.
 
@@ -37,12 +39,79 @@ tags:
 | **Throughput benchmark** | [`results/throughput.json`](results/throughput.json) - 1,900 resets/sec, 6,400 steps/sec (~114,000x speedup vs real K8s) |
 | **Blog post** | source: [`BLOG.md`](BLOG.md) |
 | **Eval results** | [`results/`](results/) - plots + `eval_summary_grpo.json` after training run |
+| **Playbook Verifier** | CLI: `python scripts/verify_policy.py policies/*.yaml` · package: [`praetor_verify/`](praetor_verify/) · policies: [`policies/`](policies/) · CI: [`.github/workflows/policy-verify.yml`](.github/workflows/policy-verify.yml) |
 
 ---
 
 ## Provenance
 
-Praetor was built for the **Meta OpenEnv Hackathon (April 2026, Theme #3.1: Professional Tasks)** and has been extended since with the payments-industry scenario library, working GRPO training pipeline, and additional deployment tooling as a portfolio release. The core environment, Backend Protocol, 6-component verifiable reward, and 8 original scenario families all date to the hackathon submission; the 4 payments scenarios, the GRPO trainer, and the extended sim-to-real deployment story are the follow-up work.
+Praetor was built for the **Meta OpenEnv Hackathon (April 2026, Theme #3.1: Professional Tasks)** and has been extended since with the payments-industry scenario library, working GRPO training pipeline, and the Playbook Verifier CI wrapper as an industrial-perspective release. The core environment, Backend Protocol, 6-component verifiable reward, and 8 original scenario families all date to the hackathon submission; the 4 payments scenarios, the GRPO trainer, the extended sim-to-real deployment story, and the Playbook Verifier are the follow-up work.
+
+---
+
+## Praetor Playbook Verifier - the industrial product
+
+The verifier is the pre-production QA layer for auto-remediation policies. You write a YAML policy that says "when this alert fires, take these actions"; the verifier runs it against the 12-scenario library and produces a per-scenario pass/fail report. Bad policies get caught in ~8 seconds of CI, not at 3 AM on Saturday.
+
+**Quick start:**
+
+```bash
+uv sync
+uv run python scripts/verify_policy.py policies/oom_auto_restart.yaml
+```
+
+**What the CLI produces:**
+
+```
+Praetor Playbook Verifier | oom_auto_restart v1.0.0
+Claims to fix: oom_crash
+
+  [PASS]  oom_crash                     C trig res   steps=2   R=+0.32
+  [PASS]  bad_deployment_cascade        - ---- ----  steps=0   R=+0.00
+  [PASS]  payment_gateway_timeout       - ---- ----  steps=0   R=+0.00
+  ... (12 total)
+
+Overall: PASS   pass=12  warn=0  fail=0   (100% pass rate on 12 scenarios)
+```
+
+The three questions each scenario answers:
+
+1. **Does the policy trigger on incidents it claims to fix?** If not: `FAIL claimed_but_not_triggered`.
+2. **Does the policy trigger on incidents it doesn't claim?** If yes, without harm: `WARN false_positive`. If yes, with net-negative reward: `FAIL false_positive_negative_reward`.
+3. **When triggered, does the policy actually resolve the incident?** If not: `FAIL triggered_but_no_resolve`.
+
+The reward metric is the sim's 6-component `RewardBreakdown` — a fully-verifiable rubric, no learned reward model, so nothing to game.
+
+**Four production example policies + one regression-test policy** ship in [`policies/`](policies/):
+
+- `oom_auto_restart.yaml` - the classic restart-on-CRITICAL playbook
+- `webhook_backlog_drain.yaml` - restart webhook-consumer when the queue backs up
+- `fraud_check_preemptive_restart.yaml` - preemptive memory-guardrail restart with a 2048Mi ceiling
+- `refund_deploy_rollback_gate.yaml` - rollback + restart-ledger with `require_confirmation_if` on rollback actions and DB writes
+- `_bad_example_trigger_happy.yaml` - intentionally-over-broad regression test (all 12 scenarios FAIL, which is the correct answer)
+
+**GitHub Actions integration** at [`.github/workflows/policy-verify.yml`](.github/workflows/policy-verify.yml). Every PR that touches `policies/*.yaml` triggers a verify run; the workflow posts a Markdown report as a PR comment (per-scenario table + fail reasons) and blocks merge on any FAIL verdict.
+
+**Policy DSL features** ([`praetor_verify/policy.py`](praetor_verify/policy.py)):
+
+- **Trigger matching** on alert content (`message_contains` list), service pattern (`fnmatch` globs like `payment-*`), and alert severity (`INFO`/`WARNING`/`CRITICAL`)
+- **Templated action sequences** — `{trigger.service}` expands to whatever service matched the trigger; unknown template variables are rejected at load time, not at runtime
+- **Safeguards** — `max_actions_per_hour` (rate limit, recorded by the verifier, enforced by production runtime) and `require_confirmation_if` (per-action-type and per-service-glob rules for human-in-the-loop)
+- **Explicit `scenarios_claimed`** — you declare what your policy is FOR; the verifier checks both (a) it resolves those AND (b) it doesn't misfire on anything else
+
+**Verdict matrix:**
+
+| Scenario in `claimed`? | Triggered? | Resolved? | Verdict |
+|---|---|---|---|
+| yes | yes | yes | **PASS** |
+| yes | yes | no | **FAIL** `triggered_but_no_resolve` |
+| yes | no | – | **FAIL** `claimed_but_not_triggered` |
+| no | yes | yes (positive reward) | **WARN** `incidental_fix_outside_claim` |
+| no | yes | no (negative reward) | **FAIL** `false_positive_negative_reward` |
+| no | yes | no (neutral) | **FAIL** `false_positive` |
+| no | no | – | **PASS** (correct non-trigger) |
+
+Everything below (the simulator, the 12 scenarios, the training pipeline, the trained agent, the sim-to-real bridge) is the **substrate** the verifier runs on top of. If you're evaluating the project for a platform-engineering team, start with the verifier. If you're evaluating it for an ML/RL role, the sim and the training pipeline sections below are the load-bearing ones.
 
 ---
 

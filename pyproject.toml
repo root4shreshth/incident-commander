@@ -13,6 +13,8 @@ dependencies = [
     "pydantic>=2.0.0",
     "uvicorn>=0.24.0",
     "reportlab>=4.0",
+    # Required for the Playbook Verifier's YAML policy DSL (praetor_verify.*).
+    "pyyaml>=6.0",
 ]
 
 [project.scripts]
@@ -35,7 +37,7 @@ training = [
 ]
 
 [tool.setuptools.packages.find]
-include = ["incident_commander_env*", "training*"]
+include = ["incident_commander_env*", "training*", "praetor_verify*"]
 
 [dependency-groups]
 dev = [

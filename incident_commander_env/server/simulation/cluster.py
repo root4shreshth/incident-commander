@@ -33,7 +33,12 @@ DEFAULT_SERVICES = [
     ServiceConfig(name="payment-gateway", version="v2.1.0", replicas=3, memory_limit="512Mi", cpu_limit="500m", port=8087),
     ServiceConfig(name="webhook-consumer", version="v1.4.0", replicas=2, memory_limit="512Mi", cpu_limit="500m", port=8088),
     ServiceConfig(name="fraud-check", version="v1.0.2", replicas=2, memory_limit="1024Mi", cpu_limit="750m", port=8089),
-    ServiceConfig(name="refund-service", version="v3.2.1", replicas=2, memory_limit="512Mi", cpu_limit="500m", port=8090),
+    # NOTE: refund-service starts on v3.2.0 (the KNOWN-STABLE version). The
+    # refund_race_deadlock scenario upgrades it to v3.2.1 during setup and
+    # appends that to the deployment history, so `rollback_deployment
+    # target=refund-service to_version=v3.2.0` finds v3.2.0 in history. Same
+    # pattern as bad_deployment_cascade with order-service v2.3.1 -> v2.4.0.
+    ServiceConfig(name="refund-service", version="v3.2.0", replicas=2, memory_limit="512Mi", cpu_limit="500m", port=8090),
     ServiceConfig(name="ledger-service", version="v2.0.0", replicas=2, memory_limit="512Mi", cpu_limit="500m", port=8091),
 ]
 

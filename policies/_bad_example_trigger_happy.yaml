@@ -1,0 +1,35 @@
+# Intentionally-broken example: over-broad trigger, claims too much,
+# triggers false-positives on scenarios it doesn't handle. Kept in the
+# repo so the failure-report format has something to render + so CI has
+# a policy that SHOULD fail the verifier (regression guard on the
+# verifier itself).
+#
+# Do NOT deploy. The underscore prefix (`_bad_example_*`) is the
+# convention this repo uses for "not for production" policies.
+
+name: _bad_example_trigger_happy
+version: 0.0.1
+owner: nobody@example.com
+description: |
+  Over-broad restart policy - triggers on any alert containing "service"
+  and restarts payment-service regardless of what actually broke. Kept
+  as a regression test for the verifier's false-positive detection.
+
+scenarios_claimed:
+  - oom_crash
+  - disk_full
+  - cert_expiry
+  - refund_race_deadlock
+
+trigger:
+  event: alert
+  match:
+    # ANY alert mentioning "service" (which is basically all of them)
+    message_contains: [service]
+
+actions:
+  - action_type: restart_service
+    target_service: payment-service
+
+safeguards:
+  max_actions_per_hour: 100
